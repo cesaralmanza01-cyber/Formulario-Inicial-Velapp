@@ -56,10 +56,13 @@ export async function ensurePatientAuth(): Promise<string> {
     return auth.currentUser.uid;
   }
 
-  // Retrieve or create a persistent anonymous identifier for the patient session
+  // Retrieve or create a cryptographically secure unique identifier for the patient session
   let localId = localStorage.getItem('vela_patient_anon_id');
   if (!localId) {
-    localId = `paciente_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 8)}`;
+    const randomUuid = typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 12)}_${Math.random().toString(36).substring(2, 12)}`;
+    localId = `paciente_${randomUuid}`;
     localStorage.setItem('vela_patient_anon_id', localId);
   }
   return localId;

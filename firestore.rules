@@ -16,14 +16,22 @@ service cloud.firestore {
     }
 
     match /cuestionarios_iniciales/{questionnaireId} {
-      // Allow reading questionnaire (doctor portal, verification)
-      allow read: if true;
+      // ONLY authenticated doctors can list/query all patient questionnaires
+      allow list: if isDoctor();
+
+      // An individual document can only be fetched by authenticated doctors
+      allow get: if isDoctor();
       
-      // Patient or Doctor can create & update questionnaires (including auto-save and closure)
-      allow create: if true;
-      allow update: if true;
+      // Patient can create their own document matching their session ID, or doctor can create
+      allow create: if isDoctor() || (request.resource.data.patientId == questionnaireId);
       
-      // Only doctor can delete
+      // Patient can update their own document matching their session ID, or doctor can update
+      allow update: if isDoctor() || (
+        request.resource.data.patientId == questionnaireId && 
+        resource.data.patientId == questionnaireId
+      );
+      
+      // ONLY authenticated doctors can delete records
       allow delete: if isDoctor();
     }
 
