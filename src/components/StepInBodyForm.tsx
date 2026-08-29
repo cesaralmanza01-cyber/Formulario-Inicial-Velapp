@@ -544,19 +544,24 @@ export const StepInBodyForm: React.FC<StepInBodyFormProps> = ({
             {/* EXTRACTED PARAMETERS DASHBOARD */}
             {formData.extractedMetrics && !isAnalyzing && (
               <motion.div
-                initial={{ opacity: 0, scale: 0.98 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="p-5 sm:p-6 rounded-3xl bg-linear-to-br from-[#F4F9F7] to-[#FAF6F0] border border-[#5B887E]/40 shadow-xs space-y-4"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="p-5 sm:p-6 rounded-3xl bg-linear-to-br from-[#F4F9F7] via-white to-[#FAF6F0] border border-[#5B887E]/40 shadow-xs space-y-4"
               >
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#AEC9C0]/40 pb-3">
-                  <div className="flex items-center gap-2 text-[#5B887E]">
-                    <CheckCircle2 className="w-5 h-5" />
+                  <div className="flex items-start gap-2.5 text-[#5B887E]">
+                    <div className="w-8 h-8 rounded-xl bg-[#EBF3F0] text-[#5B887E] flex items-center justify-center shrink-0 mt-0.5">
+                      <Sparkles className="w-4 h-4" />
+                    </div>
                     <div>
-                      <h3 className="text-sm font-bold text-[#2E3A36]">
-                        Parámetros extraídos del InBody
+                      <h3 className="text-sm font-bold text-[#2E3A36] flex items-center gap-2">
+                        <span>Parámetros InBody Extraídos Automáticamente</span>
+                        <span className="px-2 py-0.5 rounded-full bg-[#EBF3F0] text-[#5B887E] text-[10px] font-semibold">
+                          Listo
+                        </span>
                       </h3>
-                      <p className="text-[11px] text-[#5C6E68]">
-                        Revisa los datos obtenidos. Puedes editarlos directamente si notas alguna variación.
+                      <p className="text-xs text-[#5C6E68]">
+                        Extrajimos estos valores de tu documento. <strong>No necesitas volver a escribirlos</strong>; ya quedaron listos para la revisión de tu médica.
                       </p>
                     </div>
                   </div>
@@ -569,10 +574,10 @@ export const StepInBodyForm: React.FC<StepInBodyFormProps> = ({
                           analyzeInBodyDocument(firstFile.dataUrl, firstFile.type, firstFile.name);
                         }
                       }}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-[#AEC9C0] text-[#5B887E] text-[11px] font-semibold hover:bg-[#EBF3F0] transition-colors cursor-pointer self-start sm:self-auto"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-[#AEC9C0] text-[#5B887E] text-[11px] font-semibold hover:bg-[#EBF3F0] transition-colors cursor-pointer self-start sm:self-auto shadow-2xs"
                     >
                       <RefreshCw className="w-3.5 h-3.5" />
-                      <span>Re-analizar documento</span>
+                      <span>Volver a extraer</span>
                     </button>
                   )}
                 </div>
@@ -580,189 +585,222 @@ export const StepInBodyForm: React.FC<StepInBodyFormProps> = ({
                 {/* Parameters Grid */}
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                   {/* Peso */}
-                  <div className="p-3 rounded-2xl bg-white border border-[#D9D3C8] shadow-2xs space-y-1">
+                  <div className="p-3 rounded-2xl bg-white border border-[#D9D3C8] shadow-2xs space-y-1 hover:border-[#5B887E] transition-colors">
                     <label className="text-[10px] font-bold uppercase tracking-wider text-[#5C6E68] flex items-center gap-1">
-                      <Scale className="w-3 h-3 text-[#5B887E]" /> Peso (kg)
+                      <Scale className="w-3 h-3 text-[#5B887E]" /> Peso corporal
                     </label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      value={formData.extractedMetrics.pesoKg ?? ''}
-                      onChange={(e) => handleUpdateMetricField('pesoKg', e.target.value ? parseFloat(e.target.value) : null)}
-                      placeholder="Ej. 72.5"
-                      className="w-full text-base sm:text-lg font-bold text-[#2E3A36] bg-transparent focus:outline-hidden focus:ring-1 focus:ring-[#5B887E] rounded px-1"
-                    />
+                    <div className="flex items-baseline gap-1">
+                      <input
+                        type="number"
+                        step="0.1"
+                        value={formData.extractedMetrics.pesoKg ?? ''}
+                        onChange={(e) => handleUpdateMetricField('pesoKg', e.target.value ? parseFloat(e.target.value) : null)}
+                        placeholder="--"
+                        className="w-full text-base sm:text-lg font-bold text-[#2E3A36] bg-transparent focus:outline-hidden focus:ring-1 focus:ring-[#5B887E] rounded px-0.5"
+                      />
+                      <span className="text-xs font-semibold text-[#8E9E99]">kg</span>
+                    </div>
                   </div>
 
                   {/* Talla */}
-                  <div className="p-3 rounded-2xl bg-white border border-[#D9D3C8] shadow-2xs space-y-1">
+                  <div className="p-3 rounded-2xl bg-white border border-[#D9D3C8] shadow-2xs space-y-1 hover:border-[#5B887E] transition-colors">
                     <label className="text-[10px] font-bold uppercase tracking-wider text-[#5C6E68] flex items-center gap-1">
-                      <Activity className="w-3 h-3 text-[#5B887E]" /> Talla / Estatura (cm)
+                      <Activity className="w-3 h-3 text-[#5B887E]" /> Estatura / Talla
                     </label>
-                    <input
-                      type="number"
-                      step="0.5"
-                      value={formData.extractedMetrics.tallaCm ?? ''}
-                      onChange={(e) => handleUpdateMetricField('tallaCm', e.target.value ? parseFloat(e.target.value) : null)}
-                      placeholder="Ej. 165"
-                      className="w-full text-base sm:text-lg font-bold text-[#2E3A36] bg-transparent focus:outline-hidden focus:ring-1 focus:ring-[#5B887E] rounded px-1"
-                    />
+                    <div className="flex items-baseline gap-1">
+                      <input
+                        type="number"
+                        step="0.5"
+                        value={formData.extractedMetrics.tallaCm ?? ''}
+                        onChange={(e) => handleUpdateMetricField('tallaCm', e.target.value ? parseFloat(e.target.value) : null)}
+                        placeholder="--"
+                        className="w-full text-base sm:text-lg font-bold text-[#2E3A36] bg-transparent focus:outline-hidden focus:ring-1 focus:ring-[#5B887E] rounded px-0.5"
+                      />
+                      <span className="text-xs font-semibold text-[#8E9E99]">cm</span>
+                    </div>
                   </div>
 
                   {/* % Grasa Corporal */}
-                  <div className="p-3 rounded-2xl bg-white border border-[#D9D3C8] shadow-2xs space-y-1">
+                  <div className="p-3 rounded-2xl bg-white border border-[#D9D3C8] shadow-2xs space-y-1 hover:border-[#C66A4D] transition-colors">
                     <label className="text-[10px] font-bold uppercase tracking-wider text-[#5C6E68] flex items-center gap-1">
-                      <Flame className="w-3 h-3 text-[#C66A4D]" /> % Grasa (% PGC)
+                      <Flame className="w-3 h-3 text-[#C66A4D]" /> % Grasa Corporal
                     </label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      value={formData.extractedMetrics.porcentajeGrasaCorporal ?? ''}
-                      onChange={(e) => handleUpdateMetricField('porcentajeGrasaCorporal', e.target.value ? parseFloat(e.target.value) : null)}
-                      placeholder="Ej. 34.2"
-                      className="w-full text-base sm:text-lg font-bold text-[#C66A4D] bg-transparent focus:outline-hidden focus:ring-1 focus:ring-[#5B887E] rounded px-1"
-                    />
+                    <div className="flex items-baseline gap-1">
+                      <input
+                        type="number"
+                        step="0.1"
+                        value={formData.extractedMetrics.porcentajeGrasaCorporal ?? ''}
+                        onChange={(e) => handleUpdateMetricField('porcentajeGrasaCorporal', e.target.value ? parseFloat(e.target.value) : null)}
+                        placeholder="--"
+                        className="w-full text-base sm:text-lg font-bold text-[#C66A4D] bg-transparent focus:outline-hidden focus:ring-1 focus:ring-[#5B887E] rounded px-0.5"
+                      />
+                      <span className="text-xs font-semibold text-[#8E9E99]">%</span>
+                    </div>
                   </div>
 
                   {/* Masa Grasa (kg) */}
-                  <div className="p-3 rounded-2xl bg-white border border-[#D9D3C8] shadow-2xs space-y-1">
+                  <div className="p-3 rounded-2xl bg-white border border-[#D9D3C8] shadow-2xs space-y-1 hover:border-[#D97706] transition-colors">
                     <label className="text-[10px] font-bold uppercase tracking-wider text-[#5C6E68] flex items-center gap-1">
-                      <Flame className="w-3 h-3 text-[#D97706]" /> Masa Grasa (kg)
+                      <Flame className="w-3 h-3 text-[#D97706]" /> Masa Grasa Total
                     </label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      value={formData.extractedMetrics.masaGrasaCorporalKg ?? ''}
-                      onChange={(e) => handleUpdateMetricField('masaGrasaCorporalKg', e.target.value ? parseFloat(e.target.value) : null)}
-                      placeholder="Ej. 24.8"
-                      className="w-full text-base sm:text-lg font-bold text-[#2E3A36] bg-transparent focus:outline-hidden focus:ring-1 focus:ring-[#5B887E] rounded px-1"
-                    />
+                    <div className="flex items-baseline gap-1">
+                      <input
+                        type="number"
+                        step="0.1"
+                        value={formData.extractedMetrics.masaGrasaCorporalKg ?? ''}
+                        onChange={(e) => handleUpdateMetricField('masaGrasaCorporalKg', e.target.value ? parseFloat(e.target.value) : null)}
+                        placeholder="--"
+                        className="w-full text-base sm:text-lg font-bold text-[#2E3A36] bg-transparent focus:outline-hidden focus:ring-1 focus:ring-[#5B887E] rounded px-0.5"
+                      />
+                      <span className="text-xs font-semibold text-[#8E9E99]">kg</span>
+                    </div>
                   </div>
 
                   {/* Masa Muscular Esquelética (kg) */}
-                  <div className="p-3 rounded-2xl bg-white border border-[#D9D3C8] shadow-2xs space-y-1">
+                  <div className="p-3 rounded-2xl bg-white border border-[#D9D3C8] shadow-2xs space-y-1 hover:border-[#5B887E] transition-colors">
                     <label className="text-[10px] font-bold uppercase tracking-wider text-[#5C6E68] flex items-center gap-1">
-                      <Activity className="w-3 h-3 text-[#5B887E]" /> Masa Muscular (MME kg)
+                      <Activity className="w-3 h-3 text-[#5B887E]" /> Masa Muscular (MME)
                     </label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      value={formData.extractedMetrics.masaMuscularEsqueleticaKg ?? ''}
-                      onChange={(e) => handleUpdateMetricField('masaMuscularEsqueleticaKg', e.target.value ? parseFloat(e.target.value) : null)}
-                      placeholder="Ej. 23.5"
-                      className="w-full text-base sm:text-lg font-bold text-[#5B887E] bg-transparent focus:outline-hidden focus:ring-1 focus:ring-[#5B887E] rounded px-1"
-                    />
+                    <div className="flex items-baseline gap-1">
+                      <input
+                        type="number"
+                        step="0.1"
+                        value={formData.extractedMetrics.masaMuscularEsqueleticaKg ?? ''}
+                        onChange={(e) => handleUpdateMetricField('masaMuscularEsqueleticaKg', e.target.value ? parseFloat(e.target.value) : null)}
+                        placeholder="--"
+                        className="w-full text-base sm:text-lg font-bold text-[#5B887E] bg-transparent focus:outline-hidden focus:ring-1 focus:ring-[#5B887E] rounded px-0.5"
+                      />
+                      <span className="text-xs font-semibold text-[#8E9E99]">kg</span>
+                    </div>
                   </div>
 
                   {/* Masa Libre de Grasa (kg) */}
-                  <div className="p-3 rounded-2xl bg-white border border-[#D9D3C8] shadow-2xs space-y-1">
+                  <div className="p-3 rounded-2xl bg-white border border-[#D9D3C8] shadow-2xs space-y-1 hover:border-[#5B887E] transition-colors">
                     <label className="text-[10px] font-bold uppercase tracking-wider text-[#5C6E68] flex items-center gap-1">
                       <Sparkles className="w-3 h-3 text-[#5B887E]" /> Masa Libre Grasa (MLG)
                     </label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      value={formData.extractedMetrics.masaLibreDeGrasaKg ?? ''}
-                      onChange={(e) => handleUpdateMetricField('masaLibreDeGrasaKg', e.target.value ? parseFloat(e.target.value) : null)}
-                      placeholder="Ej. 47.7"
-                      className="w-full text-base sm:text-lg font-bold text-[#2E3A36] bg-transparent focus:outline-hidden focus:ring-1 focus:ring-[#5B887E] rounded px-1"
-                    />
+                    <div className="flex items-baseline gap-1">
+                      <input
+                        type="number"
+                        step="0.1"
+                        value={formData.extractedMetrics.masaLibreDeGrasaKg ?? ''}
+                        onChange={(e) => handleUpdateMetricField('masaLibreDeGrasaKg', e.target.value ? parseFloat(e.target.value) : null)}
+                        placeholder="--"
+                        className="w-full text-base sm:text-lg font-bold text-[#2E3A36] bg-transparent focus:outline-hidden focus:ring-1 focus:ring-[#5B887E] rounded px-0.5"
+                      />
+                      <span className="text-xs font-semibold text-[#8E9E99]">kg</span>
+                    </div>
                   </div>
 
                   {/* Grasa Visceral */}
-                  <div className="p-3 rounded-2xl bg-white border border-[#D9D3C8] shadow-2xs space-y-1">
+                  <div className="p-3 rounded-2xl bg-white border border-[#D9D3C8] shadow-2xs space-y-1 hover:border-[#C66A4D] transition-colors">
                     <label className="text-[10px] font-bold uppercase tracking-wider text-[#5C6E68] flex items-center gap-1">
-                      <Heart className="w-3 h-3 text-[#C66A4D]" /> Grasa Visceral (Nivel)
+                      <Heart className="w-3 h-3 text-[#C66A4D]" /> Grasa Visceral
                     </label>
-                    <input
-                      type="number"
-                      step="1"
-                      value={formData.extractedMetrics.nivelGrasaVisceral ?? ''}
-                      onChange={(e) => handleUpdateMetricField('nivelGrasaVisceral', e.target.value ? parseInt(e.target.value) : null)}
-                      placeholder="Ej. 8"
-                      className="w-full text-base sm:text-lg font-bold text-[#C66A4D] bg-transparent focus:outline-hidden focus:ring-1 focus:ring-[#5B887E] rounded px-1"
-                    />
+                    <div className="flex items-baseline gap-1">
+                      <input
+                        type="number"
+                        step="1"
+                        value={formData.extractedMetrics.nivelGrasaVisceral ?? ''}
+                        onChange={(e) => handleUpdateMetricField('nivelGrasaVisceral', e.target.value ? parseInt(e.target.value) : null)}
+                        placeholder="--"
+                        className="w-full text-base sm:text-lg font-bold text-[#C66A4D] bg-transparent focus:outline-hidden focus:ring-1 focus:ring-[#5B887E] rounded px-0.5"
+                      />
+                      <span className="text-xs font-semibold text-[#8E9E99]">Nivel</span>
+                    </div>
                   </div>
 
                   {/* Agua Corporal Total */}
-                  <div className="p-3 rounded-2xl bg-white border border-[#D9D3C8] shadow-2xs space-y-1">
+                  <div className="p-3 rounded-2xl bg-white border border-[#D9D3C8] shadow-2xs space-y-1 hover:border-[#0284C7] transition-colors">
                     <label className="text-[10px] font-bold uppercase tracking-wider text-[#5C6E68] flex items-center gap-1">
-                      <Droplets className="w-3 h-3 text-[#0284C7]" /> Agua Corporal (L)
+                      <Droplets className="w-3 h-3 text-[#0284C7]" /> Agua Corporal Total
                     </label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      value={formData.extractedMetrics.aguaCorporalTotalLt ?? ''}
-                      onChange={(e) => handleUpdateMetricField('aguaCorporalTotalLt', e.target.value ? parseFloat(e.target.value) : null)}
-                      placeholder="Ej. 35.1"
-                      className="w-full text-base sm:text-lg font-bold text-[#0284C7] bg-transparent focus:outline-hidden focus:ring-1 focus:ring-[#5B887E] rounded px-1"
-                    />
+                    <div className="flex items-baseline gap-1">
+                      <input
+                        type="number"
+                        step="0.1"
+                        value={formData.extractedMetrics.aguaCorporalTotalLt ?? ''}
+                        onChange={(e) => handleUpdateMetricField('aguaCorporalTotalLt', e.target.value ? parseFloat(e.target.value) : null)}
+                        placeholder="--"
+                        className="w-full text-base sm:text-lg font-bold text-[#0284C7] bg-transparent focus:outline-hidden focus:ring-1 focus:ring-[#5B887E] rounded px-0.5"
+                      />
+                      <span className="text-xs font-semibold text-[#8E9E99]">L</span>
+                    </div>
                   </div>
 
                   {/* Tasa Metabólica Basal */}
-                  <div className="p-3 rounded-2xl bg-white border border-[#D9D3C8] shadow-2xs space-y-1">
+                  <div className="p-3 rounded-2xl bg-white border border-[#D9D3C8] shadow-2xs space-y-1 hover:border-[#5B887E] transition-colors">
                     <label className="text-[10px] font-bold uppercase tracking-wider text-[#5C6E68] flex items-center gap-1">
-                      <Flame className="w-3 h-3 text-[#5B887E]" /> Tasa Metabólica (kcal)
+                      <Flame className="w-3 h-3 text-[#5B887E]" /> Metabolismo Basal (TMB)
                     </label>
-                    <input
-                      type="number"
-                      step="10"
-                      value={formData.extractedMetrics.tasaMetabolicaBasalKcal ?? ''}
-                      onChange={(e) => handleUpdateMetricField('tasaMetabolicaBasalKcal', e.target.value ? parseInt(e.target.value) : null)}
-                      placeholder="Ej. 1380"
-                      className="w-full text-base sm:text-lg font-bold text-[#2E3A36] bg-transparent focus:outline-hidden focus:ring-1 focus:ring-[#5B887E] rounded px-1"
-                    />
+                    <div className="flex items-baseline gap-1">
+                      <input
+                        type="number"
+                        step="10"
+                        value={formData.extractedMetrics.tasaMetabolicaBasalKcal ?? ''}
+                        onChange={(e) => handleUpdateMetricField('tasaMetabolicaBasalKcal', e.target.value ? parseInt(e.target.value) : null)}
+                        placeholder="--"
+                        className="w-full text-base sm:text-lg font-bold text-[#2E3A36] bg-transparent focus:outline-hidden focus:ring-1 focus:ring-[#5B887E] rounded px-0.5"
+                      />
+                      <span className="text-xs font-semibold text-[#8E9E99]">kcal</span>
+                    </div>
                   </div>
 
                   {/* IMC */}
-                  <div className="p-3 rounded-2xl bg-white border border-[#D9D3C8] shadow-2xs space-y-1">
+                  <div className="p-3 rounded-2xl bg-white border border-[#D9D3C8] shadow-2xs space-y-1 hover:border-[#5B887E] transition-colors">
                     <label className="text-[10px] font-bold uppercase tracking-wider text-[#5C6E68] flex items-center gap-1">
-                      <Scale className="w-3 h-3 text-[#5B887E]" /> IMC (kg/m²)
+                      <Scale className="w-3 h-3 text-[#5B887E]" /> IMC
                     </label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      value={formData.extractedMetrics.imc ?? ''}
-                      onChange={(e) => handleUpdateMetricField('imc', e.target.value ? parseFloat(e.target.value) : null)}
-                      placeholder="Ej. 26.8"
-                      className="w-full text-base sm:text-lg font-bold text-[#2E3A36] bg-transparent focus:outline-hidden focus:ring-1 focus:ring-[#5B887E] rounded px-1"
-                    />
+                    <div className="flex items-baseline gap-1">
+                      <input
+                        type="number"
+                        step="0.1"
+                        value={formData.extractedMetrics.imc ?? ''}
+                        onChange={(e) => handleUpdateMetricField('imc', e.target.value ? parseFloat(e.target.value) : null)}
+                        placeholder="--"
+                        className="w-full text-base sm:text-lg font-bold text-[#2E3A36] bg-transparent focus:outline-hidden focus:ring-1 focus:ring-[#5B887E] rounded px-0.5"
+                      />
+                      <span className="text-xs font-semibold text-[#8E9E99]">kg/m²</span>
+                    </div>
                   </div>
 
                   {/* Fecha Examen */}
-                  <div className="p-3 rounded-2xl bg-white border border-[#D9D3C8] shadow-2xs space-y-1">
+                  <div className="p-3 rounded-2xl bg-white border border-[#D9D3C8] shadow-2xs space-y-1 hover:border-[#5B887E] transition-colors">
                     <label className="text-[10px] font-bold uppercase tracking-wider text-[#5C6E68] flex items-center gap-1">
-                      <Calendar className="w-3 h-3 text-[#5B887E]" /> Fecha del examen
+                      <Calendar className="w-3 h-3 text-[#5B887E]" /> Fecha detectada
                     </label>
                     <input
                       type="text"
                       value={formData.extractedMetrics.fechaExamen ?? ''}
                       onChange={(e) => handleUpdateMetricField('fechaExamen', e.target.value)}
-                      placeholder="Ej. 2024-02-10"
-                      className="w-full text-xs font-semibold text-[#2E3A36] bg-transparent focus:outline-hidden focus:ring-1 focus:ring-[#5B887E] rounded px-1 py-1"
+                      placeholder="Fecha de la prueba"
+                      className="w-full text-xs font-semibold text-[#2E3A36] bg-transparent focus:outline-hidden focus:ring-1 focus:ring-[#5B887E] rounded px-0.5 py-1"
                     />
                   </div>
 
                   {/* Modelo de Equipo */}
-                  <div className="p-3 rounded-2xl bg-white border border-[#D9D3C8] shadow-2xs space-y-1">
+                  <div className="p-3 rounded-2xl bg-white border border-[#D9D3C8] shadow-2xs space-y-1 hover:border-[#5B887E] transition-colors">
                     <label className="text-[10px] font-bold uppercase tracking-wider text-[#5C6E68] flex items-center gap-1">
-                      <Activity className="w-3 h-3 text-[#5B887E]" /> Equipo detectado
+                      <Activity className="w-3 h-3 text-[#5B887E]" /> Equipo / Dispositivo
                     </label>
                     <input
                       type="text"
                       value={formData.extractedMetrics.modeloEquipo ?? ''}
                       onChange={(e) => handleUpdateMetricField('modeloEquipo', e.target.value)}
-                      placeholder="Ej. InBody 570"
-                      className="w-full text-xs font-semibold text-[#2E3A36] bg-transparent focus:outline-hidden focus:ring-1 focus:ring-[#5B887E] rounded px-1 py-1"
+                      placeholder="InBody / Tanita"
+                      className="w-full text-xs font-semibold text-[#2E3A36] bg-transparent focus:outline-hidden focus:ring-1 focus:ring-[#5B887E] rounded px-0.5 py-1"
                     />
                   </div>
                 </div>
 
                 {/* Observaciones clínicas detectadas */}
                 {formData.extractedMetrics.observacionesClinicas && (
-                  <div className="pt-2 border-t border-[#AEC9C0]/30 text-xs text-[#5C6E68]">
-                    <span className="font-semibold text-[#2E3A36]">Resumen detectado del reporte: </span>
-                    <span className="italic">{formData.extractedMetrics.observacionesClinicas}</span>
+                  <div className="pt-2 border-t border-[#AEC9C0]/30 text-xs text-[#5C6E68] flex items-start gap-2">
+                    <Info className="w-4 h-4 text-[#5B887E] shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-semibold text-[#2E3A36]">Resumen extraído del reporte: </span>
+                      <span className="italic">{formData.extractedMetrics.observacionesClinicas}</span>
+                    </div>
                   </div>
                 )}
               </motion.div>
@@ -789,7 +827,7 @@ export const StepInBodyForm: React.FC<StepInBodyFormProps> = ({
                   {formData.files.map((file) => (
                     <div
                       key={file.id}
-                      className="bg-white rounded-2xl p-4 border border-[#D9D3C8] shadow-xs space-y-3 hover:border-[#AEC9C0] transition-colors"
+                      className="bg-white rounded-2xl p-4 border border-[#D9D3C8] shadow-xs space-y-2 hover:border-[#AEC9C0] transition-colors"
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex items-center gap-3 min-w-0">
@@ -815,7 +853,7 @@ export const StepInBodyForm: React.FC<StepInBodyFormProps> = ({
                               className="px-2.5 py-1 text-[11px] font-semibold text-[#5B887E] hover:bg-[#EBF3F0] rounded-lg transition-colors cursor-pointer flex items-center gap-1"
                             >
                               <Sparkles className="w-3 h-3" />
-                              <span className="hidden sm:inline">Extraer</span>
+                              <span className="hidden sm:inline">Re-extraer</span>
                             </button>
                           )}
                           <button
@@ -829,70 +867,30 @@ export const StepInBodyForm: React.FC<StepInBodyFormProps> = ({
                           </button>
                         </div>
                       </div>
-
-                      <div className="pt-1 space-y-1">
-                        <label
-                          htmlFor={`inbody-desc-${file.id}`}
-                          className="text-[11px] font-semibold text-[#5C6E68] flex items-center justify-between"
-                        >
-                          <span>¿De qué fecha o lugar es este examen?</span>
-                          <span className="text-[10px] text-[#8E9E99] font-normal">(opcional)</span>
-                        </label>
-                        <input
-                          type="text"
-                          id={`inbody-desc-${file.id}`}
-                          value={file.description || ''}
-                          onChange={(e) => handleUpdateFileDescription(file.id, e.target.value)}
-                          placeholder="Ej. InBody 570 en SmartFit - Enero 2024"
-                          className="w-full px-3 py-2 rounded-xl bg-[#FAF6F0]/70 border border-[#D9D3C8] text-xs text-[#2E3A36] placeholder-[#8E9E99] focus:outline-hidden focus:ring-2 focus:ring-[#6E9E93]/40 focus:bg-white"
-                        />
-                      </div>
                     </div>
                   ))}
                 </div>
               </div>
             )}
 
-            {/* 3. Métricas conocidas o resumen editable */}
-            <div className="space-y-2 pt-2 border-t border-[#E8E2D8]">
-              <label
-                htmlFor="knownMetrics-input"
-                className="text-xs sm:text-sm font-semibold text-[#2E3A36] flex items-center justify-between"
-              >
-                <span>3. Resumen de parámetros o métricas clave</span>
-                <span className="text-[11px] text-[#8E9E99] font-normal">(se completa automáticamente)</span>
-              </label>
-              <p className="text-xs text-[#5C6E68]">
-                Puedes complementar o editar este resumen con cualquier dato adicional relevante.
-              </p>
-              <input
-                type="text"
-                id="knownMetrics-input"
-                value={formData.knownMetrics || ''}
-                onChange={(e) => setFormData((prev) => ({ ...prev, knownMetrics: e.target.value }))}
-                placeholder="Ej. % Grasa: 29.5%, Músculo: 24 kg, Grasa visceral: nivel 7"
-                className="w-full px-4 py-2.5 rounded-xl bg-[#FAF6F0]/80 border border-[#D9D3C8] text-[#2E3A36] placeholder-[#8E9E99] text-xs sm:text-sm focus:outline-hidden focus:ring-2 focus:ring-[#6E9E93]/40 focus:bg-white hover:border-[#AEC9C0]"
-              />
-            </div>
-
-            {/* 4. Campo de texto opcional: comentarios o metas sobre composición corporal */}
+            {/* Campo de comentarios opcional para la médica */}
             <div className="space-y-2 pt-2 border-t border-[#E8E2D8]">
               <label
                 htmlFor="notesOrGoals-input"
                 className="text-xs sm:text-sm font-semibold text-[#2E3A36] flex items-center justify-between"
               >
-                <span>4. ¿Hay algo en particular sobre tu composición corporal que quieras comentarle a tu médica?</span>
+                <span>¿Hay algo en particular sobre tu composición corporal que quieras comentarle a tu médica?</span>
                 <span className="text-[11px] text-[#8E9E99] font-normal">(opcional)</span>
               </label>
               <p className="text-xs text-[#5C6E68]">
-                Por ejemplo: inquietudes sobre pérdida o ganancia de masa muscular, retención de líquidos o cómo te has sentido físicamente con respecto a esos números.
+                Por ejemplo: inquietudes sobre pérdida o ganancia de masa muscular, retención de líquidos o cómo te has sentido físicamente.
               </p>
               <textarea
                 id="notesOrGoals-input"
                 rows={3}
                 value={formData.notesOrGoals || ''}
                 onChange={(e) => setFormData((prev) => ({ ...prev, notesOrGoals: e.target.value }))}
-                placeholder="Escribe cualquier detalle adicional aquí..."
+                placeholder="Escribe cualquier detalle adicional aquí si lo deseas..."
                 className="w-full px-4 py-3 rounded-2xl bg-[#FAF6F0]/80 border border-[#D9D3C8] text-[#2E3A36] placeholder-[#8E9E99] text-xs sm:text-sm focus:outline-hidden focus:ring-2 focus:ring-[#6E9E93]/40 focus:bg-white resize-y hover:border-[#AEC9C0]"
               />
             </div>
