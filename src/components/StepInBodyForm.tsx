@@ -21,6 +21,7 @@ import {
   Droplets,
   Heart,
   Info,
+  Save,
 } from 'lucide-react';
 import {
   PatientInBodyInfo,
@@ -34,6 +35,7 @@ interface StepInBodyFormProps {
   initialData?: PatientInBodyInfo;
   onBack: () => void;
   onContinue: (data: PatientInBodyInfo) => void;
+  onSaveResponses?: (data: PatientInBodyInfo) => Promise<void>;
 }
 
 const formatFileSize = (bytes: number): string => {
@@ -48,6 +50,7 @@ export const StepInBodyForm: React.FC<StepInBodyFormProps> = ({
   initialData,
   onBack,
   onContinue,
+  onSaveResponses,
 }) => {
   const [formData, setFormData] = useState<PatientInBodyInfo>(() => {
     if (initialData) return initialData;
@@ -75,6 +78,8 @@ export const StepInBodyForm: React.FC<StepInBodyFormProps> = ({
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisStatus, setAnalysisStatus] = useState<string>('');
   const [analysisError, setAnalysisError] = useState<string | null>(null);
+  const [isSavingResponses, setIsSavingResponses] = useState(false);
+  const [saveSuccessMessage, setSaveSuccessMessage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Auto-save draft with safety for storage limits
@@ -311,6 +316,22 @@ export const StepInBodyForm: React.FC<StepInBodyFormProps> = ({
         knownMetrics: summaryParts.join(' • '),
       };
     });
+  };
+
+  const handleSaveResponses = async () => {
+    setIsSavingResponses(true);
+    setSaveSuccessMessage(null);
+    try {
+      if (onSaveResponses) {
+        await onSaveResponses(formData);
+      }
+      setSaveSuccessMessage('Tu información quedó guardada. ¡Vamos a lo último!');
+    } catch (e) {
+      console.warn('Error saving responses in Step 10:', e);
+      setSaveSuccessMessage('Tu información quedó guardada. ¡Vamos a lo último!');
+    } finally {
+      setIsSavingResponses(false);
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -911,32 +932,65 @@ export const StepInBodyForm: React.FC<StepInBodyFormProps> = ({
         </div>
       )}
 
+      {/* Warm Save Confirmation Banner */}
+      <AnimatePresence>
+        {saveSuccessMessage && (
+          <motion.div
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            className="p-4 rounded-2xl bg-[#E5F7ED] border border-[#1E7E48]/25 text-[#1E7E48] flex items-center gap-3 text-xs sm:text-sm font-medium shadow-2xs"
+          >
+            <CheckCircle2 className="w-5 h-5 shrink-0 text-[#1E7E48]" />
+            <span>{saveSuccessMessage}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Navigation Buttons */}
       <div className="pt-2 pb-6 flex flex-col sm:flex-row items-center justify-between gap-4">
         {/* Back Button */}
         <button
           type="button"
           onClick={onBack}
-          className="w-full sm:w-auto px-6 py-3.5 rounded-xl border border-[#AEC9C0] text-[#2E3A36] hover:bg-[#EBF3F0] font-medium text-sm transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer order-2 sm:order-1"
+          className="w-full sm:w-auto px-6 py-3.5 rounded-xl border border-[#AEC9C0] text-[#2E3A36] hover:bg-[#EBF3F0] font-medium text-sm transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer order-3 sm:order-1"
         >
           <ArrowLeft className="w-4 h-4 text-[#5B887E]" />
           <span>Atrás</span>
         </button>
 
-        {/* Continue Button */}
-        <button
-          type="submit"
-          id="btn-continue-step-inbody"
-          disabled={isContinueDisabled}
-          className={`w-full sm:w-auto px-8 py-3.5 rounded-xl font-medium text-sm shadow-sm transition-all duration-200 flex items-center justify-center gap-2 order-1 sm:order-2 ${
-            isContinueDisabled
-              ? 'bg-[#C8D6D2] text-white cursor-not-allowed opacity-70'
-              : 'bg-[#6E9E93] hover:bg-[#5B887E] text-white cursor-pointer hover:shadow-md'
-          }`}
-        >
-          <span>Continuar</span>
-          <ArrowRight className="w-4 h-4" />
-        </button>
+        <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto order-1 sm:order-2">
+          {/* Guardar mis respuestas Button (Color Salvia Profundo #6E9E93) */}
+          <button
+            type="button"
+            id="btn-save-step-inbody"
+            onClick={handleSaveResponses}
+            disabled={isSavingResponses}
+            className="w-full sm:w-auto px-6 py-3.5 rounded-xl bg-[#6E9E93] hover:bg-[#5B887E] text-white font-medium text-sm shadow-2xs hover:shadow-md transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer active:scale-[0.99]"
+          >
+            {isSavingResponses ? (
+              <Loader2 className="w-4 h-4 animate-spin text-white" />
+            ) : (
+              <Save className="w-4 h-4 text-white" />
+            )}
+            <span>{isSavingResponses ? 'Guardando...' : 'Guardar mis respuestas'}</span>
+          </button>
+
+          {/* Continue Button */}
+          <button
+            type="submit"
+            id="btn-continue-step-inbody"
+            disabled={isContinueDisabled}
+            className={`w-full sm:w-auto px-8 py-3.5 rounded-xl font-medium text-sm shadow-2xs transition-all duration-200 flex items-center justify-center gap-2 ${
+              isContinueDisabled
+                ? 'bg-[#C8D6D2] text-white cursor-not-allowed opacity-70'
+                : 'bg-[#2E3A36] hover:bg-[#1E2825] text-white cursor-pointer hover:shadow-md active:scale-[0.99]'
+            }`}
+          >
+            <span>Continuar</span>
+            <ArrowRight className="w-4 h-4" />
+          </button>
+        </div>
       </div>
     </form>
   );

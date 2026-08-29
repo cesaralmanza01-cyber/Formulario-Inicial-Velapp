@@ -300,6 +300,64 @@ export async function saveQuestionnaireToFirestore(params: {
 }
 
 /**
+ * Uploads a generated questionnaire PDF Blob to Firebase Storage,
+ * associates its download URL to the patient Firestore record, and returns the URL.
+ */
+export async function uploadPatientPdfToStorage(
+  patientId: string,
+  pdfBlob: Blob,
+  patientName?: string
+): Promise<string> {
+  console.log('[Firebase Storage] Paso 1: Verificando/asegurando sesión de autenticación para subir PDF...');
+  try {
+    const authUid = await ensurePatientAuth();
+    console.log('[Firebase Storage] Sesión autenticada correctamente (UID:', authUid, ')');
+
+    const timestamp = Date.now();
+    const cleanName = (patientName || 'paciente').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const storagePath = `questionnaires_pdf/${patientId}_${cleanName}_${timestamp}.pdf`;
+    const storageRef = ref(storage, storagePath);
+
+    console.log('[Firebase Storage] Paso 2: Subiendo PDF Blob a la ruta de almacenamiento:', storagePath);
+    const snapshot = await uploadBytes(storageRef, pdfBlob, {
+      contentType: 'application/pdf',
+      customMetadata: {
+        patientId,
+        patientName: patientName || '',
+        uploadedAt: new Date().toISOString(),
+      },
+    });
+    console.log('[Firebase Storage] Archivo PDF subido exitosamente a Storage bytesTransferred:', snapshot.metadata?.size || pdfBlob.size);
+
+    console.log('[Firebase Storage] Paso 3: Obteniendo URL pública de descarga...');
+    const downloadUrl = await getDownloadURL(snapshot.ref);
+    console.log('[Firebase Storage] Paso 4: URL de descarga obtenida con éxito:', downloadUrl);
+
+    // Save URL back to Firestore document
+    try {
+      console.log('[Firebase Storage] Paso 5: Guardando enlace del PDF en el documento de Firestore...');
+      const docRef = doc(db, COLLECTION_NAME, patientId);
+      await setDoc(
+        docRef,
+        {
+          pdfUrl: downloadUrl,
+          pdfUploadedAt: new Date().toISOString(),
+        },
+        { merge: true }
+      );
+      console.log('[Firebase Storage] Enlace de PDF guardado en Firestore correctamente.');
+    } catch (firestoreErr) {
+      console.warn('[Firebase Storage Notice] No se pudo guardar pdfUrl en Firestore, pero la URL está lista:', firestoreErr);
+    }
+
+    return downloadUrl;
+  } catch (error: any) {
+    console.error('[Firebase Storage Error] Error al subir el PDF a Storage:', error);
+    throw new Error(error?.message || 'Error al subir el PDF a Firebase Storage');
+  }
+}
+
+/**
  * Loads all patient questionnaires for the doctor's administrative panel
  */
 export async function getAllQuestionnaires(): Promise<FirestoreQuestionnaireDocument[]> {

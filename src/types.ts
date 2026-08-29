@@ -293,6 +293,8 @@ export interface FirestoreQuestionnaireDocument {
   startedAt: string;
   updatedAt: string;
   completedAt?: string;
+  pdfUrl?: string;
+  pdfUploadedAt?: string;
   banderas_revisar: {
     id: string;
     category: string;

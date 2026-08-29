@@ -11,6 +11,7 @@ import {
   Info,
   Check,
   Sparkles,
+  Clock,
 } from 'lucide-react';
 import {
   CivilStatus,
@@ -270,19 +271,17 @@ export const StepOneForm: React.FC<StepOneFormProps> = ({
           Empecemos por lo básico. Tómate tu tiempo.
         </p>
 
-        {/* Doctor warmth card */}
-        <div className="mt-4 p-4 sm:p-5 rounded-2xl bg-[#EAF1F8]/80 border border-[#8FAFD1]/30 flex items-start gap-3.5 shadow-2xs">
-          <div className="p-2 rounded-xl bg-white/80 text-[#8FAFD1] shrink-0 mt-0.5 shadow-2xs">
-            <VelaIcon size={22} />
+        {/* Time and safe space card */}
+        <div className="mt-4 p-4 sm:p-5 rounded-2xl bg-[#F4F9F7] border border-[#AEC9C0]/70 flex items-start gap-3.5 shadow-2xs">
+          <div className="p-2 rounded-xl bg-white text-[#AEC9C0] shrink-0 mt-0.5 shadow-2xs">
+            <Clock className="w-5 h-5 text-[#AEC9C0]" />
           </div>
           <div className="text-xs sm:text-sm text-[#2E3A36]/90 leading-relaxed space-y-1">
-            <p className="font-semibold text-[#3D5A80]">
-              Un espacio seguro y confidencial
+            <p className="font-semibold text-[#2E3A36]">
+              Tiempo estimado: 20 a 30 minutos
             </p>
             <p className="text-[#5C6E68]">
-              Cada detalle de este formulario lo revisa personalmente la{' '}
-              <strong className="font-medium text-[#2E3A36]">Dra. Lorena Castro</strong> antes
-              de tu cita, para diseñar una guía médica adaptada a tu historia y biología.
+              Este cuestionario toma entre <strong>20 y 30 minutos</strong>. Te recomendamos buscar un momento tranquilo, sin afán, para responderlo con calma — mientras más completa sea tu información, más dirigida y personalizada podrá ser tu primera consulta. Puedes guardar tu progreso y continuar después si lo necesitas.
             </p>
           </div>
         </div>

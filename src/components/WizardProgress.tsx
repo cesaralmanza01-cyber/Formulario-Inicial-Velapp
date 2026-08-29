@@ -90,10 +90,24 @@ export const defaultSteps: StepItem[] = [
 
 export const WizardProgress: React.FC<WizardProgressProps> = ({
   currentStep = 1,
-  totalSteps = 5,
+  totalSteps = 11,
   steps = defaultSteps,
 }) => {
-  const percentage = Math.round((currentStep / totalSteps) * 100);
+  const percentage = Math.max(5, Math.min(100, Math.round((currentStep / totalSteps) * 100)));
+
+  // Calculate proportional estimated remaining time based on 20-30 minutes total
+  const getTimeEstimate = () => {
+    if (currentStep <= 1) return '20 a 30 min';
+    if (currentStep >= totalSteps) return '~1 min';
+    const remainingFraction = (totalSteps - currentStep + 1) / totalSteps;
+    const estimatedMinutes = Math.max(2, Math.round(remainingFraction * 25));
+    return `~${estimatedMinutes} min`;
+  };
+
+  const currentStepTitle =
+    currentStep === 0
+      ? 'Consentimiento informado'
+      : steps.find((s) => s.id === currentStep)?.title || 'Datos personales';
 
   return (
     <div className="w-full bg-[#FAF6F0]/90 backdrop-blur-xs border-b border-[#AEC9C0]/30 py-4 px-4 sm:px-8 sticky top-0 z-30 transition-all">
@@ -101,17 +115,17 @@ export const WizardProgress: React.FC<WizardProgressProps> = ({
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2.5">
           <div className="flex items-center gap-2">
             <span className="text-xs font-semibold tracking-wider uppercase text-[#5B887E] bg-[#EBF3F0] px-2.5 py-1 rounded-full">
-              Paso {currentStep} de {totalSteps}
+              {currentStep === 0 ? 'Paso previo' : `Paso ${currentStep} de ${totalSteps}`}
             </span>
             <span className="text-sm font-medium text-[#2E3A36]">
-              {steps.find((s) => s.id === currentStep)?.title || 'Datos personales'}
+              {currentStepTitle}
             </span>
           </div>
 
           <div className="flex items-center gap-3 text-xs text-[#5C6E68]">
-            <span className="inline-flex items-center gap-1">
+            <span className="inline-flex items-center gap-1 font-medium text-[#5B887E]">
               <Clock className="w-3.5 h-3.5 text-[#6E9E93]" />
-              ~3 min
+              {getTimeEstimate()}
             </span>
             <span className="text-[#AEC9C0]">•</span>
             <span className="inline-flex items-center gap-1">

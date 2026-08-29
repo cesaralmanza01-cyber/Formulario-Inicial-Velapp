@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Header } from './components/Header';
 import { WizardProgress } from './components/WizardProgress';
+import { StepZeroConsent } from './components/StepZeroConsent';
 import { StepOneForm } from './components/StepOneForm';
 import { StepTwoForm } from './components/StepTwoForm';
 import { StepThreeForm } from './components/StepThreeForm';
@@ -41,7 +42,12 @@ export default function App() {
 
   const [currentStep, setCurrentStep] = useState<number>(() => {
     const savedStep = localStorage.getItem('vela_current_step');
-    return savedStep ? parseInt(savedStep, 10) || 1 : 1;
+    if (savedStep !== null) {
+      const parsed = parseInt(savedStep, 10);
+      return isNaN(parsed) ? 0 : parsed;
+    }
+    const hasAcceptedConsent = localStorage.getItem('vela_consent_accepted') === 'true';
+    return hasAcceptedConsent ? 1 : 0;
   });
 
   const [step1Data, setStep1Data] = useState<PatientBasicInfo | null>(() => {
@@ -254,6 +260,16 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const handleSaveStepInBodyResponses = async (data: PatientInBodyInfo) => {
+    setStepInBodyData(data);
+    localStorage.setItem('vela_patient_has_saved', 'true');
+    await syncProgressToFirestore({
+      step: 10,
+      isSavedByPatient: true,
+      stepInBody: data,
+    });
+  };
+
   const handleStepClosureBack = () => {
     setCurrentStep(10);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -290,6 +306,9 @@ export default function App() {
       localStorage.removeItem('vela_step10_inbody_data');
       localStorage.removeItem('vela_current_step');
       localStorage.removeItem('vela_patient_has_saved');
+      localStorage.removeItem('vela_consent_accepted');
+      localStorage.removeItem('vela_consent_data');
+      localStorage.removeItem('vela_consent_scope');
       window.location.reload();
     }
   };
@@ -312,6 +331,24 @@ export default function App() {
       {/* Main Content Area with smooth step transitions */}
       <main className="flex-1 max-w-3xl w-full mx-auto px-4 sm:px-8 py-8 sm:py-12">
         <AnimatePresence mode="wait">
+          {currentStep === 0 && (
+            <motion.div
+              key="step-0"
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -12 }}
+              transition={{ duration: 0.25, ease: 'easeOut' }}
+            >
+              <StepZeroConsent
+                onAccept={() => {
+                  setCurrentStep(1);
+                  localStorage.setItem('vela_current_step', '1');
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+              />
+            </motion.div>
+          )}
+
           {currentStep === 1 && (
             <motion.div
               key="step-1"
@@ -451,6 +488,7 @@ export default function App() {
                 initialData={stepInBodyData || undefined}
                 onBack={handleStepInBodyBack}
                 onContinue={handleStepInBodyContinue}
+                onSaveResponses={handleSaveStepInBodyResponses}
               />
             </motion.div>
           )}
