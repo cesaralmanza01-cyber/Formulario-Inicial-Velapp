@@ -1,17 +1,126 @@
 import express from "express";
 import path from "path";
 import fs from "fs";
+import { Readable } from "stream";
+import { google } from "googleapis";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
-import {
-  uploadPdfBufferWithServiceAccount,
-  getGoogleDriveServiceAccountClient,
-  SERVICE_ACCOUNT_EMAIL,
-  GOOGLE_DRIVE_FOLDER_NAME,
-} from "./api/_lib/googleDriveService";
 
 dotenv.config();
+
+const DEFAULT_SERVICE_ACCOUNT_EMAIL = "vela-drive-uploader@consultorio-m5-95.iam.gserviceaccount.com";
+const GOOGLE_DRIVE_FOLDER_NAME = "Vela - Cuestionarios Pacientes";
+
+function parseServiceAccountCredentials(rawKey: string): { client_email: string; private_key: string } {
+  let str = rawKey.trim();
+  if ((str.startsWith('"') && str.endsWith('"')) || (str.startsWith("'") && str.endsWith("'"))) {
+    str = str.slice(1, -1).trim();
+  }
+  let parsed: any;
+  if (str.startsWith('{')) {
+    parsed = JSON.parse(str);
+  } else {
+    parsed = JSON.parse(Buffer.from(str, 'base64').toString('utf-8'));
+  }
+
+  let formattedPrivateKey = parsed.private_key;
+  if (typeof formattedPrivateKey === 'string') {
+    formattedPrivateKey = formattedPrivateKey.replace(/\\n/g, '\n');
+    if (!formattedPrivateKey.includes('-----BEGIN PRIVATE KEY-----')) {
+      formattedPrivateKey = `-----BEGIN PRIVATE KEY-----\n${formattedPrivateKey}\n-----END PRIVATE KEY-----\n`;
+    }
+  }
+
+  return {
+    client_email: String(parsed.client_email).trim(),
+    private_key: formattedPrivateKey,
+  };
+}
+
+function getGoogleDriveServiceAccountClient(): { drive: any; folderId: string; serviceAccountEmail: string } {
+  const rawKey =
+    process.env.GOOGLE_SERVICE_ACCOUNT_KEY ||
+    process.env.GOOGLE_SERVICE_ACCOUNT_JSON ||
+    process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON ||
+    process.env.GCP_SERVICE_ACCOUNT_KEY;
+
+  if (!rawKey) {
+    throw new Error("Falta la variable de entorno GOOGLE_SERVICE_ACCOUNT_KEY");
+  }
+
+  const credentials = parseServiceAccountCredentials(rawKey);
+  const jwtClient = new google.auth.JWT({
+    email: credentials.client_email,
+    key: credentials.private_key,
+    scopes: ['https://www.googleapis.com/auth/drive'],
+  });
+
+  const drive = google.drive({ version: 'v3', auth: jwtClient });
+  const targetFolderId = process.env.GOOGLE_DRIVE_FOLDER_ID?.trim() || '';
+
+  return {
+    drive,
+    folderId: targetFolderId,
+    serviceAccountEmail: credentials.client_email || DEFAULT_SERVICE_ACCOUNT_EMAIL,
+  };
+}
+
+async function uploadPdfBufferWithServiceAccount(
+  buffer: Buffer,
+  fileName: string,
+  patientName: string,
+  overrideFolderId?: string
+): Promise<{ fileId: string; fileName: string; webViewLink: string; folderId: string }> {
+  const { drive, folderId: envFolderId, serviceAccountEmail } = getGoogleDriveServiceAccountClient();
+  const destinationFolderId = overrideFolderId || envFolderId;
+
+  const fileMetadata: any = {
+    name: fileName,
+    mimeType: 'application/pdf',
+    description: `Cuestionario inicial de la paciente ${patientName} — Vela Medicina & Nutrición Integral`,
+  };
+
+  if (destinationFolderId) {
+    fileMetadata.parents = [destinationFolderId];
+  }
+
+  const stream = Readable.from(buffer);
+  const media = {
+    mimeType: 'application/pdf',
+    body: stream,
+  };
+
+  const res = await drive.files.create({
+    requestBody: fileMetadata,
+    media: media,
+    fields: 'id, name, webViewLink, webContentLink, parents',
+    supportsAllDrives: true,
+  });
+
+  const fileId = res.data.id || '';
+  const webViewLink = res.data.webViewLink || `https://drive.google.com/file/d/${fileId}/view`;
+
+  try {
+    await drive.permissions.create({
+      fileId: fileId,
+      requestBody: {
+        role: 'reader',
+        type: 'anyone',
+      },
+      supportsAllDrives: true,
+    });
+  } catch (permErr: any) {
+    console.warn('[Google Drive Service Account] Permisos públicos aviso:', permErr?.message);
+  }
+
+  return {
+    fileId: fileId,
+    fileName: res.data.name || fileName,
+    webViewLink: webViewLink,
+    folderId: destinationFolderId,
+  };
+}
 
 async function startServer() {
   const app = express();
@@ -48,7 +157,7 @@ async function startServer() {
         return res.json({
           success: true,
           connected: false,
-          serviceAccountEmail: SERVICE_ACCOUNT_EMAIL,
+          serviceAccountEmail: DEFAULT_SERVICE_ACCOUNT_EMAIL,
           folderId: targetFolderId,
           folderName: GOOGLE_DRIVE_FOLDER_NAME,
           error: "Falta configurar la variable GOOGLE_SERVICE_ACCOUNT_KEY",
@@ -69,7 +178,7 @@ async function startServer() {
         return res.json({
           success: true,
           connected: false,
-          serviceAccountEmail: SERVICE_ACCOUNT_EMAIL,
+          serviceAccountEmail: DEFAULT_SERVICE_ACCOUNT_EMAIL,
           folderId: targetFolderId,
           folderName: GOOGLE_DRIVE_FOLDER_NAME,
           error: authErr.message,
