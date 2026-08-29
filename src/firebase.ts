@@ -13,10 +13,11 @@ import firebaseConfig from '../firebase-applet-config.json';
 export const app =
   getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
-// Initialize Firestore with robust multi-tab offline caching
+// Initialize Firestore with robust multi-tab offline caching and ignoreUndefinedProperties
 export const db = (() => {
   try {
     return initializeFirestore(app, {
+      ignoreUndefinedProperties: true,
       localCache: persistentLocalCache({
         tabManager: persistentMultipleTabManager(),
       }),

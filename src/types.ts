@@ -288,18 +288,18 @@ export interface FirestoreQuestionnaireDocument {
   patientDocument: string;
   status: 'en progreso' | 'completado';
   isSavedByPatient?: boolean;
-  savedAt?: string;
+  savedAt?: string | null;
   currentStep: number;
   startedAt: string;
   updatedAt: string;
-  completedAt?: string;
-  pdfUrl?: string;
-  pdfUploadedAt?: string;
-  driveFileId?: string;
-  driveFileName?: string;
-  driveWebViewLink?: string;
-  driveFolderId?: string;
-  driveUploadedAt?: string;
+  completedAt?: string | null;
+  pdfUrl?: string | null;
+  pdfUploadedAt?: string | null;
+  driveFileId?: string | null;
+  driveFileName?: string | null;
+  driveWebViewLink?: string | null;
+  driveFolderId?: string | null;
+  driveUploadedAt?: string | null;
   banderas_revisar: {
     id: string;
     category: string;

@@ -6,9 +6,7 @@ import {
   getDocs,
   query,
   orderBy,
-  onSnapshot,
 } from 'firebase/firestore';
-import { signInAnonymously } from 'firebase/auth';
 import { db, auth } from '../firebase';
 import {
   FirestoreQuestionnaireDocument,
@@ -28,22 +26,43 @@ import { evaluateClinicalRedFlags } from '../utils/clinicalFlags';
 const COLLECTION_NAME = 'cuestionarios_iniciales';
 
 /**
- * Ensures anonymous authentication for the patient to allow secure read/write to Firestore.
+ * Deeply sanitizes any object to remove `undefined` values before passing to Firestore setDoc/updateDoc
+ */
+export function cleanFirestoreData<T>(obj: T): T {
+  if (obj === null || obj === undefined) {
+    return null as any;
+  }
+  if (Array.isArray(obj)) {
+    return obj.map((item) => cleanFirestoreData(item)) as any;
+  }
+  if (typeof obj === 'object') {
+    const cleaned: Record<string, any> = {};
+    for (const [key, value] of Object.entries(obj)) {
+      if (value !== undefined) {
+        cleaned[key] = cleanFirestoreData(value);
+      }
+    }
+    return cleaned as T;
+  }
+  return obj;
+}
+
+/**
+ * Retrieves a stable patient identifier for Firestore documents.
+ * Uses authenticated doctor UID if logged in, or a persistent unique local UUID per patient.
  */
 export async function ensurePatientAuth(): Promise<string> {
   if (auth.currentUser) {
     return auth.currentUser.uid;
   }
-  try {
-    const userCredential = await signInAnonymously(auth);
-    return userCredential.user.uid;
-  } catch (err: any) {
-    console.warn('[Firebase Auth Notice] signInAnonymously notice:', {
-      code: err?.code,
-      message: err?.message,
-    });
-    return 'paciente_vela';
+
+  // Retrieve or create a persistent anonymous identifier for the patient session
+  let localId = localStorage.getItem('vela_patient_anon_id');
+  if (!localId) {
+    localId = `paciente_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 8)}`;
+    localStorage.setItem('vela_patient_anon_id', localId);
   }
+  return localId;
 }
 
 /**
@@ -189,25 +208,25 @@ export async function saveQuestionnaireToFirestore(params: {
   const isDone = params.isComplete || isSaved;
   const status: 'en progreso' | 'completado' = isDone ? 'completado' : 'en progreso';
 
-  const driveLink = params.driveWebViewLink || existingDriveLink;
+  const driveLink = params.driveWebViewLink || existingDriveLink || null;
 
-  const docData: FirestoreQuestionnaireDocument = {
+  const rawDocData: Record<string, any> = {
     patientId,
     patientName: step1?.fullName?.trim() || 'Paciente en registro',
     patientDocument: step1?.documentNumber?.trim() || '',
     status,
     isSavedByPatient: isSaved,
-    savedAt: isSaved ? (existingSavedAt || now) : undefined,
+    savedAt: isSaved ? (existingSavedAt || now) : null,
     currentStep: params.currentStep,
     startedAt,
     updatedAt: now,
-    completedAt: isDone ? (existingCompletedAt || now) : undefined,
-    pdfUrl: driveLink, // Points directly to the Google Drive file
-    driveFileId: params.driveFileId,
-    driveFileName: params.driveFileName,
+    completedAt: isDone ? (existingCompletedAt || now) : null,
+    pdfUrl: driveLink,
+    driveFileId: params.driveFileId || null,
+    driveFileName: params.driveFileName || null,
     driveWebViewLink: driveLink,
-    driveFolderId: params.driveFolderId,
-    driveUploadedAt: driveLink ? now : undefined,
+    driveFolderId: params.driveFolderId || null,
+    driveUploadedAt: driveLink ? now : null,
     banderas_revisar: redFlagsEvaluation.flags,
     identificacion: step1 || null,
     motivo_objetivos: step2 || null,
@@ -235,12 +254,14 @@ export async function saveQuestionnaireToFirestore(params: {
       : null,
   };
 
+  const docData = cleanFirestoreData(rawDocData);
+
   // 1. Save to Firestore
   await setDoc(docRef, docData, { merge: true });
 
   // 2. Also keep a local backup in localStorage for resiliency
   try {
-    const existingBackups: FirestoreQuestionnaireDocument[] = JSON.parse(
+    const existingBackups: any[] = JSON.parse(
       localStorage.getItem('vela_submitted_questionnaires') || '[]'
     );
     const filtered = existingBackups.filter((b) => b.patientId !== patientId);
@@ -268,19 +289,16 @@ export async function updatePatientDriveInfoInFirestore(
   console.log('[Firestore] Actualizando documento con enlace de Google Drive:', driveInfo.webViewLink);
   const docRef = doc(db, COLLECTION_NAME, patientId);
   const now = new Date().toISOString();
-  await setDoc(
-    docRef,
-    {
-      pdfUrl: driveInfo.webViewLink,
-      driveFileId: driveInfo.fileId,
-      driveFileName: driveInfo.fileName,
-      driveWebViewLink: driveInfo.webViewLink,
-      driveFolderId: driveInfo.folderId,
-      driveUploadedAt: now,
-      updatedAt: now,
-    },
-    { merge: true }
-  );
+  const updateData = cleanFirestoreData({
+    pdfUrl: driveInfo.webViewLink || null,
+    driveFileId: driveInfo.fileId || null,
+    driveFileName: driveInfo.fileName || null,
+    driveWebViewLink: driveInfo.webViewLink || null,
+    driveFolderId: driveInfo.folderId || null,
+    driveUploadedAt: now,
+    updatedAt: now,
+  });
+  await setDoc(docRef, updateData, { merge: true });
   console.log('[Firestore] Enlace de Google Drive registrado con éxito en Firestore.');
 }
 
