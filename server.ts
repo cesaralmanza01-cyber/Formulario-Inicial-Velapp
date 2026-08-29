@@ -1,6 +1,8 @@
 import express from "express";
 import path from "path";
 import fs from "fs";
+import { Readable } from "stream";
+import { google } from "googleapis";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
@@ -21,6 +23,242 @@ async function startServer() {
 
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ extended: true, limit: "50mb" }));
+
+  // ==========================================
+  // GOOGLE DRIVE SERVICE ACCOUNT INTEGRATION
+  // ==========================================
+  const GOOGLE_DRIVE_FOLDER_NAME = "Vela - Cuestionarios Pacientes";
+  const SERVICE_ACCOUNT_EMAIL = "vela-drive-uploader@consultorio-m5-95.iam.gserviceaccount.com";
+
+  // Helper to get Google Drive client authenticated via Service Account JSON key
+  function getGoogleDriveServiceAccountClient(): { drive: any; folderId: string; serviceAccountEmail: string } {
+    const rawKey =
+      process.env.GOOGLE_SERVICE_ACCOUNT_KEY ||
+      process.env.GOOGLE_SERVICE_ACCOUNT_JSON ||
+      process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON ||
+      process.env.GCP_SERVICE_ACCOUNT_KEY;
+
+    if (!rawKey) {
+      throw new Error(
+        "Falta la variable de entorno GOOGLE_SERVICE_ACCOUNT_KEY. Por favor configura el JSON de la cuenta de servicio."
+      );
+    }
+
+    let credentials: any;
+    try {
+      // Parse JSON string or handle base64 if needed
+      const trimmed = rawKey.trim();
+      if (trimmed.startsWith("{")) {
+        credentials = JSON.parse(trimmed);
+      } else {
+        const decoded = Buffer.from(trimmed, "base64").toString("utf-8");
+        credentials = JSON.parse(decoded);
+      }
+    } catch (parseErr: any) {
+      throw new Error(`Error al parsear el JSON de GOOGLE_SERVICE_ACCOUNT_KEY: ${parseErr.message}`);
+    }
+
+    // Google Drive Scope
+    const auth = new google.auth.GoogleAuth({
+      credentials,
+      scopes: ["https://www.googleapis.com/auth/drive"],
+    });
+
+    const drive = google.drive({ version: "v3", auth });
+    const targetFolderId =
+      process.env.GOOGLE_DRIVE_FOLDER_ID?.trim() || "";
+
+    return {
+      drive,
+      folderId: targetFolderId,
+      serviceAccountEmail: credentials.client_email || SERVICE_ACCOUNT_EMAIL,
+    };
+  }
+
+  // Upload PDF buffer directly to Google Drive via Service Account
+  async function uploadPdfBufferWithServiceAccount(
+    buffer: Buffer,
+    fileName: string,
+    patientName: string,
+    overrideFolderId?: string
+  ): Promise<{ fileId: string; fileName: string; webViewLink: string; folderId: string }> {
+    const { drive, folderId: envFolderId, serviceAccountEmail } = getGoogleDriveServiceAccountClient();
+    const destinationFolderId = overrideFolderId || envFolderId;
+
+    const fileMetadata: any = {
+      name: fileName,
+      mimeType: "application/pdf",
+      description: `Cuestionario inicial de la paciente ${patientName} — Vela Medicina & Nutrición Integral`,
+    };
+
+    if (destinationFolderId) {
+      fileMetadata.parents = [destinationFolderId];
+    }
+
+    const media = {
+      mimeType: "application/pdf",
+      body: Readable.from(buffer),
+    };
+
+    console.log(
+      `[Google Drive Service Account] Subiendo archivo '${fileName}' (${buffer.length} bytes) como '${serviceAccountEmail}' a la carpeta ID: '${destinationFolderId || "Root"}'...`
+    );
+
+    const res = await drive.files.create({
+      requestBody: fileMetadata,
+      media: media,
+      fields: "id, name, webViewLink, webContentLink, parents",
+      supportsAllDrives: true,
+    });
+
+    const fileId = res.data.id;
+    let webViewLink = res.data.webViewLink || `https://drive.google.com/file/d/${fileId}/view`;
+
+    // Make file readable to anyone with link for doctor ease of viewing
+    try {
+      await drive.permissions.create({
+        fileId: fileId,
+        requestBody: {
+          role: "reader",
+          type: "anyone",
+        },
+        supportsAllDrives: true,
+      });
+    } catch (permErr: any) {
+      console.warn("[Google Drive Service Account] Permisos públicos opcionales aviso:", permErr?.message);
+    }
+
+    return {
+      fileId: fileId,
+      fileName: res.data.name || fileName,
+      webViewLink: webViewLink,
+      folderId: destinationFolderId,
+    };
+  }
+
+  // ==========================================
+  // GOOGLE DRIVE API ENDPOINTS (SERVICE ACCOUNT)
+  // ==========================================
+
+  // Service Account status check endpoint
+  app.get("/api/admin/drive/status", async (req, res) => {
+    try {
+      const hasKey = Boolean(
+        process.env.GOOGLE_SERVICE_ACCOUNT_KEY ||
+        process.env.GOOGLE_SERVICE_ACCOUNT_JSON ||
+        process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON ||
+        process.env.GCP_SERVICE_ACCOUNT_KEY
+      );
+
+      const targetFolderId = process.env.GOOGLE_DRIVE_FOLDER_ID?.trim() || "";
+
+      if (!hasKey) {
+        return res.json({
+          success: true,
+          connected: false,
+          serviceAccountEmail: SERVICE_ACCOUNT_EMAIL,
+          folderId: targetFolderId,
+          folderName: GOOGLE_DRIVE_FOLDER_NAME,
+          error: "Falta configurar la variable GOOGLE_SERVICE_ACCOUNT_KEY",
+        });
+      }
+
+      // Try quick handshake
+      try {
+        const { drive, serviceAccountEmail } = getGoogleDriveServiceAccountClient();
+        return res.json({
+          success: true,
+          connected: true,
+          serviceAccountEmail: serviceAccountEmail,
+          folderId: targetFolderId,
+          folderName: GOOGLE_DRIVE_FOLDER_NAME,
+        });
+      } catch (authErr: any) {
+        return res.json({
+          success: true,
+          connected: false,
+          serviceAccountEmail: SERVICE_ACCOUNT_EMAIL,
+          folderId: targetFolderId,
+          folderName: GOOGLE_DRIVE_FOLDER_NAME,
+          error: authErr.message,
+        });
+      }
+    } catch (error: any) {
+      return res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
+  // Test upload endpoint
+  app.post("/api/admin/drive/test-upload", async (req, res) => {
+    try {
+      const testPdfContent = `%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n3 0 obj<</Type/Page/MediaBox[0 0 595 842]/Parent 2 0 R/Contents 4 0 R/Resources<</Font<</F1 5 0 R>>>>>>endobj\n4 0 obj<</Length 80>>stream\nBT /F1 16 Tf 50 750 Td (Vela - Prueba de conexion con Cuenta de Servicio Google Drive exitosa) Tj ET\nendstream\nendobj\n5 0 obj<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>endobj\nxref\n0 6\n0000000000 65535 f\n0000000010 00000 n\n0000000060 00000 n\n0000000117 00000 n\n0000000228 00000 n\n0000000354 00000 n\ntrailer<</Size 6/Root 1 0 R>>\nstartxref\n428\n%%EOF`;
+      const buffer = Buffer.from(testPdfContent, "utf-8");
+      const testFileName = `Prueba_ServiceAccount_Vela_${Date.now()}.pdf`;
+
+      const result = await uploadPdfBufferWithServiceAccount(
+        buffer,
+        testFileName,
+        "Administración Médica Vela"
+      );
+
+      return res.json({
+        success: true,
+        ...result,
+        message: "¡Archivo de prueba subido exitosamente a Google Drive con la Cuenta de Servicio!",
+      });
+    } catch (error: any) {
+      console.error("[Google Drive Service Account Test Error]:", error);
+      return res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
+  // Patient upload endpoint (100% server-side with service account, non-blocking for patient)
+  app.post("/api/drive/upload-patient-pdf", async (req, res) => {
+    try {
+      const { patientName, patientId, fileDataUrl, fileName } = req.body;
+      if (!fileDataUrl) {
+        return res.json({ success: false, error: "No se proporcionaron datos de archivo PDF" });
+      }
+
+      console.log("[Google Drive Server] ========================================");
+      console.log(`[Google Drive Server] Solicitud de subida para paciente: ${patientName || patientId}`);
+
+      let base64Data = fileDataUrl;
+      if (fileDataUrl.includes(",")) {
+        base64Data = fileDataUrl.split(",")[1];
+      }
+      const buffer = Buffer.from(base64Data, "base64");
+
+      const safePatientName = patientName || "Paciente";
+      const cleanName = safePatientName.trim().replace(/[\\/:*?"<>|]/g, "_").replace(/\s+/g, " ");
+      const todayStr = new Date().toISOString().split("T")[0];
+      const finalFileName = fileName || `Cuestionario_${cleanName}_${todayStr}.pdf`;
+
+      const uploadResult = await uploadPdfBufferWithServiceAccount(
+        buffer,
+        finalFileName,
+        safePatientName
+      );
+
+      console.log(`[Google Drive Server] Subida a Drive completada con éxito. Link: ${uploadResult.webViewLink}`);
+      console.log("[Google Drive Server] ========================================");
+
+      return res.json({
+        success: true,
+        fileId: uploadResult.fileId,
+        fileName: uploadResult.fileName,
+        webViewLink: uploadResult.webViewLink,
+        folderId: uploadResult.folderId,
+      });
+    } catch (error: any) {
+      console.warn("[Google Drive Server Service Account Notice] Falló o falta configurar variable de entorno:", error?.message);
+      return res.json({
+        success: false,
+        error: error.message || "Error al subir PDF a Google Drive",
+        reason: "service_account_not_configured_or_error",
+      });
+    }
+  });
 
   // Helper for lazy Gemini initialization
   const getGeminiClient = () => {

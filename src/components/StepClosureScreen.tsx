@@ -40,11 +40,10 @@ import {
   downloadPatientRecordPdf,
 } from '../utils/pdfGenerator';
 import {
-  uploadPatientPdfToGoogleDrive,
+  uploadPatientPdfToServerDrive,
   generateDrivePdfFileName,
   GOOGLE_DRIVE_FOLDER_NAME,
 } from '../services/googleDriveService';
-import { getGoogleDriveAccessToken } from '../services/googleAuthHelper';
 import { updatePatientDriveInfoInFirestore } from '../services/questionnaireService';
 
 interface StepClosureScreenProps {
@@ -151,19 +150,13 @@ export const StepClosureScreen: React.FC<StepClosureScreenProps> = ({
           console.warn('[Triple Respaldo Notice] Respaldo Firestore (aviso):', firestoreErr);
         }
 
-        // 3. Attempt Google Drive Automatic Backup in background (non-blocking)
+        // 3. Attempt Google Drive Automatic Backup in background via server (non-blocking)
         try {
           if (isMounted) setIsUploadingToDrive(true);
-          console.log('[Triple Respaldo] Paso 3: Verificando autenticación de Google Drive...');
+          console.log('[Triple Respaldo] Paso 3: Sincronizando respaldo automático de Google Drive en servidor...');
 
-          const token = await getGoogleDriveAccessToken().catch((authErr) => {
-            console.info('[Google Drive Auth Info] Token no disponible en segundo plano aún (se solicitará si se requiere):', authErr?.message);
-            return null;
-          });
-
-          if (token && blob) {
-            console.log('[Triple Respaldo] Subiendo copia del PDF a la carpeta de Google Drive: "' + GOOGLE_DRIVE_FOLDER_NAME + '"');
-            const driveResult = await uploadPatientPdfToGoogleDrive(token, blob, patientFullName);
+          if (blob) {
+            const driveResult = await uploadPatientPdfToServerDrive(blob, patientFullName, patientDoc.patientId);
 
             if (driveResult.success && driveResult.webViewLink) {
               console.log('[Triple Respaldo] Copia en Google Drive guardada exitosamente:', driveResult.webViewLink);
@@ -171,22 +164,20 @@ export const StepClosureScreen: React.FC<StepClosureScreenProps> = ({
                 setDriveUploadComplete(true);
                 setDriveFileLink(driveResult.webViewLink);
               }
-              // Update Firestore with the new Drive link instead of storage link
+              // Update Firestore with the new Drive link
               await updatePatientDriveInfoInFirestore(patientDoc.patientId, {
                 fileId: driveResult.fileId,
                 fileName: driveResult.fileName,
                 webViewLink: driveResult.webViewLink,
                 folderId: driveResult.folderId,
               });
-            } else if (driveResult.error) {
-              console.error('[Google Drive Diagnostic Error]:', driveResult.error);
+            } else {
+              console.log('[Triple Respaldo] Estado Google Drive en servidor:', driveResult.reason || driveResult.error || 'Listo para sincronizar');
             }
-          } else {
-            console.log('[Triple Respaldo] Google Drive quedará sincronizado al abrir o enviar el expediente.');
           }
         } catch (driveErr: any) {
           // Rule 4: If Drive upload fails, do NOT block download or WhatsApp. Just log diagnostic error in console.
-          console.error('[Google Drive Diagnostic Error Details]:', driveErr);
+          console.warn('[Google Drive Diagnostic Notice]:', driveErr?.message);
         } finally {
           if (isMounted) setIsUploadingToDrive(false);
         }
@@ -311,37 +302,29 @@ export const StepClosureScreen: React.FC<StepClosureScreenProps> = ({
         console.log('[WhatsApp Flow] Paso 2/5: PDF local ya disponible en memoria.');
       }
 
-      // Paso 3: Sincronización con Google Drive (Timeout máx 4.0s - no bloqueante)
+      // Paso 3: Sincronización con Google Drive en servidor (Timeout máx 3.5s - no bloqueante)
       if (!driveFileLink && currentBlob) {
-        console.log('[WhatsApp Flow] Paso 3/5: Intentando subir copia a Google Drive...');
+        console.log('[WhatsApp Flow] Paso 3/5: Intentando subir copia a Google Drive en servidor...');
         try {
-          const token = await runWithTimeout(
-            getGoogleDriveAccessToken(),
-            2000,
-            'Autenticación Drive'
-          ).catch(() => null);
-
-          if (token) {
-            const driveRes = await runWithTimeout(
-              uploadPatientPdfToGoogleDrive(token, currentBlob, patientFullName),
-              4000,
-              'Subida de PDF a Drive'
-            );
-            if (driveRes.success && driveRes.webViewLink) {
-              setDriveFileLink(driveRes.webViewLink);
-              setDriveUploadComplete(true);
-              console.log('[WhatsApp Flow] Paso 3/5: Subida a Drive exitosa:', driveRes.webViewLink);
-              const patientDoc = buildPatientDocument();
-              updatePatientDriveInfoInFirestore(patientDoc.patientId, {
-                fileId: driveRes.fileId,
-                fileName: driveRes.fileName,
-                webViewLink: driveRes.webViewLink,
-                folderId: driveRes.folderId,
-              }).catch((fErr) => console.warn('[WhatsApp Flow] Firestore sync warning:', fErr));
-            }
+          const patientDoc = buildPatientDocument();
+          const driveRes = await runWithTimeout(
+            uploadPatientPdfToServerDrive(currentBlob, patientFullName, patientDoc.patientId),
+            3500,
+            'Subida de PDF a Drive'
+          );
+          if (driveRes.success && driveRes.webViewLink) {
+            setDriveFileLink(driveRes.webViewLink);
+            setDriveUploadComplete(true);
+            console.log('[WhatsApp Flow] Paso 3/5: Subida a Drive exitosa:', driveRes.webViewLink);
+            updatePatientDriveInfoInFirestore(patientDoc.patientId, {
+              fileId: driveRes.fileId,
+              fileName: driveRes.fileName,
+              webViewLink: driveRes.webViewLink,
+              folderId: driveRes.folderId,
+            }).catch((fErr) => console.warn('[WhatsApp Flow] Firestore sync warning:', fErr));
           }
         } catch (dErr) {
-          console.error('[WhatsApp Flow Paso 3 Error] Subida a Google Drive omitida o tardó demasiado:', dErr);
+          console.warn('[WhatsApp Flow Paso 3 Notice] Subida a Google Drive en segundo plano omitida o en curso:', dErr);
         }
       } else if (driveFileLink) {
         console.log('[WhatsApp Flow] Paso 3/5: Enlace de Google Drive ya listo:', driveFileLink);

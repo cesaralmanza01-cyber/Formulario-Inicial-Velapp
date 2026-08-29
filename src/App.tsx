@@ -14,6 +14,7 @@ import { StepNineForm } from './components/StepNineForm';
 import { StepInBodyForm } from './components/StepInBodyForm';
 import { StepClosureScreen } from './components/StepClosureScreen';
 import { StepCompletionModal } from './components/StepCompletionModal';
+import { AdminPortal } from './components/AdminPortal';
 import { VelaIcon } from './components/VelaIcon';
 import { saveQuestionnaireToFirestore } from './services/questionnaireService';
 import {
@@ -27,9 +28,28 @@ import {
   PatientLabExamsInfo,
   PatientInBodyInfo,
 } from './types';
-import { ShieldCheck, Heart } from 'lucide-react';
+import { ShieldCheck, Heart, Lock } from 'lucide-react';
 
 export default function App() {
+  const [isAdminView, setIsAdminView] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return (
+      window.location.hash === '#admin' ||
+      window.location.pathname === '/admin' ||
+      window.location.search.includes('admin=true')
+    );
+  });
+
+  useEffect(() => {
+    const handleHashChange = () => {
+      const isHashAdmin = window.location.hash === '#admin';
+      setIsAdminView(isHashAdmin);
+    };
+
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
+
   const [currentStep, setCurrentStep] = useState<number>(() => {
     const savedStep = localStorage.getItem('vela_current_step');
     if (savedStep !== null) {
@@ -280,6 +300,17 @@ export default function App() {
     }
   };
 
+  if (isAdminView) {
+    return (
+      <AdminPortal
+        onBackToApp={() => {
+          setIsAdminView(false);
+          window.location.hash = '';
+        }}
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#FAF6F0] flex flex-col selection:bg-[#AEC9C0]/40 selection:text-[#2E3A36]">
       {/* Brand Header */}
@@ -514,7 +545,7 @@ export default function App() {
             </div>
           </div>
 
-          <div className="flex items-center gap-4 text-[11px] text-[#8E9E99]">
+          <div className="flex flex-wrap items-center gap-4 text-[11px] text-[#8E9E99]">
             <span className="flex items-center gap-1">
               <ShieldCheck className="w-3.5 h-3.5 text-[#6E9E93]" />
               Protección de datos médicos
@@ -524,6 +555,17 @@ export default function App() {
               <Heart className="w-3 h-3 text-[#F2A488] fill-[#F2A488]" />
               Enfoque humano y sereno
             </span>
+            <span>•</span>
+            <button
+              onClick={() => {
+                setIsAdminView(true);
+                window.location.hash = '#admin';
+              }}
+              className="inline-flex items-center gap-1 text-[#588377] hover:text-[#2E3A36] font-medium transition-colors cursor-pointer"
+            >
+              <Lock className="w-3 h-3" />
+              Portal Médico
+            </button>
           </div>
         </div>
       </footer>
