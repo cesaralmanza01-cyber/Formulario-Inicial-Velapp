@@ -96,6 +96,7 @@ export default function App() {
   const syncProgressToFirestore = async (overrides?: {
     step?: number;
     isComplete?: boolean;
+    isSavedByPatient?: boolean;
     step1?: PatientBasicInfo | null;
     step2?: PatientMotivationInfo | null;
     step3?: PatientWeightHistoryInfo | null;
@@ -109,9 +110,11 @@ export default function App() {
     try {
       setIsSyncingFirestore(true);
       const targetStep = overrides?.step ?? currentStep;
+      const isSaved = overrides?.isSavedByPatient ?? (localStorage.getItem('vela_patient_has_saved') === 'true');
       await saveQuestionnaireToFirestore({
         currentStep: targetStep,
-        isComplete: overrides?.isComplete ?? (targetStep === 11),
+        isComplete: overrides?.isComplete ?? isSaved,
+        isSavedByPatient: isSaved,
         step1Data: overrides?.step1 !== undefined ? overrides.step1 : step1Data,
         step2Data: overrides?.step2 !== undefined ? overrides.step2 : step2Data,
         step3Data: overrides?.step3 !== undefined ? overrides.step3 : step3Data,
@@ -247,13 +250,21 @@ export default function App() {
   const handleStepInBodyContinue = (data: PatientInBodyInfo) => {
     setStepInBodyData(data);
     setCurrentStep(11);
-    syncProgressToFirestore({ step: 11, stepInBody: data, isComplete: true });
+    syncProgressToFirestore({ step: 11, stepInBody: data });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleStepClosureBack = () => {
     setCurrentStep(10);
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleSaveQuestionnaire = async () => {
+    await syncProgressToFirestore({
+      step: 11,
+      isComplete: true,
+      isSavedByPatient: true,
+    });
   };
 
   const handleOpenDoctorPortal = () => {
@@ -278,6 +289,7 @@ export default function App() {
       localStorage.removeItem('vela_step9_data');
       localStorage.removeItem('vela_step10_inbody_data');
       localStorage.removeItem('vela_current_step');
+      localStorage.removeItem('vela_patient_has_saved');
       window.location.reload();
     }
   };
@@ -463,6 +475,7 @@ export default function App() {
                 inBodyInfo={stepInBodyData}
                 onBack={handleStepClosureBack}
                 onViewSummary={() => setIsModalOpen(true)}
+                onSaveQuestionnaire={handleSaveQuestionnaire}
               />
             </motion.div>
           )}

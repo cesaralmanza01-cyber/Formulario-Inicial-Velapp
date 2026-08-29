@@ -156,6 +156,7 @@ function getCachedStepData<T>(key: string): T | null {
 export async function saveQuestionnaireToFirestore(params: {
   currentStep: number;
   isComplete?: boolean;
+  isSavedByPatient?: boolean;
   step1Data?: PatientBasicInfo | null;
   step2Data?: PatientMotivationInfo | null;
   step3Data?: PatientWeightHistoryInfo | null;
@@ -220,12 +221,17 @@ export async function saveQuestionnaireToFirestore(params: {
   const docRef = doc(db, COLLECTION_NAME, patientId);
   let existingStartedAt: string | undefined;
   let existingCompletedAt: string | undefined;
+  let existingSavedByPatient: boolean | undefined;
+  let existingSavedAt: string | undefined;
 
   try {
     const existingDoc = await getDoc(docRef);
     if (existingDoc.exists()) {
-      existingStartedAt = existingDoc.data()?.startedAt;
-      existingCompletedAt = existingDoc.data()?.completedAt;
+      const data = existingDoc.data();
+      existingStartedAt = data?.startedAt;
+      existingCompletedAt = data?.completedAt;
+      existingSavedByPatient = data?.isSavedByPatient;
+      existingSavedAt = data?.savedAt;
     }
   } catch (e) {
     console.warn('Notice reading existing doc:', e);
@@ -233,17 +239,21 @@ export async function saveQuestionnaireToFirestore(params: {
 
   const now = new Date().toISOString();
   const startedAt = existingStartedAt || now;
-  const status: 'en progreso' | 'completado' = params.isComplete ? 'completado' : 'en progreso';
+  const isSaved = params.isSavedByPatient ?? existingSavedByPatient ?? false;
+  const isDone = params.isComplete || isSaved;
+  const status: 'en progreso' | 'completado' = isDone ? 'completado' : 'en progreso';
 
   const docData: FirestoreQuestionnaireDocument = {
     patientId,
     patientName: step1?.fullName?.trim() || 'Paciente en registro',
     patientDocument: step1?.documentNumber?.trim() || '',
     status,
+    isSavedByPatient: isSaved,
+    savedAt: isSaved ? (existingSavedAt || now) : undefined,
     currentStep: params.currentStep,
     startedAt,
     updatedAt: now,
-    completedAt: params.isComplete ? now : existingCompletedAt,
+    completedAt: isDone ? (existingCompletedAt || now) : undefined,
     banderas_revisar: redFlagsEvaluation.flags,
     identificacion: step1 || null,
     motivo_objetivos: step2 || null,

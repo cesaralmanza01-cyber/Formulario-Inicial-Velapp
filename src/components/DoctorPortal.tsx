@@ -164,8 +164,9 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({ onBackToApp }) => {
     const matchesSearch = nameMatch || docMatch || reasonMatch;
     if (!matchesSearch) return false;
 
-    if (selectedStatusFilter === 'completado') return item.status === 'completado';
-    if (selectedStatusFilter === 'en progreso') return item.status === 'en progreso';
+    const isDone = item.isSavedByPatient || item.status === 'completado';
+    if (selectedStatusFilter === 'completado') return isDone;
+    if (selectedStatusFilter === 'en progreso') return !isDone;
     if (selectedStatusFilter === 'red_flags') return item.banderas_revisar && item.banderas_revisar.length > 0;
 
     return true;
@@ -346,8 +347,8 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({ onBackToApp }) => {
   }
 
   // --- AUTHORIZED DOCTOR DASHBOARD ---
-  const completedCount = questionnaires.filter((q) => q.status === 'completado').length;
-  const inProgressCount = questionnaires.filter((q) => q.status === 'en progreso').length;
+  const completedCount = questionnaires.filter((q) => q.isSavedByPatient || q.status === 'completado').length;
+  const inProgressCount = questionnaires.filter((q) => !q.isSavedByPatient && q.status !== 'completado').length;
   const withRedFlagsCount = questionnaires.filter((q) => q.banderas_revisar && q.banderas_revisar.length > 0).length;
 
   return (
@@ -546,12 +547,14 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({ onBackToApp }) => {
                         <div className="flex flex-col items-end gap-1">
                           <span
                             className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-                              item.status === 'completado'
+                              item.isSavedByPatient || item.status === 'completado'
                                 ? 'bg-[#E5F7ED] text-[#1E7E48]'
                                 : 'bg-[#FAF0E6] text-[#A2622D]'
                             }`}
                           >
-                            {item.status === 'completado' ? 'Completado' : `Paso ${item.currentStep}/11`}
+                            {item.isSavedByPatient || item.status === 'completado'
+                              ? '✓ Guardado'
+                              : `Paso ${item.currentStep}/11`}
                           </span>
 
                           {/* Warm coral highlight for clinical review flag */}

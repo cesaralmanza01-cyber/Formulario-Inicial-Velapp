@@ -99,12 +99,14 @@ export const DoctorPatientDetail: React.FC<DoctorPatientDetailProps> = ({
         <div className="flex items-center gap-2.5 flex-wrap">
           <span
             className={`px-3 py-1.5 rounded-full text-xs font-semibold shrink-0 ${
-              patient.status === 'completado'
+              patient.isSavedByPatient || patient.status === 'completado'
                 ? 'bg-[#E5F7ED] text-[#1E7E48] border border-[#1E7E48]/20'
                 : 'bg-[#FAF0E6] text-[#A2622D] border border-[#A2622D]/20'
             }`}
           >
-            {patient.status === 'completado' ? '✓ Cuestionario Completado' : `En progreso (Paso ${patient.currentStep}/11)`}
+            {patient.isSavedByPatient || patient.status === 'completado'
+              ? '✓ Cuestionario Guardado y Enviado'
+              : `En progreso (Paso ${patient.currentStep}/11)`}
           </span>
 
           <button

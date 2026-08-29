@@ -81,9 +81,9 @@ export const defaultSteps: StepItem[] = [
   },
   {
     id: 11,
-    title: 'Agradecimiento y agendamiento',
-    shortTitle: 'Agendar cita',
-    description: 'Cierre y contacto directo por WhatsApp',
+    title: 'Guardar y agendar cita',
+    shortTitle: 'Finalizar',
+    description: 'Guardar respuestas y agendar cita por WhatsApp',
     status: 'upcoming',
   },
 ];

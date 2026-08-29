@@ -287,6 +287,8 @@ export interface FirestoreQuestionnaireDocument {
   patientName: string;
   patientDocument: string;
   status: 'en progreso' | 'completado';
+  isSavedByPatient?: boolean;
+  savedAt?: string;
   currentStep: number;
   startedAt: string;
   updatedAt: string;
