@@ -977,7 +977,11 @@ export const StepCompletionModal: React.FC<StepCompletionModalProps> = ({
               Como ya completaste tu cuestionario inicial, tu contexto clínico está listo para la Dra. Lorena. Escríbenos a nuestra línea de WhatsApp (+57 301 141 7555) para coordinar la fecha y hora de tu cita.
             </p>
             <a
-              href="https://wa.me/573011417555?text=Hola%20equipo%20Vela%2C%20acabo%20de%20completar%20mi%20Cuestionario%20Inicial%20y%20me%20gustar%C3%ADa%20agendar%20mi%20cita%20m%C3%A9dica."
+              href={`https://wa.me/573011417555?text=${encodeURIComponent(
+                step1Data?.fullName
+                  ? `Hola, soy ${step1Data.fullName}, ya completé mi Cuestionario Médico Inicial. Adjunto mi PDF a continuación. Me gustaría agendar mi primera consulta.`
+                  : `Hola, ya completé mi Cuestionario Médico Inicial. Adjunto mi PDF a continuación. Me gustaría agendar mi primera consulta.`
+              )}`}
               target="_blank"
               rel="noopener noreferrer"
               className="w-full py-3 px-4 rounded-xl bg-[#25D366] hover:bg-[#20BA5A] text-white font-semibold text-xs transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer"
