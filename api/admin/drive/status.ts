@@ -14,8 +14,7 @@ export default async function handler(req: any, res: any) {
   );
 
   if (req.method === 'OPTIONS') {
-    res.status(200).end();
-    return;
+    return res.status(200).end();
   }
 
   try {
@@ -49,6 +48,7 @@ export default async function handler(req: any, res: any) {
         folderName: GOOGLE_DRIVE_FOLDER_NAME,
       });
     } catch (authErr: any) {
+      console.error('[Drive Status Check Auth Error]:', authErr?.message, authErr?.stack);
       return res.status(200).json({
         success: true,
         connected: false,
@@ -59,6 +59,7 @@ export default async function handler(req: any, res: any) {
       });
     }
   } catch (error: any) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('[Drive Status Check Uncaught Error]:', error?.message, error?.stack);
+    return res.status(200).json({ success: false, connected: false, error: error.message });
   }
 }

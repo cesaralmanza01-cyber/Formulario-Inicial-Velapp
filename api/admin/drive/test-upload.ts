@@ -18,8 +18,7 @@ export default async function handler(req: any, res: any) {
   );
 
   if (req.method === 'OPTIONS') {
-    res.status(200).end();
-    return;
+    return res.status(200).end();
   }
 
   if (req.method !== 'POST') {
@@ -43,7 +42,16 @@ export default async function handler(req: any, res: any) {
       message: '¡Archivo de prueba subido exitosamente a Google Drive con la Cuenta de Servicio!',
     });
   } catch (error: any) {
-    console.error('[Google Drive Vercel Serverless Test Error]:', error);
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('================================================================');
+    console.error('[Drive Test Upload Serverless ERROR]:', error?.message || error);
+    if (error?.stack) {
+      console.error('[Drive Test Upload STACK TRACE]:', error.stack);
+    }
+    console.error('================================================================');
+    return res.status(200).json({
+      success: false,
+      error: error?.message || 'Error en prueba de subida a Google Drive',
+      reason: 'test_upload_failed',
+    });
   }
 }

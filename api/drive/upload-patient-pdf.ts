@@ -20,28 +20,41 @@ export default async function handler(req: any, res: any) {
   );
 
   if (req.method === 'OPTIONS') {
-    res.status(200).end();
-    return;
+    return res.status(200).end();
   }
 
   if (req.method !== 'POST') {
-    return res.status(405).json({ success: false, error: 'Method Not Allowed' });
+    return res.status(405).json({ success: false, error: 'Método no permitido (Use POST)' });
   }
 
   try {
-    const { patientName, patientId, fileDataUrl, fileName } = req.body || {};
-    if (!fileDataUrl) {
-      return res.status(400).json({ success: false, error: 'No se proporcionaron datos de archivo PDF' });
+    let body = req.body;
+    if (typeof body === 'string') {
+      try {
+        body = JSON.parse(body);
+      } catch (parseErr: any) {
+        console.error('[Upload PDF Serverless] Error al parsear JSON del body:', parseErr);
+        return res.status(400).json({ success: false, error: 'Cuerpo de la solicitud no es un JSON válido' });
+      }
     }
 
-    console.log('[Google Drive Serverless] ========================================');
-    console.log(`[Google Drive Serverless] Solicitud de subida para paciente: ${patientName || patientId}`);
+    const { patientName, patientId, fileDataUrl, fileName } = body || {};
+
+    if (!fileDataUrl) {
+      console.error('[Upload PDF Serverless] Solicitud rechazada: falta fileDataUrl.');
+      return res.status(400).json({ success: false, error: 'No se proporcionaron datos de archivo PDF (fileDataUrl)' });
+    }
+
+    console.log('[Upload PDF Serverless] ========================================');
+    console.log(`[Upload PDF Serverless] Iniciando subida para paciente: '${patientName || patientId || 'Sin Nombre'}'`);
 
     let base64Data = fileDataUrl;
-    if (fileDataUrl.includes(',')) {
+    if (typeof fileDataUrl === 'string' && fileDataUrl.includes(',')) {
       base64Data = fileDataUrl.split(',')[1];
     }
+
     const buffer = Buffer.from(base64Data, 'base64');
+    console.log(`[Upload PDF Serverless] Tamaño del buffer decodificado: ${buffer.length} bytes`);
 
     const safePatientName = patientName || 'Paciente';
     const cleanName = safePatientName.trim().replace(/[\\/:*?"<>|]/g, '_').replace(/\s+/g, ' ');
@@ -54,8 +67,10 @@ export default async function handler(req: any, res: any) {
       safePatientName
     );
 
-    console.log(`[Google Drive Serverless] Subida a Drive completada con éxito. Link: ${uploadResult.webViewLink}`);
-    console.log('[Google Drive Serverless] ========================================');
+    console.log(`[Upload PDF Serverless] ¡Subida a Google Drive exitosa!`);
+    console.log(`[Upload PDF Serverless] File ID: ${uploadResult.fileId}`);
+    console.log(`[Upload PDF Serverless] Link: ${uploadResult.webViewLink}`);
+    console.log('[Upload PDF Serverless] ========================================');
 
     return res.status(200).json({
       success: true,
@@ -65,11 +80,21 @@ export default async function handler(req: any, res: any) {
       folderId: uploadResult.folderId,
     });
   } catch (error: any) {
-    console.warn('[Google Drive Serverless Service Account Notice]:', error?.message);
+    console.error('================================================================');
+    console.error('[Upload PDF Serverless ERROR FATAL]:', error?.message || error);
+    if (error?.stack) {
+      console.error('[Upload PDF Serverless STACK TRACE]:', error.stack);
+    }
+    if (error?.response?.data) {
+      console.error('[Google Drive API Raw Error Data]:', JSON.stringify(error.response.data));
+    }
+    console.error('================================================================');
+
     return res.status(200).json({
       success: false,
-      error: error.message || 'Error al subir PDF a Google Drive',
-      reason: 'service_account_not_configured_or_error',
+      error: error?.message || 'Error interno al procesar subida a Google Drive',
+      stack: process.env.NODE_ENV !== 'production' ? error?.stack : undefined,
+      reason: 'service_account_or_drive_api_error',
     });
   }
 }

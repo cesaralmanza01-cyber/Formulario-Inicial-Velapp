@@ -5,9 +5,79 @@ export const GOOGLE_DRIVE_FOLDER_NAME = 'Vela - Cuestionarios Pacientes';
 export const SERVICE_ACCOUNT_EMAIL = 'vela-drive-uploader@consultorio-m5-95.iam.gserviceaccount.com';
 
 /**
- * Helper to get Google Drive client authenticated via Service Account JSON key
+ * Safely parses and normalizes Google Service Account credentials.
+ * Handles escaped newlines, stringified JSON, base64 encoding, and formatting edge cases.
  */
-export function getGoogleDriveServiceAccountClient(): { drive: any; folderId: string; serviceAccountEmail: string } {
+export function parseServiceAccountCredentials(rawKey: string): {
+  client_email: string;
+  private_key: string;
+  project_id?: string;
+} {
+  if (!rawKey || typeof rawKey !== 'string') {
+    throw new Error('Falta la variable de entorno GOOGLE_SERVICE_ACCOUNT_KEY en el servidor/Vercel.');
+  }
+
+  let str = rawKey.trim();
+
+  // Remove potential wrapping quotes if added by Vercel env variable UI
+  if ((str.startsWith('"') && str.endsWith('"')) || (str.startsWith("'") && str.endsWith("'"))) {
+    str = str.slice(1, -1).trim();
+  }
+
+  let parsed: any;
+  if (str.startsWith('{')) {
+    try {
+      parsed = JSON.parse(str);
+    } catch (e: any) {
+      try {
+        const sanitized = str.replace(/\r?\n/g, '\\n');
+        parsed = JSON.parse(sanitized);
+      } catch (e2: any) {
+        throw new Error(`Error parseando el JSON de GOOGLE_SERVICE_ACCOUNT_KEY: ${e.message}`);
+      }
+    }
+  } else {
+    try {
+      const decoded = Buffer.from(str, 'base64').toString('utf-8');
+      parsed = JSON.parse(decoded);
+    } catch (e: any) {
+      throw new Error(`El valor de GOOGLE_SERVICE_ACCOUNT_KEY no es un JSON válido ni base64: ${e.message}`);
+    }
+  }
+
+  if (!parsed.client_email) {
+    throw new Error('El JSON de la cuenta de servicio no contiene el campo "client_email".');
+  }
+  if (!parsed.private_key) {
+    throw new Error('El JSON de la cuenta de servicio no contiene el campo "private_key".');
+  }
+
+  // CRITICAL FIX: Convert literal escaped \n strings to real newline characters
+  let formattedPrivateKey = parsed.private_key;
+  if (typeof formattedPrivateKey === 'string') {
+    formattedPrivateKey = formattedPrivateKey.replace(/\\n/g, '\n');
+    // Ensure standard PEM boundary if truncated
+    if (!formattedPrivateKey.includes('-----BEGIN PRIVATE KEY-----')) {
+      formattedPrivateKey = `-----BEGIN PRIVATE KEY-----\n${formattedPrivateKey}\n-----END PRIVATE KEY-----\n`;
+    }
+  }
+
+  return {
+    client_email: String(parsed.client_email).trim(),
+    private_key: formattedPrivateKey,
+    project_id: parsed.project_id,
+  };
+}
+
+/**
+ * Helper to get Google Drive client authenticated via Direct JWT Client.
+ * Using JWT avoids slow GCP metadata server lookups that cause serverless function timeouts.
+ */
+export function getGoogleDriveServiceAccountClient(): {
+  drive: any;
+  folderId: string;
+  serviceAccountEmail: string;
+} {
   const rawKey =
     process.env.GOOGLE_SERVICE_ACCOUNT_KEY ||
     process.env.GOOGLE_SERVICE_ACCOUNT_JSON ||
@@ -16,30 +86,20 @@ export function getGoogleDriveServiceAccountClient(): { drive: any; folderId: st
 
   if (!rawKey) {
     throw new Error(
-      'Falta la variable de entorno GOOGLE_SERVICE_ACCOUNT_KEY en el servidor/Vercel. Por favor configura el JSON de la cuenta de servicio.'
+      'Falta la variable de entorno GOOGLE_SERVICE_ACCOUNT_KEY en Vercel. Por favor configura el JSON de la cuenta de servicio.'
     );
   }
 
-  let credentials: any;
-  try {
-    const trimmed = rawKey.trim();
-    if (trimmed.startsWith('{')) {
-      credentials = JSON.parse(trimmed);
-    } else {
-      const decoded = Buffer.from(trimmed, 'base64').toString('utf-8');
-      credentials = JSON.parse(decoded);
-    }
-  } catch (parseErr: any) {
-    throw new Error(`Error al parsear el JSON de GOOGLE_SERVICE_ACCOUNT_KEY: ${parseErr.message}`);
-  }
+  const credentials = parseServiceAccountCredentials(rawKey);
 
-  // Google Drive Scope
-  const auth = new google.auth.GoogleAuth({
-    credentials,
+  // Use direct JWT auth to avoid metadata server discovery lag in serverless environments
+  const jwtClient = new google.auth.JWT({
+    email: credentials.client_email,
+    key: credentials.private_key,
     scopes: ['https://www.googleapis.com/auth/drive'],
   });
 
-  const drive = google.drive({ version: 'v3', auth });
+  const drive = google.drive({ version: 'v3', auth: jwtClient });
   const targetFolderId = process.env.GOOGLE_DRIVE_FOLDER_ID?.trim() || '';
 
   return {
@@ -71,9 +131,14 @@ export async function uploadPdfBufferWithServiceAccount(
     fileMetadata.parents = [destinationFolderId];
   }
 
+  const stream = Readable.from(buffer);
+  stream.on('error', (err) => {
+    console.error('[Google Drive Stream Error]:', err);
+  });
+
   const media = {
     mimeType: 'application/pdf',
-    body: Readable.from(buffer),
+    body: stream,
   };
 
   console.log(
