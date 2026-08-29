@@ -2,7 +2,7 @@ import { Readable } from 'stream';
 import { google } from 'googleapis';
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore, doc, getDoc } from 'firebase/firestore';
-import { firebaseConfig } from '../../src/firebaseConfig';
+import { firebaseConfig } from '../firebaseConfig';
 
 export const config = {
   api: {
