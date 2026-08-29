@@ -1,5 +1,5 @@
 import React from 'react';
-import { ShieldCheck, Clock } from 'lucide-react';
+import { ShieldCheck } from 'lucide-react';
 import { StepItem } from '../types';
 
 interface WizardProgressProps {
@@ -93,16 +93,8 @@ export const WizardProgress: React.FC<WizardProgressProps> = ({
   totalSteps = 11,
   steps = defaultSteps,
 }) => {
-  const percentage = Math.max(5, Math.min(100, Math.round((currentStep / totalSteps) * 100)));
-
-  // Calculate proportional estimated remaining time based on 20-30 minutes total
-  const getTimeEstimate = () => {
-    if (currentStep <= 1) return '20 a 30 min';
-    if (currentStep >= totalSteps) return '~1 min';
-    const remainingFraction = (totalSteps - currentStep + 1) / totalSteps;
-    const estimatedMinutes = Math.max(2, Math.round(remainingFraction * 25));
-    return `~${estimatedMinutes} min`;
-  };
+  const rawPercentage = totalSteps > 0 ? Math.round((currentStep / totalSteps) * 100) : 5;
+  const percentage = Math.max(5, Math.min(100, isNaN(rawPercentage) ? 5 : rawPercentage));
 
   const currentStepTitle =
     currentStep === 0
@@ -122,12 +114,7 @@ export const WizardProgress: React.FC<WizardProgressProps> = ({
             </span>
           </div>
 
-          <div className="flex items-center gap-3 text-xs text-[#5C6E68]">
-            <span className="inline-flex items-center gap-1 font-medium text-[#5B887E]">
-              <Clock className="w-3.5 h-3.5 text-[#6E9E93]" />
-              {getTimeEstimate()}
-            </span>
-            <span className="text-[#AEC9C0]">•</span>
+          <div className="flex items-center gap-2 text-xs text-[#5C6E68]">
             <span className="inline-flex items-center gap-1">
               <ShieldCheck className="w-3.5 h-3.5 text-[#6E9E93]" />
               Confidencial

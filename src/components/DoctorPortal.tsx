@@ -207,7 +207,7 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({ onBackToApp }) => {
       <div className="min-h-screen bg-[#FAF6F0] flex flex-col justify-between p-4 sm:p-8">
         <header className="max-w-6xl w-full mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <VelaLogo size={36} />
+            <VelaLogo height={36} />
             <div>
               <span
                 className="text-lg font-medium text-[#2E3A36]"
@@ -357,7 +357,7 @@ export const DoctorPortal: React.FC<DoctorPortalProps> = ({ onBackToApp }) => {
       <header className="bg-white border-b border-[#E8E2D8] sticky top-0 z-30 px-4 sm:px-8 py-3.5">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <VelaLogo size={34} />
+            <VelaLogo height={34} />
             <div>
               <div className="flex items-center gap-2">
                 <span

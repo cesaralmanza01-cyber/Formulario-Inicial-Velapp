@@ -416,7 +416,7 @@ export const StepFiveForm: React.FC<StepFiveFormProps> = ({
           <div
             className="h-full bg-linear-to-r from-[#AEC9C0] to-[#6E9E93] rounded-full transition-all duration-300 ease-out"
             style={{
-              width: `${Math.round((reviewedCategoriesCount / totalCategories) * 100)}%`,
+              width: `${totalCategories > 0 ? Math.round((reviewedCategoriesCount / totalCategories) * 100) : 0}%`,
             }}
           />
         </div>

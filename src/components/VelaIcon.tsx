@@ -11,10 +11,12 @@ export const VelaIcon: React.FC<VelaIconProps> = ({
   size = 40,
   showCircleBackground = false,
 }) => {
+  const validSize = typeof size === 'number' && !isNaN(size) && size > 0 ? size : 40;
+
   const svgContent = (
     <svg
-      width={size}
-      height={size}
+      width={validSize}
+      height={validSize}
       viewBox="0 0 100 100"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"

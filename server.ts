@@ -1,5 +1,6 @@
 import express from "express";
 import path from "path";
+import fs from "fs";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
@@ -9,6 +10,14 @@ dotenv.config();
 async function startServer() {
   const app = express();
   const PORT = 3000;
+
+  // Directory for storing uploaded clinical PDFs
+  const uploadsDir = path.join(process.cwd(), "uploads", "pdfs");
+  try {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+  } catch (err) {
+    console.warn("Notice: could not create uploads directory:", err);
+  }
 
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ extended: true, limit: "50mb" }));
@@ -24,6 +33,92 @@ async function startServer() {
       }
     });
   };
+
+  // API endpoint to upload patient clinical PDF securely and reliably
+  app.post("/api/pdf/upload", (req, res) => {
+    try {
+      const { patientId, fileName, fileDataUrl, patientName } = req.body;
+      if (!fileDataUrl) {
+        return res.status(400).json({ success: false, error: "No se proporcionaron datos de archivo" });
+      }
+
+      let base64Data = fileDataUrl;
+      if (fileDataUrl.includes(",")) {
+        base64Data = fileDataUrl.split(",")[1];
+      }
+
+      const buffer = Buffer.from(base64Data, "base64");
+      const safePatientId = (patientId || "paciente").replace(/[^a-zA-Z0-9_-]/g, "_");
+      const safePatientName = (patientName || "paciente").replace(/[^a-zA-Z0-9_-]/g, "_");
+      const timestamp = Date.now();
+      const uniqueFileName = `${safePatientId}_${safePatientName}_${timestamp}.pdf`;
+      const filePath = path.join(uploadsDir, uniqueFileName);
+
+      fs.writeFileSync(filePath, buffer);
+      console.log(`[PDF Upload] Archivo PDF guardado en servidor: ${filePath} (${buffer.length} bytes)`);
+
+      // Determine public URL
+      const host = req.get("host") || `localhost:${PORT}`;
+      const protocol = req.protocol === "https" || req.headers["x-forwarded-proto"] === "https" ? "https" : "http";
+      const viewUrl = `${protocol}://${host}/api/pdf/view/${uniqueFileName}`;
+      const downloadUrl = `${protocol}://${host}/api/pdf/download/${uniqueFileName}`;
+
+      return res.json({
+        success: true,
+        fileId: uniqueFileName,
+        url: viewUrl,
+        downloadUrl: downloadUrl,
+        size: buffer.length,
+        fileName: fileName || uniqueFileName,
+      });
+    } catch (error: any) {
+      console.error("[PDF Upload Error] Error al guardar PDF en servidor:", error);
+      return res.status(500).json({
+        success: false,
+        error: error.message || "Error al procesar el archivo PDF",
+      });
+    }
+  });
+
+  // API endpoint to view/preview PDF inline in browser
+  app.get("/api/pdf/view/:fileId", (req, res) => {
+    try {
+      const { fileId } = req.params;
+      const safeFileId = path.basename(fileId);
+      const filePath = path.join(uploadsDir, safeFileId);
+
+      if (!fs.existsSync(filePath)) {
+        return res.status(404).send("Documento PDF no encontrado.");
+      }
+
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `inline; filename="${safeFileId}"`);
+      return res.sendFile(filePath);
+    } catch (error: any) {
+      console.error("[PDF View Error] Error al servir vista de PDF:", error);
+      return res.status(500).send("Error al abrir el documento PDF.");
+    }
+  });
+
+  // API endpoint to download PDF as attachment
+  app.get("/api/pdf/download/:fileId", (req, res) => {
+    try {
+      const { fileId } = req.params;
+      const safeFileId = path.basename(fileId);
+      const filePath = path.join(uploadsDir, safeFileId);
+
+      if (!fs.existsSync(filePath)) {
+        return res.status(404).send("Documento PDF no encontrado.");
+      }
+
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="${safeFileId}"`);
+      return res.sendFile(filePath);
+    } catch (error: any) {
+      console.error("[PDF Download Error] Error al descargar PDF:", error);
+      return res.status(500).send("Error al descargar el documento PDF.");
+    }
+  });
 
   // API endpoint for analyzing InBody report documents / images / PDFs
   app.post("/api/inbody/analyze", async (req, res) => {

@@ -2,7 +2,7 @@ import React from 'react';
 
 interface VelaLogoProps {
   className?: string;
-  size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl';
+  size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl' | number;
   height?: number;
 }
 
@@ -11,7 +11,7 @@ export const VelaLogo: React.FC<VelaLogoProps> = ({
   size = 'md',
   height,
 }) => {
-  const heightMap = {
+  const heightMap: Record<string, number> = {
     xs: 24,
     sm: 32,
     md: 42,
@@ -19,9 +19,17 @@ export const VelaLogo: React.FC<VelaLogoProps> = ({
     xl: 72,
   };
 
-  const actualHeight = height || heightMap[size];
+  let actualHeight = 42;
+  if (typeof height === 'number' && !isNaN(height) && height > 0) {
+    actualHeight = height;
+  } else if (typeof size === 'number' && !isNaN(size) && size > 0) {
+    actualHeight = size;
+  } else if (typeof size === 'string' && heightMap[size]) {
+    actualHeight = heightMap[size];
+  }
+
   // Proportions matching the official "Velapp" logo with top coral dot
-  const actualWidth = Math.round(actualHeight * 2.6);
+  const actualWidth = Math.round(actualHeight * 2.6) || 110;
 
   return (
     <div className={`inline-flex items-center select-none ${className}`}>

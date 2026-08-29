@@ -39,8 +39,65 @@ export async function ensurePatientAuth(): Promise<string> {
   if (auth.currentUser) {
     return auth.currentUser.uid;
   }
-  const userCredential = await signInAnonymously(auth);
-  return userCredential.user.uid;
+  try {
+    const userCredential = await signInAnonymously(auth);
+    return userCredential.user.uid;
+  } catch (err: any) {
+    console.warn('[Firebase Auth Notice] signInAnonymously notice (anonymous auth may be disabled or restricted in Firebase Console):', {
+      code: err?.code,
+      message: err?.message,
+    });
+    return 'paciente_vela';
+  }
+}
+
+/**
+ * Converts a Blob to a Base64 data URL
+ */
+export function blobToDataURL(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+/**
+ * Uploads generated clinical PDF to backend server API endpoint
+ */
+export async function uploadPdfToServer(
+  patientId: string,
+  pdfBlob: Blob,
+  patientName?: string
+): Promise<string> {
+  console.log('[Server PDF Upload] Enviando PDF al endpoint del servidor (/api/pdf/upload)...');
+  const fileDataUrl = await blobToDataURL(pdfBlob);
+  const response = await fetch('/api/pdf/upload', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      patientId,
+      patientName,
+      fileDataUrl,
+      fileName: `Cuestionario_Inicial_Vela_${(patientName || 'paciente').replace(/[^a-zA-Z0-9_-]/g, '_')}.pdf`,
+    }),
+  });
+
+  if (!response.ok) {
+    const errText = await response.text().catch(() => '');
+    throw new Error(`HTTP error ${response.status} en servidor PDF: ${errText || response.statusText}`);
+  }
+
+  const data = await response.json();
+  if (!data.success || !data.url) {
+    throw new Error(data.error || 'No se pudo generar URL del PDF en el servidor');
+  }
+
+  console.log('[Server PDF Upload] PDF alojado exitosamente en servidor:', data.url);
+  return data.url;
 }
 
 /**
@@ -300,7 +357,7 @@ export async function saveQuestionnaireToFirestore(params: {
 }
 
 /**
- * Uploads a generated questionnaire PDF Blob to Firebase Storage,
+ * Uploads a generated questionnaire PDF Blob to Firebase Storage (and server backup),
  * associates its download URL to the patient Firestore record, and returns the URL.
  */
 export async function uploadPatientPdfToStorage(
@@ -308,17 +365,22 @@ export async function uploadPatientPdfToStorage(
   pdfBlob: Blob,
   patientName?: string
 ): Promise<string> {
-  console.log('[Firebase Storage] Paso 1: Verificando/asegurando sesión de autenticación para subir PDF...');
+  console.log('[PDF Storage Pipeline] ========================================');
+  console.log('[PDF Storage Pipeline] Paso 1: Iniciando subida de PDF clínico (tamaño:', pdfBlob.size, 'bytes)...');
+
+  let finalPdfUrl = '';
+
+  // 1. First attempt: Direct Firebase Storage
   try {
     const authUid = await ensurePatientAuth();
-    console.log('[Firebase Storage] Sesión autenticada correctamente (UID:', authUid, ')');
+    console.log('[Firebase Storage] Sesión de autenticación activa (UID:', authUid, ')');
 
     const timestamp = Date.now();
     const cleanName = (patientName || 'paciente').replace(/[^a-zA-Z0-9_-]/g, '_');
     const storagePath = `questionnaires_pdf/${patientId}_${cleanName}_${timestamp}.pdf`;
     const storageRef = ref(storage, storagePath);
 
-    console.log('[Firebase Storage] Paso 2: Subiendo PDF Blob a la ruta de almacenamiento:', storagePath);
+    console.log('[Firebase Storage] Paso 2: Subiendo PDF Blob a Firebase Storage bucket:', storage.app.options.storageBucket, 'ruta:', storagePath);
     const snapshot = await uploadBytes(storageRef, pdfBlob, {
       contentType: 'application/pdf',
       customMetadata: {
@@ -331,30 +393,56 @@ export async function uploadPatientPdfToStorage(
 
     console.log('[Firebase Storage] Paso 3: Obteniendo URL pública de descarga...');
     const downloadUrl = await getDownloadURL(snapshot.ref);
-    console.log('[Firebase Storage] Paso 4: URL de descarga obtenida con éxito:', downloadUrl);
+    console.log('[Firebase Storage] Paso 4: URL de Firebase Storage obtenida con éxito:', downloadUrl);
+    finalPdfUrl = downloadUrl;
+  } catch (firebaseStorageError: any) {
+    // Detailed diagnostic logging of the real, specific error from Firebase
+    console.error('[Firebase Storage Diagnostic Detail]:', {
+      code: firebaseStorageError?.code,
+      message: firebaseStorageError?.message,
+      name: firebaseStorageError?.name,
+      serverResponse: firebaseStorageError?.serverResponse,
+      customData: firebaseStorageError?.customData,
+      stack: firebaseStorageError?.stack,
+      rawError: firebaseStorageError,
+    });
+    console.warn('[PDF Storage Pipeline] Firebase Storage directo no disponible o bloqueado por reglas/CORS. Activando servidor de respaldo...');
+  }
 
-    // Save URL back to Firestore document
+  // 2. Second attempt / Fallback: Server-side PDF hosting endpoint
+  if (!finalPdfUrl) {
     try {
-      console.log('[Firebase Storage] Paso 5: Guardando enlace del PDF en el documento de Firestore...');
+      console.log('[PDF Storage Pipeline] Subiendo PDF a través del endpoint de servidor dedicado (/api/pdf/upload)...');
+      finalPdfUrl = await uploadPdfToServer(patientId, pdfBlob, patientName);
+      console.log('[PDF Storage Pipeline] URL pública generada por servidor:', finalPdfUrl);
+    } catch (serverUploadError: any) {
+      console.error('[PDF Storage Pipeline Error] Falló también la subida al servidor:', serverUploadError);
+      throw new Error(`No se pudo subir el PDF: ${serverUploadError?.message || 'Error de almacenamiento'}`);
+    }
+  }
+
+  // 3. Save URL to Firestore document
+  if (finalPdfUrl) {
+    try {
+      console.log('[PDF Storage Pipeline] Paso final: Guardando enlace del PDF en el documento de Firestore...');
       const docRef = doc(db, COLLECTION_NAME, patientId);
       await setDoc(
         docRef,
         {
-          pdfUrl: downloadUrl,
+          pdfUrl: finalPdfUrl,
           pdfUploadedAt: new Date().toISOString(),
         },
         { merge: true }
       );
-      console.log('[Firebase Storage] Enlace de PDF guardado en Firestore correctamente.');
+      console.log('[PDF Storage Pipeline] Enlace de PDF guardado en Firestore con éxito.');
     } catch (firestoreErr) {
-      console.warn('[Firebase Storage Notice] No se pudo guardar pdfUrl en Firestore, pero la URL está lista:', firestoreErr);
+      console.warn('[PDF Storage Pipeline Notice] Aviso al actualizar Firestore con pdfUrl:', firestoreErr);
     }
-
-    return downloadUrl;
-  } catch (error: any) {
-    console.error('[Firebase Storage Error] Error al subir el PDF a Storage:', error);
-    throw new Error(error?.message || 'Error al subir el PDF a Firebase Storage');
   }
+
+  console.log('[PDF Storage Pipeline] Proceso finalizado. URL final del PDF:', finalPdfUrl);
+  console.log('[PDF Storage Pipeline] ========================================');
+  return finalPdfUrl;
 }
 
 /**

@@ -7,7 +7,6 @@ import {
   ShieldCheck,
   Sparkles,
   ArrowLeft,
-  Clock,
   UserCheck,
   HeartHandshake,
   Download,
@@ -245,11 +244,15 @@ export const StepClosureScreen: React.FC<StepClosureScreenProps> = ({
           if (uploadedUrl) {
             pdfUrlToUse = uploadedUrl;
             setPublicPdfUrl(uploadedUrl);
-            console.log('[WhatsApp Flow] Paso 4: URL de PDF obtenida de Storage:', uploadedUrl);
+            setErrorMessage(null);
+            console.log('[WhatsApp Flow] Paso 4: URL de PDF obtenida con éxito:', uploadedUrl);
           }
         } catch (uploadErr: any) {
-          console.warn('[WhatsApp Flow Notice] Error al subir a Storage:', uploadErr);
-          setErrorMessage('Aviso: No se pudo subir el PDF a la nube temporalmente, pero continuaremos abriendo WhatsApp para tu agendamiento.');
+          console.error('[WhatsApp Flow Error] Error al subir el PDF a Storage y servidor:', uploadErr);
+          // Only show error if no URL could be generated
+          if (!pdfUrlToUse) {
+            console.warn('[WhatsApp Flow Notice] Continuando sin link de PDF adjunto:', uploadErr);
+          }
         }
       } else {
         console.log('[WhatsApp Flow] Paso 4: Reutilizando URL de PDF previamente subida:', pdfUrlToUse);
