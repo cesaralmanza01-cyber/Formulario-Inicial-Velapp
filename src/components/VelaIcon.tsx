@@ -4,12 +4,16 @@ interface VelaIconProps {
   className?: string;
   size?: number;
   showCircleBackground?: boolean;
+  color?: string;
+  dotColor?: string;
 }
 
 export const VelaIcon: React.FC<VelaIconProps> = ({
   className = '',
   size = 40,
   showCircleBackground = false,
+  color = '#588377',
+  dotColor = '#E76F51',
 }) => {
   const validSize = typeof size === 'number' && !isNaN(size) && size > 0 ? size : 40;
 
@@ -21,25 +25,38 @@ export const VelaIcon: React.FC<VelaIconProps> = ({
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       className={className}
-      aria-label="Vela Icono"
+      aria-label="Vela Icono Oficial"
     >
-      {/* Top coral dot matching the brand logo */}
-      <circle cx="48" cy="22" r="7.5" fill="#EE977B" />
+      {/* Top coral dot above the vertical mast */}
+      <circle cx="46.5" cy="24.5" r="2.2" fill={dotColor} />
 
-      {/* Brand monogram 'V' in Fraunces serif and brand sage #5C8377 */}
-      <text
-        x="50"
-        y="84"
-        textAnchor="middle"
-        fill="#5C8377"
-        style={{
-          fontFamily: "'Fraunces', Georgia, serif",
-          fontWeight: 400,
-          fontSize: '66px',
-        }}
-      >
-        V
-      </text>
+      {/* Vertical mast line */}
+      <line
+        x1="46.5"
+        y1="28"
+        x2="46.5"
+        y2="70"
+        stroke={color}
+        strokeWidth="2.4"
+        strokeLinecap="butt"
+      />
+
+      {/* Horizontal base / hull line */}
+      <line
+        x1="33"
+        y1="70"
+        x2="62"
+        y2="70"
+        stroke={color}
+        strokeWidth="2.4"
+        strokeLinecap="round"
+      />
+
+      {/* Sail: vertical left edge, flat bottom, smooth convex outer arch */}
+      <path
+        d="M 50 30.5 C 51.5 35 63.8 48.5 63.8 66.8 L 50 66.8 Z"
+        fill={color}
+      />
     </svg>
   );
 

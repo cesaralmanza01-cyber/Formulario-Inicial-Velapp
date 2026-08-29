@@ -247,81 +247,142 @@ export const StepClosureScreen: React.FC<StepClosureScreenProps> = ({
     }
   };
 
-  // Handler for 1.b: "Enviar y agendar por WhatsApp"
+  // Helper to enforce individual step timeouts
+  const runWithTimeout = <T,>(
+    promise: Promise<T>,
+    timeoutMs: number,
+    stepName: string
+  ): Promise<T> => {
+    return new Promise<T>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        console.warn(`[WhatsApp Flow Timeout] Paso "${stepName}" superó el límite de ${timeoutMs}ms. Continuando sin bloquear al usuario.`);
+        reject(new Error(`Timeout en ${stepName}`));
+      }, timeoutMs);
+
+      promise
+        .then((res) => {
+          clearTimeout(timer);
+          resolve(res);
+        })
+        .catch((err) => {
+          clearTimeout(timer);
+          reject(err);
+        });
+    });
+  };
+
+  // Handler for 1.b: "Enviar y agendar por WhatsApp" with strict 8s timeout and guaranteed exit
   const handleSendAndScheduleWhatsApp = async () => {
     console.log('[WhatsApp Flow] ========================================');
-    console.log('[WhatsApp Flow] Paso 1: Usuario hizo clic en "Enviar y agendar por WhatsApp"');
+    console.log('[WhatsApp Flow] Paso 1/5: Paciente hizo clic en "Enviar y agendar por WhatsApp"');
     setIsSharingWhatsApp(true);
     setErrorMessage(null);
     setDirectWaLink(null);
+
+    // Global 8-second safety fallback to guarantee button never gets stuck in loading state
+    const globalSafetyTimer = setTimeout(() => {
+      console.warn('[WhatsApp Flow Safety] Límite global de 8s alcanzado. Desbloqueando interfaz y asegurando enlace de WhatsApp.');
+      setIsSharingWhatsApp(false);
+      const fallbackMessage = `Hola Dra. Lorena y equipo Vela, soy ${patientFullName}. Ya completé mi Cuestionario Médico Inicial con todos mis antecedentes de salud. Me gustaría agendar mi primera consulta médica. ¡Muchas gracias!`;
+      const fallbackWaLink = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(fallbackMessage)}`;
+      setDirectWaLink(fallbackWaLink);
+    }, 8000);
 
     const fileName = generateDrivePdfFileName(patientFullName);
     let currentBlob = pdfBlob;
 
     try {
-      // Ensure PDF Blob is ready
+      // Paso 2: Generar PDF Blob local si no está listo (Timeout máx 3.5s)
       if (!currentBlob) {
-        console.log('[WhatsApp Flow] Paso 2: Generando PDF Blob en tiempo real...');
-        const patientDoc = buildPatientDocument();
-        currentBlob = await generatePatientQuestionnairePdfBlob(patientDoc);
-        setPdfBlob(currentBlob);
+        console.log('[WhatsApp Flow] Paso 2/5: Generando documento PDF local...');
+        try {
+          const patientDoc = buildPatientDocument();
+          currentBlob = await runWithTimeout(
+            generatePatientQuestionnairePdfBlob(patientDoc),
+            3500,
+            'Generación de PDF'
+          );
+          setPdfBlob(currentBlob);
+          console.log('[WhatsApp Flow] Paso 2/5: PDF local generado correctamente.');
+        } catch (pdfErr) {
+          console.error('[WhatsApp Flow Paso 2 Error] No se pudo generar PDF local en el tiempo asignado:', pdfErr);
+        }
+      } else {
+        console.log('[WhatsApp Flow] Paso 2/5: PDF local ya disponible en memoria.');
       }
 
-      // If Google Drive hasn't been uploaded yet, try now (without blocking WhatsApp on failure)
+      // Paso 3: Sincronización con Google Drive (Timeout máx 4.0s - no bloqueante)
       if (!driveFileLink && currentBlob) {
+        console.log('[WhatsApp Flow] Paso 3/5: Intentando subir copia a Google Drive...');
         try {
-          console.log('[WhatsApp Flow] Intentando sincronizar con Google Drive...');
-          const token = await getGoogleDriveAccessToken().catch(() => null);
+          const token = await runWithTimeout(
+            getGoogleDriveAccessToken(),
+            2000,
+            'Autenticación Drive'
+          ).catch(() => null);
+
           if (token) {
-            const driveRes = await uploadPatientPdfToGoogleDrive(token, currentBlob, patientFullName);
+            const driveRes = await runWithTimeout(
+              uploadPatientPdfToGoogleDrive(token, currentBlob, patientFullName),
+              4000,
+              'Subida de PDF a Drive'
+            );
             if (driveRes.success && driveRes.webViewLink) {
               setDriveFileLink(driveRes.webViewLink);
               setDriveUploadComplete(true);
+              console.log('[WhatsApp Flow] Paso 3/5: Subida a Drive exitosa:', driveRes.webViewLink);
               const patientDoc = buildPatientDocument();
-              await updatePatientDriveInfoInFirestore(patientDoc.patientId, {
+              updatePatientDriveInfoInFirestore(patientDoc.patientId, {
                 fileId: driveRes.fileId,
                 fileName: driveRes.fileName,
                 webViewLink: driveRes.webViewLink,
                 folderId: driveRes.folderId,
-              });
+              }).catch((fErr) => console.warn('[WhatsApp Flow] Firestore sync warning:', fErr));
             }
           }
         } catch (dErr) {
-          console.error('[Google Drive WhatsApp Sync Notice]:', dErr);
+          console.error('[WhatsApp Flow Paso 3 Error] Subida a Google Drive omitida o tardó demasiado:', dErr);
+        }
+      } else if (driveFileLink) {
+        console.log('[WhatsApp Flow] Paso 3/5: Enlace de Google Drive ya listo:', driveFileLink);
+      }
+
+      // Paso 4: Web Share API en dispositivos móviles
+      if (currentBlob) {
+        try {
+          console.log('[WhatsApp Flow] Paso 4/5: Evaluando Web Share API nativo del dispositivo...');
+          const file = new File([currentBlob], fileName, { type: 'application/pdf' });
+          const shareData = {
+            title: 'Cuestionario Inicial Vela',
+            text: `Hola Dra. Lorena y equipo Vela, soy ${patientFullName}. Adjunto mi Cuestionario Médico Inicial diligenciado. Quiero agendar mi primera cita con la Dra. Lorena Castro.`,
+            files: [file],
+          };
+
+          if (
+            navigator.canShare &&
+            navigator.canShare(shareData) &&
+            navigator.share
+          ) {
+            console.log('[WhatsApp Flow] Compartiendo archivo PDF mediante Web Share API...');
+            clearTimeout(globalSafetyTimer);
+            await navigator.share(shareData);
+            console.log('[WhatsApp Flow] Archivo compartido con éxito.');
+            setIsSharingWhatsApp(false);
+            return;
+          }
+        } catch (shareErr: any) {
+          if (shareErr.name === 'AbortError') {
+            console.log('[WhatsApp Flow] Ventana de compartir cancelada por el usuario.');
+            clearTimeout(globalSafetyTimer);
+            setIsSharingWhatsApp(false);
+            return;
+          }
+          console.warn('[WhatsApp Flow Paso 4 Notice] Web Share no disponible o descartado, continuando con enlace wa.me:', shareErr);
         }
       }
 
-      // Try Web Share API on mobile devices if supported (attaches the PDF file directly to WhatsApp)
-      try {
-        const file = new File([currentBlob], fileName, { type: 'application/pdf' });
-        const shareData = {
-          title: 'Cuestionario Inicial Vela',
-          text: `Hola Dra. Lorena y equipo Vela, soy ${patientFullName}. Adjunto mi Cuestionario Médico Inicial diligenciado. Quiero agendar mi primera cita con la Dra. Lorena Castro.`,
-          files: [file],
-        };
-
-        if (
-          navigator.canShare &&
-          navigator.canShare(shareData) &&
-          navigator.share
-        ) {
-          console.log('[WhatsApp Flow] Compartiendo archivo PDF mediante Web Share API...');
-          await navigator.share(shareData);
-          console.log('[WhatsApp Flow] Archivo compartido exitosamente.');
-          setIsSharingWhatsApp(false);
-          return;
-        }
-      } catch (shareErr: any) {
-        if (shareErr.name === 'AbortError') {
-          console.log('[WhatsApp Flow] Selector de compartir cancelado por el usuario.');
-          setIsSharingWhatsApp(false);
-          return;
-        }
-        console.warn('[WhatsApp Flow Notice] Web Share descartado, procediendo con enlace directo wa.me:', shareErr);
-      }
-
-      // Construct pre-written WhatsApp Message
-      console.log('[WhatsApp Flow] Construyendo mensaje pre-escrito de WhatsApp...');
+      // Paso 5: Construir mensaje pre-escrito de WhatsApp y abrir
+      console.log('[WhatsApp Flow] Paso 5/5: Construyendo enlace de WhatsApp wa.me...');
       let message = `Hola Dra. Lorena y equipo Vela, soy ${patientFullName}. Ya completé mi Cuestionario Médico Inicial`;
       if (driveFileLink) {
         message += `. Puedes ver mi PDF médico en Google Drive aquí: ${driveFileLink}`;
@@ -331,24 +392,29 @@ export const StepClosureScreen: React.FC<StepClosureScreenProps> = ({
       message += `. Me gustaría agendar mi primera consulta médica. ¡Muchas gracias!`;
 
       const waLink = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
-      console.log('[WhatsApp Flow] Abriendo WhatsApp con enlace:', waLink);
+      console.log('[WhatsApp Flow] Enlace de WhatsApp generado:', waLink);
 
       setDirectWaLink(waLink);
 
-      // Open WhatsApp in new tab
+      // Open WhatsApp in new window/tab
       const newTab = window.open(waLink, '_blank', 'noopener,noreferrer');
       if (!newTab || newTab.closed || typeof newTab.closed === 'undefined') {
-        console.warn('[WhatsApp Flow] La ventana emergente fue bloqueada por el navegador.');
-        setStatusMessage('Si WhatsApp no se abrió automáticamente, haz clic en el botón de acceso directo abajo.');
+        console.warn('[WhatsApp Flow] El navegador bloqueó la apertura emergente automática.');
+        setStatusMessage('WhatsApp listo. Haz clic en el botón de acceso directo abajo si no se abrió automáticamente.');
       } else {
         setStatusMessage('¡Conectando con WhatsApp de Vela!');
         setTimeout(() => setStatusMessage(null), 6000);
       }
     } catch (flowErr: any) {
-      console.error('[WhatsApp Flow Error] Error en el flujo de WhatsApp:', flowErr);
-      setErrorMessage(`Ocurrió un error al preparar el agendamiento: ${flowErr?.message || 'Error inesperado'}.`);
+      console.error('[WhatsApp Flow Error General]:', flowErr);
+      const fallbackMessage = `Hola Dra. Lorena y equipo Vela, soy ${patientFullName}. Ya completé mi Cuestionario Médico Inicial. Me gustaría agendar mi primera consulta médica.`;
+      const fallbackWaLink = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(fallbackMessage)}`;
+      setDirectWaLink(fallbackWaLink);
+      setErrorMessage(`No se pudo abrir WhatsApp automáticamente (${flowErr?.message || 'timeout'}). Usa el botón directo abajo.`);
     } finally {
+      clearTimeout(globalSafetyTimer);
       setIsSharingWhatsApp(false);
+      console.log('[WhatsApp Flow] Finalizado proceso de WhatsApp.');
       console.log('[WhatsApp Flow] ========================================');
     }
   };

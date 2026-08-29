@@ -23,6 +23,11 @@ import {
   StepNineErrors,
 } from '../types';
 import { VelaIcon } from './VelaIcon';
+import {
+  compressImageFileToDataUrl,
+  storeFileDataUrl,
+  getFileDataUrl,
+} from '../utils/fileMemoryStore';
 
 interface StepNineFormProps {
   initialData?: PatientLabExamsInfo;
@@ -44,15 +49,30 @@ export const StepNineForm: React.FC<StepNineFormProps> = ({
   onContinue,
 }) => {
   const [formData, setFormData] = useState<PatientLabExamsInfo>(() => {
-    if (initialData) return initialData;
-    const saved = localStorage.getItem('vela_step9_data');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        console.error('Error parsing step 9 draft', e);
+    let baseData: PatientLabExamsInfo | null = initialData || null;
+    if (!baseData) {
+      const saved = localStorage.getItem('vela_step9_data');
+      if (saved) {
+        try {
+          baseData = JSON.parse(saved);
+        } catch (e) {
+          console.error('Error parsing step 9 draft', e);
+        }
       }
     }
+
+    if (baseData) {
+      // Re-hydrate any missing dataUrls from fileMemoryStore
+      const restoredFiles = (baseData.files || []).map((f) => ({
+        ...f,
+        dataUrl: f.dataUrl || getFileDataUrl(f.id, f.name),
+      }));
+      return {
+        ...baseData,
+        files: restoredFiles,
+      };
+    }
+
     return {
       hasRecentLabs: '',
       files: [],
@@ -65,8 +85,15 @@ export const StepNineForm: React.FC<StepNineFormProps> = ({
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Auto-save draft with safety for localStorage quota
+  // Auto-save draft with safety for localStorage quota and persistence in memory
   useEffect(() => {
+    // Store all current dataUrls in fileMemoryStore
+    formData.files.forEach((f) => {
+      if (f.dataUrl) {
+        storeFileDataUrl(f.id, f.dataUrl, f.name);
+      }
+    });
+
     try {
       localStorage.setItem('vela_step9_data', JSON.stringify(formData));
     } catch (e) {
@@ -105,7 +132,7 @@ export const StepNineForm: React.FC<StepNineFormProps> = ({
     return Object.keys(errs).length === 0;
   };
 
-  const handleProcessFiles = (fileList: FileList | null) => {
+  const handleProcessFiles = async (fileList: FileList | null) => {
     if (!fileList || fileList.length === 0) return;
 
     const allowedTypes = [
@@ -116,29 +143,43 @@ export const StepNineForm: React.FC<StepNineFormProps> = ({
       'image/webp',
     ];
 
-    const newFiles: UploadedLabFile[] = [];
     const filesArray = Array.from(fileList);
 
-    filesArray.forEach((file) => {
+    for (const file of filesArray) {
       // Basic extension / mime check
       const ext = file.name.split('.').pop()?.toLowerCase();
       const isAllowedExt = ext === 'pdf' || ext === 'jpg' || ext === 'jpeg' || ext === 'png' || ext === 'webp';
 
       if (!allowedTypes.includes(file.type) && !isAllowedExt) {
         alert(`El archivo "${file.name}" no es compatible. Por favor sube archivos en formato PDF, JPG o PNG.`);
-        return;
+        continue;
       }
 
       const fileId = `file-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
-      const reader = new FileReader();
 
-      reader.onload = () => {
-        const dataUrl = typeof reader.result === 'string' ? reader.result : undefined;
+      try {
+        let dataUrl: string | undefined;
+        if (file.type.startsWith('image/') || isAllowedExt && ext !== 'pdf') {
+          // Compress image to ensure perfect embedding in jsPDF and compact storage
+          dataUrl = await compressImageFileToDataUrl(file, 1600, 0.85);
+        } else if (file.size < 8 * 1024 * 1024) {
+          dataUrl = await new Promise<string>((resolve, reject) => {
+            const r = new FileReader();
+            r.onload = () => resolve(r.result as string);
+            r.onerror = reject;
+            r.readAsDataURL(file);
+          });
+        }
+
+        if (dataUrl) {
+          storeFileDataUrl(fileId, dataUrl, file.name);
+        }
+
         const uploadedFile: UploadedLabFile = {
           id: fileId,
           name: file.name,
           size: file.size,
-          type: file.type || 'application/octet-stream',
+          type: file.type || (ext === 'pdf' ? 'application/pdf' : 'image/jpeg'),
           dataUrl,
           description: '',
           uploadedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
@@ -152,27 +193,10 @@ export const StepNineForm: React.FC<StepNineFormProps> = ({
         if (attemptedSubmit) {
           setErrors((prev) => ({ ...prev, files: undefined }));
         }
-      };
-
-      // Read as DataURL for image previews or small PDFs
-      if (file.size < 8 * 1024 * 1024) {
-        reader.readAsDataURL(file);
-      } else {
-        // Fallback for very large files without base64 in memory
-        const uploadedFile: UploadedLabFile = {
-          id: fileId,
-          name: file.name,
-          size: file.size,
-          type: file.type || 'application/octet-stream',
-          description: '',
-          uploadedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        };
-        setFormData((prev) => ({
-          ...prev,
-          files: [...prev.files, uploadedFile],
-        }));
+      } catch (fileErr) {
+        console.error('Error processing file:', fileErr);
       }
-    });
+    }
 
     // Reset input
     if (fileInputRef.current) {

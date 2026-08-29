@@ -5,7 +5,9 @@
  * Target recipient Google Account: comerconcalma@gmail.com
  */
 
-const GOOGLE_DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
+import firebaseConfig from '../../firebase-applet-config.json';
+
+const GOOGLE_DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/drive.file';
 export const TARGET_GOOGLE_ACCOUNT = 'comerconcalma@gmail.com';
 
 let tokenClient: any = null;
@@ -14,7 +16,7 @@ let tokenExpiresAt: number = 0;
 
 /**
  * Initializes and requests an OAuth Access Token from the user for Google Drive.
- * Uses GSI Token Client configured specifically for comerconcalma@gmail.com.
+ * Uses GSI Token Client configured with the project's OAuth client ID.
  */
 export async function getGoogleDriveAccessToken(clientId?: string): Promise<string> {
   // If we already have a valid non-expired token in memory
@@ -38,8 +40,9 @@ export async function getGoogleDriveAccessToken(clientId?: string): Promise<stri
 
   const effectiveClientId =
     clientId ||
+    firebaseConfig.oAuthClientId ||
     (import.meta as any).env?.VITE_GOOGLE_CLIENT_ID ||
-    '1028826074180-87i1a77421hjh0a3u8470v15u506cphf.apps.googleusercontent.com';
+    '1028826074180-m7oqf27rei6p45c2trqkiam5av9ubck1.apps.googleusercontent.com';
 
   return new Promise((resolve, reject) => {
     const google = (window as any).google;
@@ -75,7 +78,7 @@ export async function getGoogleDriveAccessToken(clientId?: string): Promise<stri
         },
       });
 
-      // Request token with hint towards comerconcalma@gmail.com
+      // Request token with hint towards target account
       tokenClient.requestAccessToken({ prompt: 'select_account', hint: TARGET_GOOGLE_ACCOUNT });
     } catch (err) {
       reject(err);

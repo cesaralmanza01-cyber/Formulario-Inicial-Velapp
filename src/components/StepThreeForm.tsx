@@ -727,6 +727,14 @@ export const StepThreeForm: React.FC<StepThreeFormProps> = ({
       </div>
 
       {/* =========================================================================
+          SUB-SECCIÓN 1.5: "Línea de tiempo y trayectoria de peso" (Momentos clave)
+         ========================================================================= */}
+      <WeightTrajectoryTimeline
+        milestones={formData.weightTrajectoryMilestones || []}
+        onChange={(milestones) => handleChange('weightTrajectoryMilestones', milestones)}
+      />
+
+      {/* =========================================================================
           SUB-SECCIÓN 2: "Intentos previos para bajar de peso"
          ========================================================================= */}
       <div className="space-y-6 bg-white/70 backdrop-blur-xs p-6 sm:p-8 rounded-3xl border border-[#AEC9C0]/30 shadow-xs">

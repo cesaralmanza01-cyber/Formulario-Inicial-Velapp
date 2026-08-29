@@ -5,6 +5,7 @@ import {
   MealMomentEntry,
   WeightTrajectoryMilestone,
 } from '../types';
+import { getFileDataUrl } from './fileMemoryStore';
 
 /**
  * Formats date into readable Colombian / Latin American format
@@ -317,10 +318,27 @@ export function generatePatientQuestionnairePdfDoc(
     patient.relacion_peso?.weightTrajectoryMilestones &&
     patient.relacion_peso.weightTrajectoryMilestones.length > 0
   ) {
-    printSubSectionTitle('Trayectoria de peso y momentos clave de vida');
+    printSubSectionTitle('Momentos clave de tu trayectoria de peso');
+
+    const shiftTypeLabels: Record<string, string> = {
+      subida: 'Subida notoria de peso',
+      bajada: 'Bajada notoria de peso',
+      rebote: 'Fluctuación / Efecto rebote',
+      estabilidad: 'Etapa de estabilidad',
+    };
+
     patient.relacion_peso.weightTrajectoryMilestones.forEach((m: WeightTrajectoryMilestone, idx: number) => {
-      const milestoneText = `Momento: ${m.stageOrAge || 'No especificado'}  |  Cambio: ${m.shiftType || '—'}${m.approxWeightOrChange ? ` (${m.approxWeightOrChange})` : ''}\nDesencadenantes: ${m.triggers?.length ? m.triggers.join(', ') : 'No especificados'}\nContexto: ${m.lifeContext || 'Sin notas adicionales'}`;
-      printField(`Hito ${idx + 1}`, milestoneText, true);
+      const shiftLabel = shiftTypeLabels[m.shiftType] || m.shiftType || 'Cambio registrado';
+      const lines: string[] = [];
+      lines.push(`• Etapa / Momento de vida: ${m.stageOrAge || 'No especificado'}`);
+      lines.push(`• Tipo de cambio: ${shiftLabel}${m.approxWeightOrChange ? ` (${m.approxWeightOrChange})` : ''}`);
+      if (m.triggers && m.triggers.length > 0) {
+        lines.push(`• Factores o desencadenantes: ${m.triggers.join(', ')}`);
+      }
+      if (m.lifeContext && m.lifeContext.trim().length > 0) {
+        lines.push(`• Contexto y vivencia descrita: ${m.lifeContext.trim()}`);
+      }
+      printField(`Hito ${idx + 1}: ${m.stageOrAge || 'Momento clave'}`, lines.join('\n'), true);
     });
   }
 
@@ -535,13 +553,24 @@ export function generatePatientQuestionnairePdfDoc(
     patient.entrevista_dietetica?.dailyMealsTimeline &&
     patient.entrevista_dietetica.dailyMealsTimeline.length > 0
   ) {
-    printSubSectionTitle('Línea de tiempo de comidas diarias habituales');
-    patient.entrevista_dietetica.dailyMealsTimeline.forEach((meal: MealMomentEntry) => {
-      if (meal.foodAndDrinks && meal.foodAndDrinks.trim()) {
-        const mealSummary = `Horario: ${meal.time || 'No esp.'}  |  Lugar: ${meal.location || 'En casa'}\nAlimentos y bebidas: ${meal.foodAndDrinks}`;
-        printField(meal.name || 'Comida', mealSummary, true);
-      }
-    });
+    const validMeals = patient.entrevista_dietetica.dailyMealsTimeline.filter(
+      (m: MealMomentEntry) =>
+        (m.foodAndDrinks && m.foodAndDrinks.trim().length > 0) ||
+        (m.time && m.time.trim().length > 0) ||
+        (m.location && m.location.trim().length > 0)
+    );
+
+    if (validMeals.length > 0) {
+      printSubSectionTitle('Línea de tiempo de comidas diarias habituales');
+      validMeals.forEach((meal: MealMomentEntry, idx: number) => {
+        const mealTitle = meal.name?.trim() || `Comida ${idx + 1}`;
+        const horarioStr = meal.time ? `Horario: ${meal.time}` : 'Horario: No especificado';
+        const lugarStr = meal.location ? `Lugar: ${meal.location}` : 'Lugar: En casa';
+        const foodsStr = meal.foodAndDrinks?.trim() || 'Sin alimentos específicos descritos';
+        const mealSummary = `${horarioStr}  |  ${lugarStr}\nAlimentos y bebidas habituales: ${foodsStr}`;
+        printField(mealTitle, mealSummary, true);
+      });
+    }
   }
 
   printField('Preparación y logística de comidas', patient.entrevista_dietetica?.mealPreparationStyle);
@@ -619,17 +648,17 @@ export function generatePatientQuestionnairePdfDoc(
     if (!files || files.length === 0) return;
 
     for (const f of files) {
+      const dataUrl = f.dataUrl || getFileDataUrl(f.id, f.name);
       const isImg =
-        f.dataUrl &&
+        dataUrl &&
         (f.type?.startsWith('image/') ||
-          f.dataUrl.startsWith('data:image/jpeg') ||
-          f.dataUrl.startsWith('data:image/png') ||
-          f.dataUrl.startsWith('data:image/webp'));
+          dataUrl.startsWith('data:image/') ||
+          /\.(jpe?g|png|webp|gif|bmp)$/i.test(f.name || ''));
 
-      if (isImg && f.dataUrl) {
+      if (isImg && dataUrl) {
         try {
           // Get natural image dimensions using jsPDF image decoder
-          const imgProps = doc.getImageProperties(f.dataUrl);
+          const imgProps = doc.getImageProperties(dataUrl);
           const naturalWidth = imgProps.width || 800;
           const naturalHeight = imgProps.height || 600;
           const aspect = naturalWidth / naturalHeight;
@@ -661,11 +690,11 @@ export function generatePatientQuestionnairePdfDoc(
           y += 24;
 
           const imgFormat =
-            f.type?.includes('png') || f.dataUrl.includes('image/png') ? 'PNG' : 'JPEG';
+            f.type?.includes('png') || dataUrl.includes('image/png') ? 'PNG' : 'JPEG';
 
           // Render high-res image with exact proportional aspect ratio
           doc.addImage(
-            f.dataUrl,
+            dataUrl,
             imgFormat,
             renderX,
             y,
@@ -692,24 +721,47 @@ export function generatePatientQuestionnairePdfDoc(
         }
       } else {
         // PDF or remote document representation card
-        checkPageBreak(28);
+        checkPageBreak(36);
+        const cardH = f.description ? 34 : 26;
         doc.setFillColor(250, 246, 240);
-        doc.roundedRect(margin + 6, y, contentWidth - 12, 22, 3, 3, 'F');
+        doc.roundedRect(margin + 6, y, contentWidth - 12, cardH, 3, 3, 'F');
         doc.setDrawColor(217, 211, 200);
         doc.setLineWidth(0.5);
-        doc.roundedRect(margin + 6, y, contentWidth - 12, 22, 3, 3, 'S');
+        doc.roundedRect(margin + 6, y, contentWidth - 12, cardH, 3, 3, 'S');
 
         doc.setFont('helvetica', 'bold');
-        doc.setFontSize(8);
+        doc.setFontSize(8.5);
         doc.setTextColor(91, 136, 126);
-        doc.text(`• Documento adjunto: ${f.name || 'Archivo'} (${f.type || 'PDF'})`, margin + 14, y + 14);
+        doc.text(`• Documento PDF adjunto: ${f.name || 'Archivo'}`, margin + 14, y + 12);
 
-        if (f.downloadUrl) {
-          doc.setTextColor(46, 58, 54);
+        const targetUrl =
+          f.downloadUrl ||
+          patient.driveWebViewLink ||
+          (dataUrl?.startsWith('http') ? dataUrl : null) ||
+          null;
+
+        if (targetUrl) {
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(8);
+          doc.setTextColor(52, 106, 96);
+          doc.textWithLink('→ Ver documento completo en Google Drive / Nube', margin + 14, y + (f.description ? 22 : 20), {
+            url: targetUrl,
+          });
+        } else {
           doc.setFont('helvetica', 'normal');
-          doc.text(`(Almacenado y disponible en la nube)`, margin + 270, y + 14);
+          doc.setFontSize(8);
+          doc.setTextColor(92, 110, 104);
+          doc.text('Documento PDF registrado y respaldado en el expediente clínico', margin + 14, y + (f.description ? 22 : 20));
         }
-        y += 26;
+
+        if (f.description) {
+          doc.setFont('helvetica', 'italic');
+          doc.setFontSize(7.5);
+          doc.setTextColor(110, 125, 120);
+          doc.text(`Nota: ${f.description}`, margin + 14, y + 30);
+        }
+
+        y += cardH + 6;
       }
     }
   };
