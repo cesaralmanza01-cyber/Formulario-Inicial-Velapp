@@ -1,0 +1,36 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Doctor / Admin email check - strictly comerconcalma@gmail.com and testing account cesaralmanza01@gmail.com
+    function isDoctor() {
+      return isAuthenticated() && (
+        request.auth.token.email != null && (
+          request.auth.token.email.lower() == 'comerconcalma@gmail.com' ||
+          request.auth.token.email.lower() == 'cesaralmanza01@gmail.com'
+        )
+      );
+    }
+
+    match /cuestionarios_iniciales/{questionnaireId} {
+      // Doctor can read all questionnaires; Patients can read
+      allow read: if isDoctor() || isAuthenticated();
+      
+      // Patient or Doctor can create & update questionnaires
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated();
+      
+      // Only doctor can delete
+      allow delete: if isDoctor();
+    }
+
+    match /app_config/{docId} {
+      allow read: if isAuthenticated();
+      allow write: if isDoctor();
+    }
+  }
+}
+

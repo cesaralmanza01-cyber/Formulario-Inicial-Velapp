@@ -1,0 +1,39 @@
+@import "tailwindcss";
+
+@theme {
+  --font-serif: 'Fraunces', Georgia, serif;
+  --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  --color-cream: #FAF6F0;
+  --color-sage: #6E9E93;
+  --color-sage-hover: #5B887E;
+  --color-sage-active: #4B736A;
+  --color-sage-soft: #AEC9C0;
+  --color-sage-pale: #EBF3F0;
+  --color-coral: #F2A488;
+  --color-coral-soft: #FDEEE9;
+  --color-charcoal: #2E3A36;
+  --color-charcoal-muted: #5C6E68;
+  --color-charcoal-light: #8E9E99;
+  --color-trust-blue: #8FAFD1;
+  --color-trust-blue-soft: #EAF1F8;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--color-cream);
+  color: var(--color-charcoal);
+  min-height: 100vh;
+}
+
+/* Custom smooth styling for inputs and dates */
+input[type="date"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity 0.2s ease;
+  filter: invert(20%) sepia(10%) saturate(1000%) hue-rotate(110deg) brightness(85%) contrast(90%);
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+}
+

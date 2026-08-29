@@ -1,0 +1,6 @@
+{
+  "name": "Vela — Cuestionario Inicial",
+  "description": "Cuestionario inicial previo a la primera consulta con la Dra. Lorena Castro para el manejo integral del sobrepeso y la obesidad.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
