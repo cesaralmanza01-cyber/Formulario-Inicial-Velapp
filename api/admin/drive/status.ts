@@ -1,33 +1,12 @@
-import { google } from 'googleapis';
+import { initializeApp, getApps, getApp } from 'firebase/app';
+import { getFirestore, doc, getDoc } from 'firebase/firestore';
+import firebaseConfig from '../../../firebase-applet-config.json';
 
-const DEFAULT_SERVICE_ACCOUNT_EMAIL = 'vela-drive-uploader@consultorio-m5-95.iam.gserviceaccount.com';
-const GOOGLE_DRIVE_FOLDER_NAME = 'Vela - Cuestionarios Pacientes';
+const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+const db = getFirestore(app);
 
-function parseServiceAccountCredentials(rawKey: string): { client_email: string; private_key: string } {
-  let str = rawKey.trim();
-  if ((str.startsWith('"') && str.endsWith('"')) || (str.startsWith("'") && str.endsWith("'"))) {
-    str = str.slice(1, -1).trim();
-  }
-  let parsed: any;
-  if (str.startsWith('{')) {
-    parsed = JSON.parse(str);
-  } else {
-    parsed = JSON.parse(Buffer.from(str, 'base64').toString('utf-8'));
-  }
-
-  let formattedPrivateKey = parsed.private_key;
-  if (typeof formattedPrivateKey === 'string') {
-    formattedPrivateKey = formattedPrivateKey.replace(/\\n/g, '\n');
-    if (!formattedPrivateKey.includes('-----BEGIN PRIVATE KEY-----')) {
-      formattedPrivateKey = `-----BEGIN PRIVATE KEY-----\n${formattedPrivateKey}\n-----END PRIVATE KEY-----\n`;
-    }
-  }
-
-  return {
-    client_email: String(parsed.client_email).trim(),
-    private_key: formattedPrivateKey,
-  };
-}
+const DEFAULT_FOLDER_ID = '1GF3_uCNeiuevL7PsNiwXzIXRIuocrpK8';
+const GOOGLE_DRIVE_FOLDER_NAME = 'FORMULARIO CONSULTAS VELA';
 
 export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -43,47 +22,51 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    const rawKey =
-      process.env.GOOGLE_SERVICE_ACCOUNT_KEY ||
-      process.env.GOOGLE_SERVICE_ACCOUNT_JSON ||
-      process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON ||
-      process.env.GCP_SERVICE_ACCOUNT_KEY;
+    const hasClientId = Boolean(process.env.GOOGLE_CLIENT_ID);
+    const hasClientSecret = Boolean(process.env.GOOGLE_CLIENT_SECRET);
+    const destinationFolderId = process.env.GOOGLE_DRIVE_FOLDER_ID?.trim() || DEFAULT_FOLDER_ID;
 
-    const targetFolderId = process.env.GOOGLE_DRIVE_FOLDER_ID?.trim() || '';
-
-    if (!rawKey) {
+    if (!hasClientId || !hasClientSecret) {
       return res.status(200).json({
         success: true,
         connected: false,
-        serviceAccountEmail: DEFAULT_SERVICE_ACCOUNT_EMAIL,
-        folderId: targetFolderId,
+        folderId: destinationFolderId,
         folderName: GOOGLE_DRIVE_FOLDER_NAME,
-        error: 'Falta configurar la variable GOOGLE_SERVICE_ACCOUNT_KEY en Vercel',
+        authorizedEmail: null,
+        error: 'Faltan las variables GOOGLE_CLIENT_ID y GOOGLE_CLIENT_SECRET en Vercel',
       });
     }
 
-    try {
-      const credentials = parseServiceAccountCredentials(rawKey);
+    // Check Firestore for stored refresh token
+    const tokensRef = doc(db, '_system_config', 'google_drive_tokens');
+    const snap = await getDoc(tokensRef);
+
+    if (snap.exists() && snap.data()?.refreshToken) {
+      const data = snap.data();
       return res.status(200).json({
         success: true,
         connected: true,
-        serviceAccountEmail: credentials.client_email || DEFAULT_SERVICE_ACCOUNT_EMAIL,
-        folderId: targetFolderId,
+        authorizedEmail: data.authorizedEmail || 'comerconcalma@gmail.com',
+        folderId: destinationFolderId,
         folderName: GOOGLE_DRIVE_FOLDER_NAME,
+        updatedAt: data.updatedAt,
       });
-    } catch (authErr: any) {
-      console.error('[Drive Status Check Auth Error]:', authErr?.message);
+    } else {
       return res.status(200).json({
         success: true,
         connected: false,
-        serviceAccountEmail: DEFAULT_SERVICE_ACCOUNT_EMAIL,
-        folderId: targetFolderId,
+        authorizedEmail: null,
+        folderId: destinationFolderId,
         folderName: GOOGLE_DRIVE_FOLDER_NAME,
-        error: authErr.message,
+        error: 'Google Drive no está conectado aún. La Dra. Lorena debe hacer clic en "Conectar Google Drive".',
       });
     }
   } catch (error: any) {
-    console.error('[Drive Status Check Uncaught Error]:', error?.message);
-    return res.status(200).json({ success: false, connected: false, error: error.message });
+    console.error('[Drive Status Error]:', error);
+    return res.status(200).json({
+      success: false,
+      connected: false,
+      error: error?.message || 'Error al verificar estado de Google Drive',
+    });
   }
 }

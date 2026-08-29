@@ -18,6 +18,7 @@ import {
   Check,
   Key,
   FolderOpen,
+  Link2,
 } from 'lucide-react';
 import {
   signInWithPopup,
@@ -59,7 +60,21 @@ export function AdminPortal({ onBackToApp }: AdminPortalProps) {
   const [isLoadingQuestionnaires, setIsLoadingQuestionnaires] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
 
-  // 1. Listen to Firebase Auth state
+  // 1. Listen to URL params for OAuth return status
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('drive_connected') === 'true') {
+      setActionSuccess('¡Google Drive conectado y autorizado exitosamente para la Dra. Lorena Castro!');
+      // Clean up URL without reload
+      window.history.replaceState({}, document.title, window.location.pathname);
+    } else if (urlParams.get('drive_error')) {
+      const err = urlParams.get('drive_error');
+      setActionError(`Error durante la autorización de Google Drive: ${err}`);
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, []);
+
+  // 2. Listen to Firebase Auth state
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
@@ -86,7 +101,7 @@ export function AdminPortal({ onBackToApp }: AdminPortalProps) {
     return () => unsubscribe();
   }, []);
 
-  // 2. Fetch Drive status & recent questionnaires when authorized
+  // 3. Fetch Drive status & recent questionnaires when authorized
   useEffect(() => {
     if (currentUser) {
       fetchDriveStatus();
@@ -155,7 +170,12 @@ export function AdminPortal({ onBackToApp }: AdminPortalProps) {
     setCurrentUser(null);
   };
 
-  // Test Drive Upload with Service Account
+  // Initiate OAuth connect flow for Google Drive
+  const handleConnectGoogleDrive = () => {
+    window.location.href = '/api/auth/google/login';
+  };
+
+  // Test Drive Upload with stored refresh token
   const handleTestDriveUpload = async () => {
     setIsTestingDrive(true);
     setActionError(null);
@@ -165,10 +185,10 @@ export function AdminPortal({ onBackToApp }: AdminPortalProps) {
     try {
       const result = await testDriveServerConnection();
       if (result.success && result.webViewLink) {
-        setActionSuccess('¡Prueba de subida exitosa con la Cuenta de Servicio! El archivo PDF de prueba se subió directamente a Google Drive.');
+        setActionSuccess('¡Prueba de subida exitosa! El archivo PDF de prueba se subió directamente a tu Google Drive personal.');
         setTestResultLink(result.webViewLink);
       } else {
-        setActionError(result.error || 'Falló la prueba de subida con la Cuenta de Servicio.');
+        setActionError(result.error || 'Falló la prueba de subida a Google Drive.');
       }
     } catch (err: any) {
       setActionError(err?.message || 'Error en la prueba de subida.');
@@ -354,7 +374,7 @@ export function AdminPortal({ onBackToApp }: AdminPortalProps) {
                     rel="noopener noreferrer"
                     className="mt-2 inline-flex items-center gap-1 text-emerald-700 underline font-medium hover:text-emerald-800"
                   >
-                    <span>Ver archivo de prueba en Google Drive</span>
+                    <span>Ver archivo de prueba en tu Google Drive</span>
                     <ExternalLink className="w-3.5 h-3.5" />
                   </a>
                 )}
@@ -390,7 +410,7 @@ export function AdminPortal({ onBackToApp }: AdminPortalProps) {
           )}
         </AnimatePresence>
 
-        {/* Section 1: Google Drive Service Account Status */}
+        {/* Section 1: Google Drive Integration Status & OAuth Button */}
         <section className="bg-white rounded-3xl p-6 sm:p-8 border border-[#AEC9C0]/40 shadow-xs space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-[#AEC9C0]/20">
             <div className="flex items-center gap-3.5">
@@ -399,10 +419,10 @@ export function AdminPortal({ onBackToApp }: AdminPortalProps) {
               </div>
               <div>
                 <h2 className="text-lg font-bold text-[#2E3A36] font-serif">
-                  Subida a Google Drive (Cuenta de Servicio)
+                  Conexión con Google Drive
                 </h2>
                 <p className="text-xs text-[#5C6E68]">
-                  Subida directa y automática de PDFs generados mediante Google Cloud Service Account
+                  Sincronización automática de cuestionarios en la carpeta personal de la Dra. Lorena Castro
                 </p>
               </div>
             </div>
@@ -424,18 +444,18 @@ export function AdminPortal({ onBackToApp }: AdminPortalProps) {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="p-4 rounded-2xl bg-[#FAF6F0] border border-[#AEC9C0]/30 space-y-1.5">
               <p className="text-[11px] font-semibold text-[#8E9E99] uppercase tracking-wider">
-                Estado de la Cuenta
+                Estado de la Conexión
               </p>
               <div className="flex items-center gap-2">
                 {driveStatus?.connected ? (
                   <>
                     <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-                    <span className="text-sm font-bold text-emerald-700">Listo y Autenticado</span>
+                    <span className="text-sm font-bold text-emerald-700">Conectado y Autorizado</span>
                   </>
                 ) : (
                   <>
                     <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
-                    <span className="text-sm font-bold text-amber-700">Pendiente de Configuración</span>
+                    <span className="text-sm font-bold text-amber-700">Desconectado</span>
                   </>
                 )}
               </div>
@@ -443,55 +463,65 @@ export function AdminPortal({ onBackToApp }: AdminPortalProps) {
 
             <div className="p-4 rounded-2xl bg-[#FAF6F0] border border-[#AEC9C0]/30 space-y-1.5">
               <p className="text-[11px] font-semibold text-[#8E9E99] uppercase tracking-wider">
-                Cuenta de Servicio
+                Cuenta de Google Vinculada
               </p>
-              <p className="text-xs font-mono font-medium text-[#2E3A36] truncate" title={driveStatus?.serviceAccountEmail || 'vela-drive-uploader@consultorio-m5-95.iam.gserviceaccount.com'}>
-                {driveStatus?.serviceAccountEmail || 'vela-drive-uploader@consultorio-m5-95.iam.gserviceaccount.com'}
+              <p className="text-xs font-mono font-medium text-[#2E3A36] truncate" title={driveStatus?.authorizedEmail || 'comerconcalma@gmail.com'}>
+                {driveStatus?.authorizedEmail || 'Pendiente de autorización'}
               </p>
             </div>
 
             <div className="p-4 rounded-2xl bg-[#FAF6F0] border border-[#AEC9C0]/30 space-y-1.5">
               <p className="text-[11px] font-semibold text-[#8E9E99] uppercase tracking-wider">
-                Carpeta en Google Drive
+                Carpeta de Destino
               </p>
               <p className="text-sm font-bold text-[#588377] truncate">
-                {driveStatus?.folderName || 'Vela - Cuestionarios Pacientes'}
+                {driveStatus?.folderName || 'FORMULARIO CONSULTAS VELA'}
               </p>
             </div>
           </div>
 
-          {/* Details & Test Button */}
+          {/* Action Box */}
           <div className="p-5 rounded-2xl bg-[#F0F7F4] border border-[#588377]/20 space-y-4">
             <div className="flex items-start gap-3 text-xs text-[#2E3A36] leading-relaxed">
               <ShieldCheck className="w-5 h-5 text-[#588377] shrink-0 mt-0.5" />
               <div>
                 <p className="font-semibold text-sm text-[#2E3A36] mb-1">
-                  Subida directa en servidor sin ventanas de consentimiento
+                  Autorización única del Administrador Médico (OAuth con Refresh Token)
                 </p>
                 <p className="text-[#5C6E68]">
-                  La aplicación utiliza la cuenta de servicio de Google Cloud (<code className="bg-white/80 px-1.5 py-0.5 rounded border border-[#588377]/20 font-mono text-[11px]">vela-drive-uploader@consultorio-m5-95.iam.gserviceaccount.com</code>) autenticada con la variable <code className="bg-white/80 px-1.5 py-0.5 rounded border border-[#588377]/20 font-mono text-[11px]">GOOGLE_SERVICE_ACCOUNT_KEY</code>. Todos los cuestionarios de las pacientes se envían directamente a la carpeta compartida sin requerir ninguna acción de su parte.
+                  Al presionar <strong>"Conectar Google Drive"</strong>, autorizas a la aplicación a subir archivos en tu cuenta de Google (<code className="bg-white/80 px-1.5 py-0.5 rounded border border-[#588377]/20 font-mono text-[11px]">comerconcalma@gmail.com</code>). El servidor guardará el token de actualización de forma segura en Firestore para que cuando cualquier paciente complete su formulario, el PDF se deposite automáticamente en tu carpeta sin que la paciente deba iniciar sesión.
                 </p>
               </div>
             </div>
 
             <div className="flex flex-wrap items-center gap-3 pt-2">
               <button
-                onClick={handleTestDriveUpload}
-                disabled={isTestingDrive}
-                className="inline-flex items-center gap-2 bg-[#588377] hover:bg-[#476C62] active:bg-[#3D5C53] text-white font-semibold text-xs py-3 px-5 rounded-xl shadow-xs transition-all disabled:opacity-60"
+                onClick={handleConnectGoogleDrive}
+                className="inline-flex items-center gap-2 bg-[#588377] hover:bg-[#476C62] active:bg-[#3D5C53] text-white font-semibold text-xs py-3 px-5 rounded-xl shadow-xs transition-all"
               >
-                {isTestingDrive ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Subiendo prueba a Google Drive...</span>
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="w-4 h-4" />
-                    <span>Probar Subida con Cuenta de Servicio</span>
-                  </>
-                )}
+                <Link2 className="w-4 h-4" />
+                <span>{driveStatus?.connected ? 'Reconectar / Cambiar Cuenta de Google Drive' : 'Conectar Google Drive de la Dra. Lorena'}</span>
               </button>
+
+              {driveStatus?.connected && (
+                <button
+                  onClick={handleTestDriveUpload}
+                  disabled={isTestingDrive}
+                  className="inline-flex items-center gap-2 bg-white hover:bg-[#FAF6F0] active:bg-[#F0ECE4] text-[#588377] font-semibold text-xs py-3 px-5 rounded-xl border border-[#588377]/40 shadow-xs transition-all disabled:opacity-60"
+                >
+                  {isTestingDrive ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Subiendo prueba a Google Drive...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-4 h-4" />
+                      <span>Probar Subida a Google Drive</span>
+                    </>
+                  )}
+                </button>
+              )}
             </div>
           </div>
         </section>
@@ -504,7 +534,7 @@ export function AdminPortal({ onBackToApp }: AdminPortalProps) {
                 Expedientes y Cuestionarios Recientes
               </h2>
               <p className="text-xs text-[#5C6E68]">
-                Registros almacenados en Firestore con su estado de respaldo
+                Registros almacenados en Firestore con su enlace de respaldo en Google Drive
               </p>
             </div>
 

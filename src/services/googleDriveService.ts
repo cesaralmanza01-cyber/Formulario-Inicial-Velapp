@@ -1,11 +1,14 @@
 /**
  * Google Drive Integration Service for Vela Questionnaires
  *
- * Provides completely invisible, server-side PDF uploads for patients,
- * powered by a Google Cloud Service Account (vela-drive-uploader@consultorio-m5-95.iam.gserviceaccount.com).
+ * Server-side OAuth 2.0 with offline refresh_token flow.
+ * The doctor (comerconcalma@gmail.com) authorizes the app once from /admin,
+ * and the server transparently uploads patient questionnaires to the
+ * "FORMULARIO CONSULTAS VELA" folder.
  */
 
-export const GOOGLE_DRIVE_FOLDER_NAME = 'Vela - Cuestionarios Pacientes';
+export const GOOGLE_DRIVE_FOLDER_NAME = 'FORMULARIO CONSULTAS VELA';
+export const GOOGLE_DRIVE_FOLDER_ID = '1GF3_uCNeiuevL7PsNiwXzIXRIuocrpK8';
 
 export interface DriveUploadResult {
   success: boolean;
@@ -21,9 +24,10 @@ export interface DriveUploadResult {
 export interface DriveServerStatus {
   success: boolean;
   connected: boolean;
-  serviceAccountEmail?: string;
+  authorizedEmail?: string | null;
   folderName?: string;
   folderId?: string | null;
+  updatedAt?: string;
   error?: string;
 }
 
@@ -71,7 +75,7 @@ export async function uploadPatientPdfToServerDrive(
   patientName: string,
   patientId: string
 ): Promise<DriveUploadResult> {
-  console.log('[Google Drive Service] Iniciando envío de PDF al servidor para Google Drive...');
+  console.log('[Google Drive Service] Iniciando subida de PDF a Google Drive...');
   try {
     const fileDataUrl = await blobToDataUrl(pdfBlob);
     const fileName = generateDrivePdfFileName(patientName);
@@ -89,7 +93,7 @@ export async function uploadPatientPdfToServerDrive(
 
     if (!res.ok) {
       const errText = await res.text().catch(() => '');
-      console.warn(`[Google Drive Service] Respuesta no-OK del servidor (${res.status}):`, errText);
+      console.warn(`[Google Drive Service] Servidor devolvió status (${res.status}):`, errText);
       return {
         success: false,
         error: `Servidor devolvió status ${res.status}`,
@@ -108,7 +112,7 @@ export async function uploadPatientPdfToServerDrive(
 }
 
 /**
- * Checks current Google Drive connection status from the server (Service Account)
+ * Checks current Google Drive connection status from the server
  */
 export async function getDriveServerStatus(): Promise<DriveServerStatus> {
   try {
@@ -138,4 +142,3 @@ export async function testDriveServerConnection(): Promise<DriveUploadResult & {
     return { success: false, error: err?.message || 'Error de red' };
   }
 }
-
