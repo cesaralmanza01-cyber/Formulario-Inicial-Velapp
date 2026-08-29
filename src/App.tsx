@@ -14,7 +14,6 @@ import { StepNineForm } from './components/StepNineForm';
 import { StepInBodyForm } from './components/StepInBodyForm';
 import { StepClosureScreen } from './components/StepClosureScreen';
 import { StepCompletionModal } from './components/StepCompletionModal';
-import { DoctorPortal } from './components/DoctorPortal';
 import { VelaIcon } from './components/VelaIcon';
 import { saveQuestionnaireToFirestore } from './services/questionnaireService';
 import {
@@ -28,18 +27,9 @@ import {
   PatientLabExamsInfo,
   PatientInBodyInfo,
 } from './types';
-import { ShieldCheck, Heart, CloudCheck } from 'lucide-react';
+import { ShieldCheck, Heart } from 'lucide-react';
 
 export default function App() {
-  // Check if URL hash or path has #/admin or /admin or doctor portal mode
-  const [isDoctorPortalActive, setIsDoctorPortalActive] = useState<boolean>(() => {
-    return (
-      window.location.hash.includes('admin') ||
-      window.location.pathname.includes('/admin') ||
-      window.location.search.includes('admin=true')
-    );
-  });
-
   const [currentStep, setCurrentStep] = useState<number>(() => {
     const savedStep = localStorage.getItem('vela_current_step');
     if (savedStep !== null) {
@@ -142,19 +132,6 @@ export default function App() {
     localStorage.setItem('vela_current_step', currentStep.toString());
     syncProgressToFirestore({ step: currentStep });
   }, [currentStep]);
-
-  // Listen to hash change for #/admin
-  useEffect(() => {
-    const handleHashChange = () => {
-      if (window.location.hash.includes('admin')) {
-        setIsDoctorPortalActive(true);
-      } else {
-        setIsDoctorPortalActive(false);
-      }
-    };
-    window.addEventListener('hashchange', handleHashChange);
-    return () => window.removeEventListener('hashchange', handleHashChange);
-  }, []);
 
   // Navigation Handlers with instant Firestore autosync
   const handleStepOneContinue = (data: PatientBasicInfo) => {
@@ -283,16 +260,6 @@ export default function App() {
     });
   };
 
-  const handleOpenDoctorPortal = () => {
-    window.location.hash = '#/admin';
-    setIsDoctorPortalActive(true);
-  };
-
-  const handleCloseDoctorPortal = () => {
-    window.location.hash = '';
-    setIsDoctorPortalActive(false);
-  };
-
   const handleResetDraft = () => {
     if (window.confirm('¿Deseas reiniciar los campos de este cuestionario?')) {
       localStorage.removeItem('vela_step1_data');
@@ -313,19 +280,12 @@ export default function App() {
     }
   };
 
-  if (isDoctorPortalActive) {
-    return <DoctorPortal onBackToApp={handleCloseDoctorPortal} />;
-  }
-
   return (
     <div className="min-h-screen bg-[#FAF6F0] flex flex-col selection:bg-[#AEC9C0]/40 selection:text-[#2E3A36]">
       {/* Brand Header */}
-      <Header
-        onResetDraft={handleResetDraft}
-        onOpenDoctorPortal={handleOpenDoctorPortal}
-      />
+      <Header onResetDraft={handleResetDraft} />
 
-      {/* Multi-step Wizard Progress Bar (Screen 10 of 11) */}
+      {/* Multi-step Wizard Progress Bar */}
       <WizardProgress currentStep={currentStep} totalSteps={11} />
 
       {/* Main Content Area with smooth step transitions */}

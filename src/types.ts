@@ -295,6 +295,11 @@ export interface FirestoreQuestionnaireDocument {
   completedAt?: string;
   pdfUrl?: string;
   pdfUploadedAt?: string;
+  driveFileId?: string;
+  driveFileName?: string;
+  driveWebViewLink?: string;
+  driveFolderId?: string;
+  driveUploadedAt?: string;
   banderas_revisar: {
     id: string;
     category: string;

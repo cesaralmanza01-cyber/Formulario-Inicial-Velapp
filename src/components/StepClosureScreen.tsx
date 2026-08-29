@@ -10,7 +10,6 @@ import {
   UserCheck,
   HeartHandshake,
   Download,
-  Share2,
   Loader2,
   Scale,
   Activity,
@@ -20,7 +19,8 @@ import {
   MessageCircle,
   AlertCircle,
   Eye,
-  RefreshCw,
+  FolderSync,
+  CloudCheck,
 } from 'lucide-react';
 import { VelaIcon } from './VelaIcon';
 import {
@@ -39,7 +39,13 @@ import {
   generatePatientQuestionnairePdfBlob,
   downloadPatientRecordPdf,
 } from '../utils/pdfGenerator';
-import { uploadPatientPdfToStorage } from '../services/questionnaireService';
+import {
+  uploadPatientPdfToGoogleDrive,
+  generateDrivePdfFileName,
+  GOOGLE_DRIVE_FOLDER_NAME,
+} from '../services/googleDriveService';
+import { getGoogleDriveAccessToken } from '../services/googleAuthHelper';
+import { updatePatientDriveInfoInFirestore } from '../services/questionnaireService';
 
 interface StepClosureScreenProps {
   basicInfo?: PatientBasicInfo | null;
@@ -73,8 +79,11 @@ export const StepClosureScreen: React.FC<StepClosureScreenProps> = ({
   const [isGeneratingPdf, setIsGeneratingPdf] = useState<boolean>(true);
   const [isDownloadingPdf, setIsDownloadingPdf] = useState<boolean>(false);
   const [isSharingWhatsApp, setIsSharingWhatsApp] = useState<boolean>(false);
+  const [isUploadingToDrive, setIsUploadingToDrive] = useState<boolean>(false);
+  const [driveUploadComplete, setDriveUploadComplete] = useState<boolean>(false);
+  const [driveFileLink, setDriveFileLink] = useState<string | null>(null);
+
   const [pdfBlob, setPdfBlob] = useState<Blob | null>(null);
-  const [publicPdfUrl, setPublicPdfUrl] = useState<string>('');
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [directWaLink, setDirectWaLink] = useState<string | null>(null);
@@ -109,69 +118,99 @@ export const StepClosureScreen: React.FC<StepClosureScreenProps> = ({
     };
   };
 
-  // Automatic PDF generation and initial background sync on arrival
+  /**
+   * Triple Respaldo Flow:
+   * 1. Generate in-memory PDF Blob
+   * 2. Save structured data to Firestore (always works)
+   * 3. Automatically upload a copy to Google Drive in folder "Vela - Cuestionarios Pacientes"
+   */
   useEffect(() => {
     let isMounted = true;
 
-    async function initPdfFlow() {
-      console.log('[Flujo Inicial] Paso 1: Iniciando compilación de PDF en pantalla de cierre...');
+    async function initTripleBackupFlow() {
+      console.log('[Triple Respaldo] ========================================');
+      console.log('[Triple Respaldo] Paso 1: Iniciando compilación de PDF clínico...');
       try {
         setIsGeneratingPdf(true);
         setErrorMessage(null);
         const patientDoc = buildPatientDocument();
 
         // 1. Generate in-memory PDF Blob
-        console.log('[Flujo Inicial] Paso 2: Construyendo documento jsPDF...');
         const blob = await generatePatientQuestionnairePdfBlob(patientDoc);
         if (isMounted) {
           setPdfBlob(blob);
-          console.log('[Flujo Inicial] Paso 3: Blob listo en memoria (tamaño:', blob.size, 'bytes)');
+          console.log('[Triple Respaldo] Paso 1 completado: PDF Blob listo (tamaño:', blob.size, 'bytes)');
         }
 
-        // 2. Save questionnaire to Firestore as backup
+        // 2. Save text responses to Firestore
         try {
-          console.log('[Flujo Inicial] Paso 4: Guardando respaldo de respuestas en Firestore...');
+          console.log('[Triple Respaldo] Paso 2: Guardando registro completo en Firestore...');
           await onSaveQuestionnaire();
-          console.log('[Flujo Inicial] Paso 5: Respuestas guardadas en Firestore exitosamente.');
-        } catch (e) {
-          console.warn('[Flujo Inicial Notice] Respaldo Firestore (aviso):', e);
+          console.log('[Triple Respaldo] Paso 2 completado: Registro guardado en Firestore.');
+        } catch (firestoreErr) {
+          console.warn('[Triple Respaldo Notice] Respaldo Firestore (aviso):', firestoreErr);
         }
 
-        // 3. Pre-upload PDF to Firebase Storage in background for WhatsApp link
+        // 3. Attempt Google Drive Automatic Backup in background (non-blocking)
         try {
-          console.log('[Flujo Inicial] Paso 6: Subiendo PDF a Firebase Storage para generar enlace público...');
-          const downloadUrl = await uploadPatientPdfToStorage(
-            patientDoc.patientId,
-            blob,
-            patientDoc.patientName
-          );
-          if (isMounted && downloadUrl) {
-            setPublicPdfUrl(downloadUrl);
-            console.log('[Flujo Inicial] Paso 7: Enlace de PDF público listo:', downloadUrl);
+          if (isMounted) setIsUploadingToDrive(true);
+          console.log('[Triple Respaldo] Paso 3: Verificando autenticación de Google Drive...');
+
+          const token = await getGoogleDriveAccessToken().catch((authErr) => {
+            console.info('[Google Drive Auth Info] Token no disponible en segundo plano aún (se solicitará si se requiere):', authErr?.message);
+            return null;
+          });
+
+          if (token && blob) {
+            console.log('[Triple Respaldo] Subiendo copia del PDF a la carpeta de Google Drive: "' + GOOGLE_DRIVE_FOLDER_NAME + '"');
+            const driveResult = await uploadPatientPdfToGoogleDrive(token, blob, patientFullName);
+
+            if (driveResult.success && driveResult.webViewLink) {
+              console.log('[Triple Respaldo] Copia en Google Drive guardada exitosamente:', driveResult.webViewLink);
+              if (isMounted) {
+                setDriveUploadComplete(true);
+                setDriveFileLink(driveResult.webViewLink);
+              }
+              // Update Firestore with the new Drive link instead of storage link
+              await updatePatientDriveInfoInFirestore(patientDoc.patientId, {
+                fileId: driveResult.fileId,
+                fileName: driveResult.fileName,
+                webViewLink: driveResult.webViewLink,
+                folderId: driveResult.folderId,
+              });
+            } else if (driveResult.error) {
+              console.error('[Google Drive Diagnostic Error]:', driveResult.error);
+            }
+          } else {
+            console.log('[Triple Respaldo] Google Drive quedará sincronizado al abrir o enviar el expediente.');
           }
-        } catch (storageErr: any) {
-          console.warn('[Flujo Inicial Notice] Subida previa a Storage (se reintentará al enviar):', storageErr);
+        } catch (driveErr: any) {
+          // Rule 4: If Drive upload fails, do NOT block download or WhatsApp. Just log diagnostic error in console.
+          console.error('[Google Drive Diagnostic Error Details]:', driveErr);
+        } finally {
+          if (isMounted) setIsUploadingToDrive(false);
         }
       } catch (err: any) {
-        console.error('[Flujo Inicial Error] Error al generar PDF inicial:', err);
+        console.error('[Triple Respaldo Error] Error al generar PDF inicial:', err);
         if (isMounted) {
-          setErrorMessage(`No se pudo generar el PDF automáticamente: ${err?.message || 'Error desconocido'}. Puedes reintentar.`);
+          setErrorMessage(`No se pudo compilar el PDF: ${err?.message || 'Error desconocido'}. Puedes presionar el botón de descarga para reintentar.`);
         }
       } finally {
         if (isMounted) {
           setIsGeneratingPdf(false);
         }
+        console.log('[Triple Respaldo] ========================================');
       }
     }
 
-    initPdfFlow();
+    initTripleBackupFlow();
 
     return () => {
       isMounted = false;
     };
   }, []);
 
-  // Handler for "Descargar mi PDF"
+  // Handler for 1.a: "Descargar mi PDF"
   const handleDownloadPdf = async () => {
     console.log('[Descarga PDF] Iniciando descarga manual de PDF por la paciente...');
     setIsDownloadingPdf(true);
@@ -184,14 +223,13 @@ export const StepClosureScreen: React.FC<StepClosureScreenProps> = ({
       setTimeout(() => setStatusMessage(null), 6000);
     } catch (err: any) {
       console.error('[Descarga PDF Error] Error al descargar PDF:', err);
-      // Fallback using stored Blob
+      // Resilient fallback using stored Blob
       if (pdfBlob) {
         try {
-          console.log('[Descarga PDF] Intentando fallback con Blob generado...');
           const url = URL.createObjectURL(pdfBlob);
           const a = document.createElement('a');
           a.href = url;
-          a.download = `Cuestionario_Inicial_Vela_${patientFullName.replace(/[^a-zA-Z0-9_-]/g, '_')}.pdf`;
+          a.download = generateDrivePdfFileName(patientFullName);
           document.body.appendChild(a);
           a.click();
           document.body.removeChild(a);
@@ -202,14 +240,14 @@ export const StepClosureScreen: React.FC<StepClosureScreenProps> = ({
           setErrorMessage(`No se pudo descargar el archivo: ${blobErr?.message || err?.message}`);
         }
       } else {
-        setErrorMessage(`Error al descargar el PDF: ${err?.message || 'Por favor reintenta en unos momentos'}.`);
+        setErrorMessage(`Error al descargar el PDF: ${err?.message || 'Por favor reintenta'}.`);
       }
     } finally {
       setIsDownloadingPdf(false);
     }
   };
 
-  // Handler for "Enviar y agendar por WhatsApp"
+  // Handler for 1.b: "Enviar y agendar por WhatsApp"
   const handleSendAndScheduleWhatsApp = async () => {
     console.log('[WhatsApp Flow] ========================================');
     console.log('[WhatsApp Flow] Paso 1: Usuario hizo clic en "Enviar y agendar por WhatsApp"');
@@ -217,54 +255,48 @@ export const StepClosureScreen: React.FC<StepClosureScreenProps> = ({
     setErrorMessage(null);
     setDirectWaLink(null);
 
-    const fileName = `Cuestionario_Inicial_Vela_${patientFullName.replace(/[^a-zA-Z0-9_-]/g, '_')}.pdf`;
+    const fileName = generateDrivePdfFileName(patientFullName);
     let currentBlob = pdfBlob;
 
     try {
-      // 1. Ensure PDF Blob is generated (await generation if not ready)
+      // Ensure PDF Blob is ready
       if (!currentBlob) {
         console.log('[WhatsApp Flow] Paso 2: Generando PDF Blob en tiempo real...');
         const patientDoc = buildPatientDocument();
         currentBlob = await generatePatientQuestionnairePdfBlob(patientDoc);
         setPdfBlob(currentBlob);
-        console.log('[WhatsApp Flow] Paso 2 completado: Blob generado exitosamente.');
       }
 
-      // 2. Ensure PDF is uploaded to Firebase Storage and get public URL
-      let pdfUrlToUse = publicPdfUrl;
-      if (!pdfUrlToUse) {
-        console.log('[WhatsApp Flow] Paso 3: Subiendo PDF a Firebase Storage para obtener URL de descarga...');
+      // If Google Drive hasn't been uploaded yet, try now (without blocking WhatsApp on failure)
+      if (!driveFileLink && currentBlob) {
         try {
-          const patientDoc = buildPatientDocument();
-          const uploadedUrl = await uploadPatientPdfToStorage(
-            patientDoc.patientId,
-            currentBlob,
-            patientDoc.patientName
-          );
-          if (uploadedUrl) {
-            pdfUrlToUse = uploadedUrl;
-            setPublicPdfUrl(uploadedUrl);
-            setErrorMessage(null);
-            console.log('[WhatsApp Flow] Paso 4: URL de PDF obtenida con éxito:', uploadedUrl);
+          console.log('[WhatsApp Flow] Intentando sincronizar con Google Drive...');
+          const token = await getGoogleDriveAccessToken().catch(() => null);
+          if (token) {
+            const driveRes = await uploadPatientPdfToGoogleDrive(token, currentBlob, patientFullName);
+            if (driveRes.success && driveRes.webViewLink) {
+              setDriveFileLink(driveRes.webViewLink);
+              setDriveUploadComplete(true);
+              const patientDoc = buildPatientDocument();
+              await updatePatientDriveInfoInFirestore(patientDoc.patientId, {
+                fileId: driveRes.fileId,
+                fileName: driveRes.fileName,
+                webViewLink: driveRes.webViewLink,
+                folderId: driveRes.folderId,
+              });
+            }
           }
-        } catch (uploadErr: any) {
-          console.error('[WhatsApp Flow Error] Error al subir el PDF a Storage y servidor:', uploadErr);
-          // Only show error if no URL could be generated
-          if (!pdfUrlToUse) {
-            console.warn('[WhatsApp Flow Notice] Continuando sin link de PDF adjunto:', uploadErr);
-          }
+        } catch (dErr) {
+          console.error('[Google Drive WhatsApp Sync Notice]:', dErr);
         }
-      } else {
-        console.log('[WhatsApp Flow] Paso 4: Reutilizando URL de PDF previamente subida:', pdfUrlToUse);
       }
 
-      // 3. Try Web Share API on mobile devices if supported
-      let didShareFile = false;
+      // Try Web Share API on mobile devices if supported (attaches the PDF file directly to WhatsApp)
       try {
         const file = new File([currentBlob], fileName, { type: 'application/pdf' });
         const shareData = {
           title: 'Cuestionario Inicial Vela',
-          text: `Hola Dra. Lorena / equipo Vela, soy ${patientFullName}. Adjunto mi Cuestionario Médico Inicial diligenciado. Quiero agendar mi primera cita.${pdfUrlToUse ? ` Enlace de respaldo: ${pdfUrlToUse}` : ''}`,
+          text: `Hola Dra. Lorena y equipo Vela, soy ${patientFullName}. Adjunto mi Cuestionario Médico Inicial diligenciado. Quiero agendar mi primera cita con la Dra. Lorena Castro.`,
           files: [file],
         };
 
@@ -273,41 +305,40 @@ export const StepClosureScreen: React.FC<StepClosureScreenProps> = ({
           navigator.canShare(shareData) &&
           navigator.share
         ) {
-          console.log('[WhatsApp Flow] Intentando compartir archivo mediante Web Share API...');
+          console.log('[WhatsApp Flow] Compartiendo archivo PDF mediante Web Share API...');
           await navigator.share(shareData);
-          console.log('[WhatsApp Flow] Archivo compartido mediante Web Share API exitosamente.');
-          didShareFile = true;
+          console.log('[WhatsApp Flow] Archivo compartido exitosamente.');
           setIsSharingWhatsApp(false);
           return;
         }
       } catch (shareErr: any) {
         if (shareErr.name === 'AbortError') {
-          console.log('[WhatsApp Flow] El usuario canceló el selector de compartir.');
+          console.log('[WhatsApp Flow] Selector de compartir cancelado por el usuario.');
           setIsSharingWhatsApp(false);
           return;
         }
-        console.warn('[WhatsApp Flow Notice] Web Share no disponible o descartado, procediendo con enlace directo wa.me:', shareErr);
+        console.warn('[WhatsApp Flow Notice] Web Share descartado, procediendo con enlace directo wa.me:', shareErr);
       }
 
-      // 4. Construct WhatsApp Message URL
-      console.log('[WhatsApp Flow] Paso 5: Construyendo mensaje y enlace de WhatsApp...');
-      let message = `Hola Dra. Lorena y equipo Vela, soy ${patientFullName}. Ya completé mi Cuestionario Inicial`;
-      if (pdfUrlToUse) {
-        message += `. Puedes ver mi información y PDF médico aquí: ${pdfUrlToUse}`;
+      // Construct pre-written WhatsApp Message
+      console.log('[WhatsApp Flow] Construyendo mensaje pre-escrito de WhatsApp...');
+      let message = `Hola Dra. Lorena y equipo Vela, soy ${patientFullName}. Ya completé mi Cuestionario Médico Inicial`;
+      if (driveFileLink) {
+        message += `. Puedes ver mi PDF médico en Google Drive aquí: ${driveFileLink}`;
       } else {
-        message += ` con mi información y antecedentes de salud`;
+        message += ` con todos mis antecedentes y datos de salud`;
       }
-      message += `. Me gustaría agendar mi primera consulta. ¡Gracias!`;
+      message += `. Me gustaría agendar mi primera consulta médica. ¡Muchas gracias!`;
 
       const waLink = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
-      console.log('[WhatsApp Flow] Paso 6: Abriendo WhatsApp con enlace:', waLink);
+      console.log('[WhatsApp Flow] Abriendo WhatsApp con enlace:', waLink);
 
       setDirectWaLink(waLink);
 
       // Open WhatsApp in new tab
       const newTab = window.open(waLink, '_blank', 'noopener,noreferrer');
       if (!newTab || newTab.closed || typeof newTab.closed === 'undefined') {
-        console.warn('[WhatsApp Flow] La ventana emergente pudo haber sido bloqueada por el navegador.');
+        console.warn('[WhatsApp Flow] La ventana emergente fue bloqueada por el navegador.');
         setStatusMessage('Si WhatsApp no se abrió automáticamente, haz clic en el botón de acceso directo abajo.');
       } else {
         setStatusMessage('¡Conectando con WhatsApp de Vela!');
@@ -403,7 +434,7 @@ export const StepClosureScreen: React.FC<StepClosureScreenProps> = ({
       </div>
 
       {/* Main Action Hub Card */}
-      <div className="bg-linear-to-br from-[#FAF6F0] to-[#F2F8F5] rounded-3xl p-6 sm:p-8 border-2 border-[#6E9E93]/40 shadow-sm space-y-6">
+      <div className="bg-gradient-to-br from-[#FAF6F0] to-[#F2F8F5] rounded-3xl p-6 sm:p-8 border-2 border-[#6E9E93]/40 shadow-sm space-y-6">
         <div className="flex items-start gap-4">
           <div className="w-12 h-12 rounded-2xl bg-[#6E9E93] text-white flex items-center justify-center shrink-0 shadow-xs">
             {isGeneratingPdf ? (
@@ -435,7 +466,7 @@ export const StepClosureScreen: React.FC<StepClosureScreenProps> = ({
         {isGeneratingPdf && (
           <div className="p-3.5 rounded-2xl bg-[#EBF3F0] border border-[#6E9E93]/30 text-xs sm:text-sm text-[#5B887E] flex items-center gap-3">
             <Loader2 className="w-4 h-4 animate-spin shrink-0 text-[#6E9E93]" />
-            <span>Generando documento PDF y verificando almacenamiento...</span>
+            <span>Generando documento PDF y preparando respaldo de seguridad...</span>
           </div>
         )}
 
@@ -524,13 +555,16 @@ export const StepClosureScreen: React.FC<StepClosureScreenProps> = ({
           </button>
         </div>
 
-        {/* WhatsApp Line Note */}
+        {/* WhatsApp Line & Triple Respaldo Note */}
         <div className="pt-1 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-[#5C6E68] border-t border-[#E8E2D8] pt-4">
           <div className="flex items-center gap-2">
             <MessageCircle className="w-4 h-4 text-[#6E9E93]" />
             <span>Línea institucional: <strong className="text-[#2E3A36]">{whatsappNumber}</strong></span>
           </div>
-          <span className="text-[11px] text-[#8E9E99]">Respaldo seguro guardado en Firestore</span>
+          <div className="flex items-center gap-1.5 text-[11px] text-[#5B887E]">
+            <ShieldCheck className="w-3.5 h-3.5 text-[#6E9E93]" />
+            <span>Respaldo seguro en Firestore y Google Drive</span>
+          </div>
         </div>
       </div>
 

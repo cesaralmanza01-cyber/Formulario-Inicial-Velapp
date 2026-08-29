@@ -8,13 +8,8 @@ import {
   orderBy,
   onSnapshot,
 } from 'firebase/firestore';
-import {
-  ref,
-  uploadBytes,
-  getDownloadURL,
-} from 'firebase/storage';
 import { signInAnonymously } from 'firebase/auth';
-import { db, auth, storage } from '../firebase';
+import { db, auth } from '../firebase';
 import {
   FirestoreQuestionnaireDocument,
   PatientBasicInfo,
@@ -43,7 +38,7 @@ export async function ensurePatientAuth(): Promise<string> {
     const userCredential = await signInAnonymously(auth);
     return userCredential.user.uid;
   } catch (err: any) {
-    console.warn('[Firebase Auth Notice] signInAnonymously notice (anonymous auth may be disabled or restricted in Firebase Console):', {
+    console.warn('[Firebase Auth Notice] signInAnonymously notice:', {
       code: err?.code,
       message: err?.message,
     });
@@ -64,7 +59,7 @@ export function blobToDataURL(blob: Blob): Promise<string> {
 }
 
 /**
- * Uploads generated clinical PDF to backend server API endpoint
+ * Uploads generated clinical PDF to backend server API endpoint as a reliable backup
  */
 export async function uploadPdfToServer(
   patientId: string,
@@ -101,101 +96,6 @@ export async function uploadPdfToServer(
 }
 
 /**
- * Converts a base64 data URL to Blob for upload
- */
-function dataURLtoBlob(dataUrl: string): Blob {
-  const arr = dataUrl.split(',');
-  const mime = arr[0].match(/:(.*?);/)?.[1] || 'application/octet-stream';
-  const bstr = atob(arr[1]);
-  let n = bstr.length;
-  const u8arr = new Uint8Array(n);
-  while (n--) {
-    u8arr[n] = bstr.charCodeAt(n);
-  }
-  return new Blob([u8arr], { type: mime });
-}
-
-/**
- * Uploads a file to Firebase Storage if not already uploaded,
- * organized in folder: questionnaires/{patientId}/{category}/{fileName}
- */
-export async function uploadFileToStorage(
-  patientId: string,
-  category: 'paraclinicos' | 'inbody',
-  file: UploadedLabFile
-): Promise<UploadedLabFile> {
-  // If it already has a downloadUrl, don't re-upload
-  if (file.downloadUrl) {
-    return file;
-  }
-
-  try {
-    let blob: Blob | null = null;
-    if (file.dataUrl) {
-      blob = dataURLtoBlob(file.dataUrl);
-    }
-
-    if (!blob) {
-      return file;
-    }
-
-    const safeFileName = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
-    const storagePath = `questionnaires/${patientId}/${category}/${safeFileName}`;
-    const storageRef = ref(storage, storagePath);
-
-    const snapshot = await uploadBytes(storageRef, blob, {
-      contentType: file.type || 'application/octet-stream',
-    });
-
-    const downloadUrl = await getDownloadURL(snapshot.ref);
-
-    return {
-      id: file.id,
-      name: file.name,
-      size: file.size,
-      type: file.type,
-      description: file.description || '',
-      uploadedAt: file.uploadedAt || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      downloadUrl,
-      storagePath,
-      // Clear dataUrl after successful upload to keep Firestore doc lightweight
-    };
-  } catch (error) {
-    console.warn('Storage upload error (continuing with local data):', error);
-    return file;
-  }
-}
-
-/**
- * Sanitizes files before saving to Firestore (removes heavy dataUrls, keeps downloadUrls & metadata)
- */
-async function processFilesForStorage(
-  patientId: string,
-  category: 'paraclinicos' | 'inbody',
-  files?: UploadedLabFile[]
-): Promise<UploadedLabFile[]> {
-  if (!files || files.length === 0) return [];
-
-  const processed: UploadedLabFile[] = [];
-  for (const f of files) {
-    const uploaded = await uploadFileToStorage(patientId, category, f);
-    // Strip large dataUrl to avoid hitting Firestore 1MB document limit
-    const clean: UploadedLabFile = {
-      id: uploaded.id,
-      name: uploaded.name,
-      size: uploaded.size,
-      type: uploaded.type,
-      description: uploaded.description || '',
-      uploadedAt: uploaded.uploadedAt,
-      downloadUrl: uploaded.downloadUrl,
-      storagePath: uploaded.storagePath,
-    };
-    processed.push(clean);
-  }
-  return processed;
-}
-
-/**
  * Helper to get cached step data from localStorage as fallback
  */
 function getCachedStepData<T>(key: string): T | null {
@@ -205,6 +105,21 @@ function getCachedStepData<T>(key: string): T | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * Sanitizes attached files before saving to Firestore so document size limits are respected
+ */
+function sanitizeLabFiles(files?: UploadedLabFile[]): UploadedLabFile[] {
+  if (!files || files.length === 0) return [];
+  return files.map((f) => ({
+    id: f.id,
+    name: f.name,
+    size: f.size,
+    type: f.type,
+    description: f.description || '',
+    uploadedAt: f.uploadedAt || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+  }));
 }
 
 /**
@@ -223,6 +138,10 @@ export async function saveQuestionnaireToFirestore(params: {
   step7Data?: PatientPhysicalActivityInfo | null;
   step9Data?: PatientLabExamsInfo | null;
   stepInBodyData?: PatientInBodyInfo | null;
+  driveFileId?: string;
+  driveFileName?: string;
+  driveWebViewLink?: string;
+  driveFolderId?: string;
 }): Promise<string> {
   const patientId = await ensurePatientAuth();
 
@@ -240,46 +159,15 @@ export async function saveQuestionnaireToFirestore(params: {
   // Evaluate clinical red flags from symptoms review
   const redFlagsEvaluation = evaluateClinicalRedFlags(step5);
 
-  // Process files for Cloud Storage asynchronously if present
-  let cleanLabFiles: UploadedLabFile[] = [];
-  if (step9?.files && step9.files.length > 0) {
-    try {
-      cleanLabFiles = await processFilesForStorage(patientId, 'paraclinicos', step9.files);
-    } catch (e) {
-      console.warn('Error processing lab files for storage', e);
-      cleanLabFiles = step9.files.map((f) => ({
-        id: f.id,
-        name: f.name,
-        size: f.size,
-        type: f.type,
-        description: f.description,
-        uploadedAt: f.uploadedAt,
-      }));
-    }
-  }
-
-  let cleanInBodyFiles: UploadedLabFile[] = [];
-  if (stepInBody?.files && stepInBody.files.length > 0) {
-    try {
-      cleanInBodyFiles = await processFilesForStorage(patientId, 'inbody', stepInBody.files);
-    } catch (e) {
-      console.warn('Error processing inBody files for storage', e);
-      cleanInBodyFiles = stepInBody.files.map((f) => ({
-        id: f.id,
-        name: f.name,
-        size: f.size,
-        type: f.type,
-        description: f.description,
-        uploadedAt: f.uploadedAt,
-      }));
-    }
-  }
+  const cleanLabFiles = sanitizeLabFiles(step9?.files);
+  const cleanInBodyFiles = sanitizeLabFiles(stepInBody?.files);
 
   const docRef = doc(db, COLLECTION_NAME, patientId);
   let existingStartedAt: string | undefined;
   let existingCompletedAt: string | undefined;
   let existingSavedByPatient: boolean | undefined;
   let existingSavedAt: string | undefined;
+  let existingDriveLink: string | undefined;
 
   try {
     const existingDoc = await getDoc(docRef);
@@ -289,6 +177,7 @@ export async function saveQuestionnaireToFirestore(params: {
       existingCompletedAt = data?.completedAt;
       existingSavedByPatient = data?.isSavedByPatient;
       existingSavedAt = data?.savedAt;
+      existingDriveLink = data?.driveWebViewLink || data?.pdfUrl;
     }
   } catch (e) {
     console.warn('Notice reading existing doc:', e);
@@ -299,6 +188,8 @@ export async function saveQuestionnaireToFirestore(params: {
   const isSaved = params.isSavedByPatient ?? existingSavedByPatient ?? false;
   const isDone = params.isComplete || isSaved;
   const status: 'en progreso' | 'completado' = isDone ? 'completado' : 'en progreso';
+
+  const driveLink = params.driveWebViewLink || existingDriveLink;
 
   const docData: FirestoreQuestionnaireDocument = {
     patientId,
@@ -311,6 +202,12 @@ export async function saveQuestionnaireToFirestore(params: {
     startedAt,
     updatedAt: now,
     completedAt: isDone ? (existingCompletedAt || now) : undefined,
+    pdfUrl: driveLink, // Points directly to the Google Drive file
+    driveFileId: params.driveFileId,
+    driveFileName: params.driveFileName,
+    driveWebViewLink: driveLink,
+    driveFolderId: params.driveFolderId,
+    driveUploadedAt: driveLink ? now : undefined,
     banderas_revisar: redFlagsEvaluation.flags,
     identificacion: step1 || null,
     motivo_objetivos: step2 || null,
@@ -357,96 +254,38 @@ export async function saveQuestionnaireToFirestore(params: {
 }
 
 /**
- * Uploads a generated questionnaire PDF Blob to Firebase Storage (and server backup),
- * associates its download URL to the patient Firestore record, and returns the URL.
+ * Updates the Firestore document with Google Drive file details
  */
-export async function uploadPatientPdfToStorage(
+export async function updatePatientDriveInfoInFirestore(
   patientId: string,
-  pdfBlob: Blob,
-  patientName?: string
-): Promise<string> {
-  console.log('[PDF Storage Pipeline] ========================================');
-  console.log('[PDF Storage Pipeline] Paso 1: Iniciando subida de PDF clínico (tamaño:', pdfBlob.size, 'bytes)...');
-
-  let finalPdfUrl = '';
-
-  // 1. First attempt: Direct Firebase Storage
-  try {
-    const authUid = await ensurePatientAuth();
-    console.log('[Firebase Storage] Sesión de autenticación activa (UID:', authUid, ')');
-
-    const timestamp = Date.now();
-    const cleanName = (patientName || 'paciente').replace(/[^a-zA-Z0-9_-]/g, '_');
-    const storagePath = `questionnaires_pdf/${patientId}_${cleanName}_${timestamp}.pdf`;
-    const storageRef = ref(storage, storagePath);
-
-    console.log('[Firebase Storage] Paso 2: Subiendo PDF Blob a Firebase Storage bucket:', storage.app.options.storageBucket, 'ruta:', storagePath);
-    const snapshot = await uploadBytes(storageRef, pdfBlob, {
-      contentType: 'application/pdf',
-      customMetadata: {
-        patientId,
-        patientName: patientName || '',
-        uploadedAt: new Date().toISOString(),
-      },
-    });
-    console.log('[Firebase Storage] Archivo PDF subido exitosamente a Storage bytesTransferred:', snapshot.metadata?.size || pdfBlob.size);
-
-    console.log('[Firebase Storage] Paso 3: Obteniendo URL pública de descarga...');
-    const downloadUrl = await getDownloadURL(snapshot.ref);
-    console.log('[Firebase Storage] Paso 4: URL de Firebase Storage obtenida con éxito:', downloadUrl);
-    finalPdfUrl = downloadUrl;
-  } catch (firebaseStorageError: any) {
-    // Detailed diagnostic logging of the real, specific error from Firebase
-    console.error('[Firebase Storage Diagnostic Detail]:', {
-      code: firebaseStorageError?.code,
-      message: firebaseStorageError?.message,
-      name: firebaseStorageError?.name,
-      serverResponse: firebaseStorageError?.serverResponse,
-      customData: firebaseStorageError?.customData,
-      stack: firebaseStorageError?.stack,
-      rawError: firebaseStorageError,
-    });
-    console.warn('[PDF Storage Pipeline] Firebase Storage directo no disponible o bloqueado por reglas/CORS. Activando servidor de respaldo...');
+  driveInfo: {
+    fileId?: string;
+    fileName?: string;
+    webViewLink?: string;
+    folderId?: string;
   }
-
-  // 2. Second attempt / Fallback: Server-side PDF hosting endpoint
-  if (!finalPdfUrl) {
-    try {
-      console.log('[PDF Storage Pipeline] Subiendo PDF a través del endpoint de servidor dedicado (/api/pdf/upload)...');
-      finalPdfUrl = await uploadPdfToServer(patientId, pdfBlob, patientName);
-      console.log('[PDF Storage Pipeline] URL pública generada por servidor:', finalPdfUrl);
-    } catch (serverUploadError: any) {
-      console.error('[PDF Storage Pipeline Error] Falló también la subida al servidor:', serverUploadError);
-      throw new Error(`No se pudo subir el PDF: ${serverUploadError?.message || 'Error de almacenamiento'}`);
-    }
-  }
-
-  // 3. Save URL to Firestore document
-  if (finalPdfUrl) {
-    try {
-      console.log('[PDF Storage Pipeline] Paso final: Guardando enlace del PDF en el documento de Firestore...');
-      const docRef = doc(db, COLLECTION_NAME, patientId);
-      await setDoc(
-        docRef,
-        {
-          pdfUrl: finalPdfUrl,
-          pdfUploadedAt: new Date().toISOString(),
-        },
-        { merge: true }
-      );
-      console.log('[PDF Storage Pipeline] Enlace de PDF guardado en Firestore con éxito.');
-    } catch (firestoreErr) {
-      console.warn('[PDF Storage Pipeline Notice] Aviso al actualizar Firestore con pdfUrl:', firestoreErr);
-    }
-  }
-
-  console.log('[PDF Storage Pipeline] Proceso finalizado. URL final del PDF:', finalPdfUrl);
-  console.log('[PDF Storage Pipeline] ========================================');
-  return finalPdfUrl;
+): Promise<void> {
+  console.log('[Firestore] Actualizando documento con enlace de Google Drive:', driveInfo.webViewLink);
+  const docRef = doc(db, COLLECTION_NAME, patientId);
+  const now = new Date().toISOString();
+  await setDoc(
+    docRef,
+    {
+      pdfUrl: driveInfo.webViewLink,
+      driveFileId: driveInfo.fileId,
+      driveFileName: driveInfo.fileName,
+      driveWebViewLink: driveInfo.webViewLink,
+      driveFolderId: driveInfo.folderId,
+      driveUploadedAt: now,
+      updatedAt: now,
+    },
+    { merge: true }
+  );
+  console.log('[Firestore] Enlace de Google Drive registrado con éxito en Firestore.');
 }
 
 /**
- * Loads all patient questionnaires for the doctor's administrative panel
+ * Loads all patient questionnaires for reference or local review
  */
 export async function getAllQuestionnaires(): Promise<FirestoreQuestionnaireDocument[]> {
   const questionnaires: FirestoreQuestionnaireDocument[] = [];
@@ -480,32 +319,6 @@ export async function getAllQuestionnaires(): Promise<FirestoreQuestionnaireDocu
         seenIds.add(docId);
       }
     }
-
-    // Also check if current browser has active filled draft that can be previewed
-    const step1 = getCachedStepData<PatientBasicInfo>('vela_step1_data');
-    if (step1 && step1.fullName && questionnaires.length === 0) {
-      const draftDoc: FirestoreQuestionnaireDocument = {
-        id: 'draft-local-patient',
-        patientId: 'draft-local-patient',
-        patientName: step1.fullName,
-        patientDocument: step1.documentNumber || '',
-        status: (localStorage.getItem('vela_current_step') === '11') ? 'completado' : 'en progreso',
-        currentStep: parseInt(localStorage.getItem('vela_current_step') || '1', 10),
-        startedAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        banderas_revisar: [],
-        identificacion: step1,
-        motivo_objetivos: getCachedStepData<PatientMotivationInfo>('vela_step2_data'),
-        relacion_peso: getCachedStepData<PatientWeightHistoryInfo>('vela_step3_data'),
-        mapa_salud: getCachedStepData<PatientHealthMapInfo>('vela_step4_data'),
-        revision_sistemas: getCachedStepData<PatientBodySymptomsInfo>('vela_step5_data'),
-        entrevista_dietetica: getCachedStepData<PatientNutritionInfo>('vela_step6_data'),
-        actividad_fisica: getCachedStepData<PatientPhysicalActivityInfo>('vela_step7_data'),
-        paraclinicos: getCachedStepData<PatientLabExamsInfo>('vela_step9_data'),
-        inbody: getCachedStepData<PatientInBodyInfo>('vela_step10_inbody_data'),
-      };
-      questionnaires.push(draftDoc);
-    }
   } catch (err) {
     console.warn('Error reading local cache for questionnaires:', err);
   }
@@ -519,31 +332,3 @@ export async function getAllQuestionnaires(): Promise<FirestoreQuestionnaireDocu
 
   return questionnaires;
 }
-
-/**
- * Subscribes to real-time updates for doctor dashboard
- */
-export function subscribeToQuestionnaires(
-  callback: (list: FirestoreQuestionnaireDocument[]) => void
-): () => void {
-  const q = query(collection(db, COLLECTION_NAME), orderBy('updatedAt', 'desc'));
-  return onSnapshot(
-    q,
-    (snapshot) => {
-      const questionnaires: FirestoreQuestionnaireDocument[] = [];
-      snapshot.forEach((docSnap) => {
-        questionnaires.push({
-          id: docSnap.id,
-          ...(docSnap.data() as Omit<FirestoreQuestionnaireDocument, 'id'>),
-        });
-      });
-      callback(questionnaires);
-    },
-    (error) => {
-      console.warn('Firestore subscription notice (loading via getAllQuestionnaires):', error);
-      // Fallback to fetch
-      getAllQuestionnaires().then(callback);
-    }
-  );
-}
-
