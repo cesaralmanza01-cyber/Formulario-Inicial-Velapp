@@ -7,7 +7,7 @@
 
 import firebaseConfig from '../../firebase-applet-config.json';
 
-const GOOGLE_DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/drive.file';
+const GOOGLE_DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
 export const TARGET_GOOGLE_ACCOUNT = 'comerconcalma@gmail.com';
 
 let tokenClient: any = null;
