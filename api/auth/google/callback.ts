@@ -1,7 +1,18 @@
 import { google } from 'googleapis';
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore, doc, setDoc } from 'firebase/firestore';
-import { firebaseConfig } from '../../firebaseConfig';
+
+const firebaseConfig = {
+  projectId: "gen-lang-client-0995145097",
+  appId: "1:1028826074180:web:c5e9636ea22b1f3a850011",
+  apiKey: "AIzaSyA9hePNixcQD90_2HOJREulcMz538-CaSg",
+  authDomain: "gen-lang-client-0995145097.firebaseapp.com",
+  storageBucket: "gen-lang-client-0995145097.firebasestorage.app",
+  messagingSenderId: "1028826074180",
+  measurementId: "",
+  oAuthClientId: "1028826074180-m7oqf27rei6p45c2trqkiam5av9ubck1.apps.googleusercontent.com",
+  recaptchaSiteKey: ""
+};
 
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 const db = getFirestore(app);
