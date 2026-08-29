@@ -8,7 +8,7 @@ import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getFirestore, doc, getDoc, setDoc } from "firebase/firestore";
-import firebaseConfig from "./firebase-applet-config.json";
+import { firebaseConfig } from "./src/firebaseConfig";
 
 dotenv.config();
 

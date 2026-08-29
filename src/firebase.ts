@@ -7,7 +7,7 @@ import {
 } from 'firebase/firestore';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 import { getStorage } from 'firebase/storage';
-import firebaseConfig from '../firebase-applet-config.json';
+import firebaseConfig from './firebaseConfig';
 
 // Initialize Firebase App instance safely
 export const app =

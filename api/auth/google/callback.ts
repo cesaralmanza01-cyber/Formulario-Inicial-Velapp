@@ -1,7 +1,7 @@
 import { google } from 'googleapis';
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore, doc, setDoc } from 'firebase/firestore';
-import firebaseConfig from '../../../firebase-applet-config.json';
+import { firebaseConfig } from '../../../src/firebaseConfig';
 
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 const db = getFirestore(app);
