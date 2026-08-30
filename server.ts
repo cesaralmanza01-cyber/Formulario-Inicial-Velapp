@@ -8,21 +8,10 @@ import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
 import { initializeApp as initAdminApp, getApps as getAdminApps, cert, getApp as getAdminApp } from "firebase-admin/app";
 import { getFirestore as getAdminFirestoreInstance } from "firebase-admin/firestore";
-import { initializeApp as initClientApp, getApps as getClientApps, getApp as getClientApp } from "firebase/app";
-import { getFirestore as getClientFirestore, doc as clientDoc, getDoc as clientGetDoc, setDoc as clientSetDoc } from "firebase/firestore";
 
 dotenv.config();
 
 const FIREBASE_PROJECT_ID = "gen-lang-client-0995145097";
-
-const firebaseClientConfig = {
-  projectId: FIREBASE_PROJECT_ID,
-  appId: "1:1028826074180:web:c5e9636ea22b1f3a850011",
-  apiKey: "AIzaSyA9hePNixcQD90_2HOJREulcMz538-CaSg",
-  authDomain: "gen-lang-client-0995145097.firebaseapp.com",
-  storageBucket: "gen-lang-client-0995145097.firebasestorage.app",
-  messagingSenderId: "1028826074180",
-};
 
 interface StoredDriveTokens {
   refreshToken?: string;
@@ -130,56 +119,25 @@ async function getGoogleDriveStoredTokens(): Promise<StoredDriveTokens | null> {
       }
     }
   } catch (adminErr: any) {
-    console.warn("[Server] Firebase Admin fetch notice:", adminErr?.message || adminErr);
-  }
-
-  // Tier 3: Client SDK getDoc with 4s timeout fallback
-  try {
-    const clientApp = getClientApps().length === 0 ? initClientApp(firebaseClientConfig) : getClientApp();
-    const clientDb = getClientFirestore(clientApp);
-    const docRef = clientDoc(clientDb, "_system_config", "google_drive_tokens");
-    
-    const timeoutPromise = new Promise<null>((_, reject) =>
-      setTimeout(() => reject(new Error("Timeout de lectura Firestore (4s)")), 4000)
-    );
-
-    const docSnap = await Promise.race([clientGetDoc(docRef), timeoutPromise]);
-    if (docSnap && "exists" in docSnap && docSnap.exists()) {
-      const data = docSnap.data() as StoredDriveTokens;
-      if (data?.refreshToken) {
-        return data;
-      }
-    }
-  } catch (clientErr: any) {
-    console.warn("[Server] Client SDK getDoc notice:", clientErr?.message || clientErr);
+    console.error("[Server] Firebase Admin fetch error:", adminErr?.message || adminErr);
   }
 
   return null;
 }
 
 async function saveGoogleDriveTokens(tokens: StoredDriveTokens): Promise<boolean> {
-  // Tier 1: Firebase Admin SDK
   try {
     const dbAdmin = getAdminFirestore();
     if (dbAdmin) {
       await dbAdmin.collection("_system_config").doc("google_drive_tokens").set(tokens, { merge: true });
       console.log("[Server] Tokens guardados exitosamente con Firebase Admin SDK.");
       return true;
+    } else {
+      console.error("[Server] Firebase Admin no disponible para guardar tokens.");
+      return false;
     }
   } catch (adminErr: any) {
-    console.warn("[Server] Error guardando con Firebase Admin, intentando Client SDK:", adminErr?.message);
-  }
-
-  // Tier 2: Client SDK fallback
-  try {
-    const clientApp = getClientApps().length === 0 ? initClientApp(firebaseClientConfig) : getClientApp();
-    const clientDb = getClientFirestore(clientApp);
-    const docRef = clientDoc(clientDb, "_system_config", "google_drive_tokens");
-    await clientSetDoc(docRef, tokens, { merge: true });
-    console.log("[Server] Tokens guardados con Client SDK fallback.");
-    return true;
-  } catch (clientErr: any) {
-    console.error("[Server] Error crítico guardando tokens en Firestore:", clientErr);
+    console.error("[Server] Error guardando con Firebase Admin:", adminErr?.message || adminErr);
     return false;
   }
 }

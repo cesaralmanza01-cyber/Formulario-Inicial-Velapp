@@ -2,19 +2,8 @@ import { Readable } from 'stream';
 import { google } from 'googleapis';
 import { initializeApp as initAdminApp, getApps as getAdminApps, cert, getApp as getAdminApp } from 'firebase-admin/app';
 import { getFirestore as getAdminFirestoreInstance } from 'firebase-admin/firestore';
-import { initializeApp as initClientApp, getApps as getClientApps, getApp as getClientApp } from 'firebase/app';
-import { getFirestore as getClientFirestore, doc as clientDoc, getDoc as clientGetDoc } from 'firebase/firestore';
 
 const FIREBASE_PROJECT_ID = 'gen-lang-client-0995145097';
-
-const firebaseClientConfig = {
-  projectId: FIREBASE_PROJECT_ID,
-  appId: '1:1028826074180:web:c5e9636ea22b1f3a850011',
-  apiKey: 'AIzaSyA9hePNixcQD90_2HOJREulcMz538-CaSg',
-  authDomain: 'gen-lang-client-0995145097.firebaseapp.com',
-  storageBucket: 'gen-lang-client-0995145097.firebasestorage.app',
-  messagingSenderId: '1028826074180',
-};
 
 interface StoredDriveTokens {
   refreshToken?: string;
@@ -83,6 +72,7 @@ function getAdminFirestore() {
 
     const serviceAccount = parseServiceAccount(process.env.FIREBASE_SERVICE_ACCOUNT);
     if (!serviceAccount) {
+      console.warn('[Drive Test Upload] FIREBASE_SERVICE_ACCOUNT no configurada o inválida.');
       return null;
     }
 
@@ -99,7 +89,6 @@ function getAdminFirestore() {
 }
 
 async function getGoogleDriveStoredTokens(): Promise<StoredDriveTokens | null> {
-  // Tier 1: Direct Environment Variable (Optional)
   const envRefreshToken = getCleanEnv('GOOGLE_DRIVE_REFRESH_TOKEN');
   if (envRefreshToken) {
     return {
@@ -109,7 +98,6 @@ async function getGoogleDriveStoredTokens(): Promise<StoredDriveTokens | null> {
     };
   }
 
-  // Tier 2: Firebase Admin SDK
   try {
     const dbAdmin = getAdminFirestore();
     if (dbAdmin) {
@@ -122,28 +110,7 @@ async function getGoogleDriveStoredTokens(): Promise<StoredDriveTokens | null> {
       }
     }
   } catch (adminErr: any) {
-    console.warn('[Drive Test Upload] Firebase Admin fetch notice:', adminErr?.message || adminErr);
-  }
-
-  // Tier 3: Client SDK getDoc with 4s timeout fallback
-  try {
-    const clientApp = getClientApps().length === 0 ? initClientApp(firebaseClientConfig) : getClientApp();
-    const clientDb = getClientFirestore(clientApp);
-    const docRef = clientDoc(clientDb, '_system_config', 'google_drive_tokens');
-    
-    const timeoutPromise = new Promise<null>((_, reject) =>
-      setTimeout(() => reject(new Error('Timeout de lectura Firestore (4s)')), 4000)
-    );
-
-    const docSnap = await Promise.race([clientGetDoc(docRef), timeoutPromise]);
-    if (docSnap && 'exists' in docSnap && docSnap.exists()) {
-      const data = docSnap.data() as StoredDriveTokens;
-      if (data?.refreshToken) {
-        return data;
-      }
-    }
-  } catch (clientErr: any) {
-    console.warn('[Drive Test Upload] Client SDK getDoc notice:', clientErr?.message || clientErr);
+    console.error('[Drive Test Upload] Firebase Admin fetch error:', adminErr?.message || adminErr);
   }
 
   return null;

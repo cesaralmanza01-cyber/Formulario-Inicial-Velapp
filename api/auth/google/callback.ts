@@ -1,19 +1,8 @@
 import { google } from 'googleapis';
 import { initializeApp as initAdminApp, getApps as getAdminApps, cert, getApp as getAdminApp } from 'firebase-admin/app';
 import { getFirestore as getAdminFirestoreInstance } from 'firebase-admin/firestore';
-import { initializeApp as initClientApp, getApps as getClientApps, getApp as getClientApp } from 'firebase/app';
-import { getFirestore as getClientFirestore, doc as clientDoc, setDoc as clientSetDoc } from 'firebase/firestore';
 
 const FIREBASE_PROJECT_ID = 'gen-lang-client-0995145097';
-
-const firebaseClientConfig = {
-  projectId: FIREBASE_PROJECT_ID,
-  appId: '1:1028826074180:web:c5e9636ea22b1f3a850011',
-  apiKey: 'AIzaSyA9hePNixcQD90_2HOJREulcMz538-CaSg',
-  authDomain: 'gen-lang-client-0995145097.firebaseapp.com',
-  storageBucket: 'gen-lang-client-0995145097.firebasestorage.app',
-  messagingSenderId: '1028826074180',
-};
 
 interface StoredDriveTokens {
   refreshToken?: string;
@@ -82,6 +71,7 @@ function getAdminFirestore() {
 
     const serviceAccount = parseServiceAccount(process.env.FIREBASE_SERVICE_ACCOUNT);
     if (!serviceAccount) {
+      console.warn('[OAuth Callback] FIREBASE_SERVICE_ACCOUNT no está configurada o es inválida.');
       return null;
     }
 
@@ -98,28 +88,18 @@ function getAdminFirestore() {
 }
 
 async function saveGoogleDriveTokens(tokens: StoredDriveTokens): Promise<boolean> {
-  // Tier 1: Firebase Admin SDK
   try {
     const dbAdmin = getAdminFirestore();
     if (dbAdmin) {
       await dbAdmin.collection('_system_config').doc('google_drive_tokens').set(tokens, { merge: true });
       console.log('[OAuth Callback] Tokens guardados exitosamente con Firebase Admin SDK.');
       return true;
+    } else {
+      console.error('[OAuth Callback] No se pudo inicializar Firebase Admin SDK para guardar tokens.');
+      return false;
     }
   } catch (adminErr: any) {
-    console.warn('[OAuth Callback] Error guardando con Firebase Admin, intentando Client SDK:', adminErr?.message);
-  }
-
-  // Tier 2: Client SDK fallback
-  try {
-    const clientApp = getClientApps().length === 0 ? initClientApp(firebaseClientConfig) : getClientApp();
-    const clientDb = getClientFirestore(clientApp);
-    const docRef = clientDoc(clientDb, '_system_config', 'google_drive_tokens');
-    await clientSetDoc(docRef, tokens, { merge: true });
-    console.log('[OAuth Callback] Tokens guardados con Client SDK fallback.');
-    return true;
-  } catch (clientErr: any) {
-    console.error('[OAuth Callback] Error guardando tokens en Firestore con Client SDK:', clientErr);
+    console.error('[OAuth Callback] Error guardando tokens con Firebase Admin:', adminErr?.message || adminErr);
     return false;
   }
 }
@@ -130,7 +110,7 @@ function getOAuthRedirectUri(req: any): string {
     return `${customAppUrl.replace(/\/$/, '')}/api/auth/google/callback`;
   }
   const host = req.headers['x-forwarded-host'] || req.headers.host || '';
-  if (host.includes('vercel.app')) {
+  if (host.includes('formulario-inicial-velapp.vercel.app') || host.includes('vercel.app')) {
     return 'https://formulario-inicial-velapp.vercel.app/api/auth/google/callback';
   }
   const proto = req.headers['x-forwarded-proto'] || 'https';
@@ -159,7 +139,7 @@ export default async function handler(req: any, res: any) {
     }
 
     const redirectUri = getOAuthRedirectUri(req);
-    console.log(`[Google OAuth Callback] Intercambiando code por tokens con redirectUri=${redirectUri}`);
+    console.log(`[Google OAuth Callback] Intercambiando code con clientId=${clientId.substring(0, 15)}... (${clientId.length} chars), secret_length=${clientSecret.length}, redirectUri=${redirectUri}`);
 
     const oauth2Client = new google.auth.OAuth2(
       clientId,
@@ -167,7 +147,7 @@ export default async function handler(req: any, res: any) {
       redirectUri
     );
 
-    // Exchange code for tokens
+    // Exchange authorization code for tokens
     const { tokens } = await oauth2Client.getToken(String(code));
     oauth2Client.setCredentials(tokens);
 
@@ -183,7 +163,7 @@ export default async function handler(req: any, res: any) {
       console.warn('[Google OAuth Callback] No se pudo obtener userinfo email:', e?.message);
     }
 
-    // Save tokens in Firestore
+    // Save tokens in Firestore via Admin SDK
     await saveGoogleDriveTokens({
       refreshToken: tokens.refresh_token || '',
       accessToken: tokens.access_token || '',
