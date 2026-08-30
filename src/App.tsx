@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Header } from './components/Header';
 import { WizardProgress } from './components/WizardProgress';
@@ -106,10 +106,9 @@ export default function App() {
   });
 
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
-  const [isSyncingFirestore, setIsSyncingFirestore] = useState(false);
 
-  // Sync to Firestore whenever state changes or step advances
-  const syncProgressToFirestore = async (overrides?: {
+  // Sync to Firestore whenever state changes or step advances without causing unneeded re-renders
+  const syncProgressToFirestore = useCallback(async (overrides?: {
     step?: number;
     isComplete?: boolean;
     isSavedByPatient?: boolean;
@@ -124,7 +123,6 @@ export default function App() {
     stepInBody?: PatientInBodyInfo | null;
   }) => {
     try {
-      setIsSyncingFirestore(true);
       const targetStep = overrides?.step ?? currentStep;
       const isSaved = overrides?.isSavedByPatient ?? (localStorage.getItem('vela_patient_has_saved') === 'true');
       await saveQuestionnaireToFirestore({
@@ -143,10 +141,19 @@ export default function App() {
       });
     } catch (e) {
       console.warn('Firestore autosync notice (data kept in local storage safely):', e);
-    } finally {
-      setIsSyncingFirestore(false);
     }
-  };
+  }, [
+    currentStep,
+    step1Data,
+    step2Data,
+    step3Data,
+    step4Data,
+    step5Data,
+    step6Data,
+    step7Data,
+    step9Data,
+    stepInBodyData,
+  ]);
 
   useEffect(() => {
     localStorage.setItem('vela_current_step', currentStep.toString());

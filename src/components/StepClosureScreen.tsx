@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   CheckCircle2,
@@ -88,6 +88,7 @@ export const StepClosureScreen: React.FC<StepClosureScreenProps> = ({
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [directWaLink, setDirectWaLink] = useState<string | null>(null);
+  const backupInitiatedRef = useRef<boolean>(false);
 
   const patientFullName = basicInfo?.fullName?.trim() || 'Paciente';
   const patientFirstName = patientFullName !== 'Paciente' ? patientFullName.split(' ')[0] : '¡Hola!';
@@ -129,6 +130,8 @@ export const StepClosureScreen: React.FC<StepClosureScreenProps> = ({
    * 3. Automatically upload a copy to Google Drive in folder "Vela - Cuestionarios Pacientes"
    */
   useEffect(() => {
+    if (backupInitiatedRef.current) return;
+    backupInitiatedRef.current = true;
     let isMounted = true;
 
     async function initTripleBackupFlow() {

@@ -1123,21 +1123,6 @@ export const StepThreeForm: React.FC<StepThreeFormProps> = ({
       </div>
 
       {/* =========================================================================
-          SUB-SECCIÓN 2.5: "Línea de tiempo de trayectoria de peso (Weight Trajectory)"
-         ========================================================================= */}
-      <div id="field-weightTrajectoryMilestones">
-        <WeightTrajectoryTimeline
-          milestones={formData.weightTrajectoryMilestones || []}
-          onChange={(newMilestones) => {
-            setFormData((prev) => ({
-              ...prev,
-              weightTrajectoryMilestones: newMilestones,
-            }));
-          }}
-        />
-      </div>
-
-      {/* =========================================================================
           SUB-SECCIÓN 3: "Medicamentos para el peso"
          ========================================================================= */}
       <div className="space-y-6 bg-white/70 backdrop-blur-xs p-6 sm:p-8 rounded-3xl border border-[#AEC9C0]/30 shadow-xs">
