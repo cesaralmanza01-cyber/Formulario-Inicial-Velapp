@@ -1,19 +1,6 @@
 import { Readable } from 'stream';
 import { google } from 'googleapis';
-import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getFirestore, doc, getDoc } from 'firebase/firestore';
-
-const firebaseConfig = {
-  projectId: "gen-lang-client-0995145097",
-  appId: "1:1028826074180:web:c5e9636ea22b1f3a850011",
-  apiKey: "AIzaSyA9hePNixcQD90_2HOJREulcMz538-CaSg",
-  authDomain: "gen-lang-client-0995145097.firebaseapp.com",
-  storageBucket: "gen-lang-client-0995145097.firebasestorage.app",
-  messagingSenderId: "1028826074180",
-  measurementId: "",
-  oAuthClientId: "1028826074180-m7oqf27rei6p45c2trqkiam5av9ubck1.apps.googleusercontent.com",
-  recaptchaSiteKey: ""
-};
+import { getGoogleDriveStoredTokens } from '../../lib/serverTokens';
 
 export const config = {
   api: {
@@ -23,8 +10,6 @@ export const config = {
   },
 };
 
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
-const db = getFirestore(app);
 const DEFAULT_FOLDER_ID = '1GF3_uCNeiuevL7PsNiwXzIXRIuocrpK8';
 
 export default async function handler(req: any, res: any) {
@@ -56,17 +41,16 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    const tokensRef = doc(db, '_system_config', 'google_drive_tokens');
-    const tokenSnap = await getDoc(tokensRef);
+    const tokenData = await getGoogleDriveStoredTokens();
 
-    if (!tokenSnap.exists() || !tokenSnap.data()?.refreshToken) {
+    if (!tokenData || !tokenData.refreshToken) {
       return res.status(400).json({
         success: false,
         error: 'Google Drive no está conectado. Por favor haz clic en "Conectar Google Drive" primero.',
       });
     }
 
-    const refreshToken = tokenSnap.data().refreshToken;
+    const refreshToken = tokenData.refreshToken;
     const oauth2Client = new google.auth.OAuth2(clientId, clientSecret);
     oauth2Client.setCredentials({ refresh_token: refreshToken });
 

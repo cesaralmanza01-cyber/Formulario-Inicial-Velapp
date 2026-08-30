@@ -1,19 +1,6 @@
 import { Readable } from 'stream';
 import { google } from 'googleapis';
-import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getFirestore, doc, getDoc } from 'firebase/firestore';
-
-const firebaseConfig = {
-  projectId: "gen-lang-client-0995145097",
-  appId: "1:1028826074180:web:c5e9636ea22b1f3a850011",
-  apiKey: "AIzaSyA9hePNixcQD90_2HOJREulcMz538-CaSg",
-  authDomain: "gen-lang-client-0995145097.firebaseapp.com",
-  storageBucket: "gen-lang-client-0995145097.firebasestorage.app",
-  messagingSenderId: "1028826074180",
-  measurementId: "",
-  oAuthClientId: "1028826074180-m7oqf27rei6p45c2trqkiam5av9ubck1.apps.googleusercontent.com",
-  recaptchaSiteKey: ""
-};
+import { getGoogleDriveStoredTokens } from '../lib/serverTokens';
 
 export const config = {
   api: {
@@ -22,9 +9,6 @@ export const config = {
     },
   },
 };
-
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
-const db = getFirestore(app);
 
 const DEFAULT_FOLDER_ID = '1GF3_uCNeiuevL7PsNiwXzIXRIuocrpK8';
 
@@ -75,12 +59,11 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    // 1. Fetch Refresh Token from Firestore
-    const tokensRef = doc(db, '_system_config', 'google_drive_tokens');
-    const tokenSnap = await getDoc(tokensRef);
+    // 1. Fetch Refresh Token using multi-tier fallback (Env Var -> Firebase Admin -> Client SDK)
+    const tokenData = await getGoogleDriveStoredTokens();
 
-    if (!tokenSnap.exists() || !tokenSnap.data()?.refreshToken) {
-      console.warn('[Upload PDF] No existe refresh_token en _system_config/google_drive_tokens. La médica no ha conectado Google Drive.');
+    if (!tokenData || !tokenData.refreshToken) {
+      console.warn('[Upload PDF] No existe refresh_token disponible. La médica no ha conectado Google Drive ni se definió GOOGLE_DRIVE_REFRESH_TOKEN.');
       return res.status(200).json({
         success: false,
         reason: 'drive_not_linked',
@@ -88,7 +71,6 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    const tokenData = tokenSnap.data();
     const refreshToken = tokenData.refreshToken;
 
     // 2. Initialize OAuth client with Refresh Token

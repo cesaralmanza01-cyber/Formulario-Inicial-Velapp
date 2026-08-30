@@ -1,20 +1,4 @@
-import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getFirestore, doc, getDoc } from 'firebase/firestore';
-
-const firebaseConfig = {
-  projectId: "gen-lang-client-0995145097",
-  appId: "1:1028826074180:web:c5e9636ea22b1f3a850011",
-  apiKey: "AIzaSyA9hePNixcQD90_2HOJREulcMz538-CaSg",
-  authDomain: "gen-lang-client-0995145097.firebaseapp.com",
-  storageBucket: "gen-lang-client-0995145097.firebasestorage.app",
-  messagingSenderId: "1028826074180",
-  measurementId: "",
-  oAuthClientId: "1028826074180-m7oqf27rei6p45c2trqkiam5av9ubck1.apps.googleusercontent.com",
-  recaptchaSiteKey: ""
-};
-
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
-const db = getFirestore(app);
+import { getGoogleDriveStoredTokens } from '../../lib/serverTokens';
 
 const DEFAULT_FOLDER_ID = '1GF3_uCNeiuevL7PsNiwXzIXRIuocrpK8';
 const GOOGLE_DRIVE_FOLDER_NAME = 'FORMULARIO CONSULTAS VELA';
@@ -48,19 +32,17 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    // Check Firestore for stored refresh token
-    const tokensRef = doc(db, '_system_config', 'google_drive_tokens');
-    const snap = await getDoc(tokensRef);
+    // Check stored refresh token via multi-tier fallback
+    const tokenData = await getGoogleDriveStoredTokens();
 
-    if (snap.exists() && snap.data()?.refreshToken) {
-      const data = snap.data();
+    if (tokenData && tokenData.refreshToken) {
       return res.status(200).json({
         success: true,
         connected: true,
-        authorizedEmail: data.authorizedEmail || 'comerconcalma@gmail.com',
+        authorizedEmail: tokenData.authorizedEmail || 'comerconcalma@gmail.com',
         folderId: destinationFolderId,
         folderName: GOOGLE_DRIVE_FOLDER_NAME,
-        updatedAt: data.updatedAt,
+        updatedAt: tokenData.updatedAt || new Date().toISOString(),
       });
     } else {
       return res.status(200).json({

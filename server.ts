@@ -6,14 +6,9 @@ import { google } from "googleapis";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
-import { initializeApp, getApps, getApp } from "firebase/app";
-import { getFirestore, doc, getDoc, setDoc } from "firebase/firestore";
-import { firebaseConfig } from "./src/firebaseConfig";
+import { getGoogleDriveStoredTokens, saveGoogleDriveTokens } from "./api/lib/serverTokens";
 
 dotenv.config();
-
-const appFirebase = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
-const db = getFirestore(appFirebase);
 
 const DEFAULT_FOLDER_ID = "1GF3_uCNeiuevL7PsNiwXzIXRIuocrpK8";
 const GOOGLE_DRIVE_FOLDER_NAME = "FORMULARIO CONSULTAS VELA";
@@ -114,18 +109,13 @@ async function startServer() {
       } catch (e) {}
 
       // Save tokens in Firestore under _system_config/google_drive_tokens
-      const tokensRef = doc(db, "_system_config", "google_drive_tokens");
-      await setDoc(
-        tokensRef,
-        {
-          refreshToken: tokens.refresh_token || "",
-          accessToken: tokens.access_token || "",
-          expiryDate: tokens.expiry_date || 0,
-          authorizedEmail: userEmail,
-          updatedAt: new Date().toISOString(),
-        },
-        { merge: true }
-      );
+      await saveGoogleDriveTokens({
+        refreshToken: tokens.refresh_token || "",
+        accessToken: tokens.access_token || "",
+        expiryDate: tokens.expiry_date || 0,
+        authorizedEmail: userEmail,
+        updatedAt: new Date().toISOString(),
+      });
 
       console.log(`[Express OAuth Callback] Google Drive tokens guardados para ${userEmail}`);
       return res.redirect("/?admin_tab=config&drive_connected=true");
@@ -152,18 +142,16 @@ async function startServer() {
         });
       }
 
-      const tokensRef = doc(db, "_system_config", "google_drive_tokens");
-      const snap = await getDoc(tokensRef);
+      const tokenData = await getGoogleDriveStoredTokens();
 
-      if (snap.exists() && snap.data()?.refreshToken) {
-        const data = snap.data();
+      if (tokenData && tokenData.refreshToken) {
         return res.json({
           success: true,
           connected: true,
-          authorizedEmail: data.authorizedEmail || "comerconcalma@gmail.com",
+          authorizedEmail: tokenData.authorizedEmail || "comerconcalma@gmail.com",
           folderId: destinationFolderId,
           folderName: GOOGLE_DRIVE_FOLDER_NAME,
-          updatedAt: data.updatedAt,
+          updatedAt: tokenData.updatedAt || new Date().toISOString(),
         });
       }
 
@@ -190,13 +178,12 @@ async function startServer() {
         return res.status(400).json({ success: false, error: "Faltan credenciales de Google OAuth." });
       }
 
-      const tokensRef = doc(db, "_system_config", "google_drive_tokens");
-      const snap = await getDoc(tokensRef);
-      if (!snap.exists() || !snap.data()?.refreshToken) {
+      const tokenData = await getGoogleDriveStoredTokens();
+      if (!tokenData || !tokenData.refreshToken) {
         return res.status(400).json({ success: false, error: "Google Drive no está conectado." });
       }
 
-      const refreshToken = snap.data().refreshToken;
+      const refreshToken = tokenData.refreshToken;
       const oauth2Client = new google.auth.OAuth2(clientId, clientSecret);
       oauth2Client.setCredentials({ refresh_token: refreshToken });
 
@@ -258,13 +245,12 @@ async function startServer() {
         return res.json({ success: false, reason: "oauth_not_configured" });
       }
 
-      const tokensRef = doc(db, "_system_config", "google_drive_tokens");
-      const snap = await getDoc(tokensRef);
-      if (!snap.exists() || !snap.data()?.refreshToken) {
+      const tokenData = await getGoogleDriveStoredTokens();
+      if (!tokenData || !tokenData.refreshToken) {
         return res.json({ success: false, reason: "drive_not_linked" });
       }
 
-      const refreshToken = snap.data().refreshToken;
+      const refreshToken = tokenData.refreshToken;
       const oauth2Client = new google.auth.OAuth2(clientId, clientSecret);
       oauth2Client.setCredentials({ refresh_token: refreshToken });
 

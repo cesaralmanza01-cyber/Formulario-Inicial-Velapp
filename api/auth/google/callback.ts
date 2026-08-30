@@ -1,21 +1,5 @@
 import { google } from 'googleapis';
-import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getFirestore, doc, setDoc } from 'firebase/firestore';
-
-const firebaseConfig = {
-  projectId: "gen-lang-client-0995145097",
-  appId: "1:1028826074180:web:c5e9636ea22b1f3a850011",
-  apiKey: "AIzaSyA9hePNixcQD90_2HOJREulcMz538-CaSg",
-  authDomain: "gen-lang-client-0995145097.firebaseapp.com",
-  storageBucket: "gen-lang-client-0995145097.firebasestorage.app",
-  messagingSenderId: "1028826074180",
-  measurementId: "",
-  oAuthClientId: "1028826074180-m7oqf27rei6p45c2trqkiam5av9ubck1.apps.googleusercontent.com",
-  recaptchaSiteKey: ""
-};
-
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
-const db = getFirestore(app);
+import { saveGoogleDriveTokens } from '../../lib/serverTokens';
 
 export default async function handler(req: any, res: any) {
   try {
@@ -70,21 +54,16 @@ export default async function handler(req: any, res: any) {
       console.warn('[Google OAuth Callback] No se pudo obtener userinfo email:', e?.message);
     }
 
-    // Save tokens in Firestore under _system_config/google_drive_tokens
-    const tokensRef = doc(db, '_system_config', 'google_drive_tokens');
-    await setDoc(
-      tokensRef,
-      {
-        refreshToken: tokens.refresh_token || '',
-        accessToken: tokens.access_token || '',
-        expiryDate: tokens.expiry_date || 0,
-        authorizedEmail: userEmail,
-        updatedAt: new Date().toISOString(),
-      },
-      { merge: true }
-    );
+    // Save tokens in Firestore with Admin SDK & fallback
+    await saveGoogleDriveTokens({
+      refreshToken: tokens.refresh_token || '',
+      accessToken: tokens.access_token || '',
+      expiryDate: tokens.expiry_date || 0,
+      authorizedEmail: userEmail,
+      updatedAt: new Date().toISOString(),
+    });
 
-    console.log(`[Google OAuth Callback] ¡Tokens de Google Drive guardados con éxito para ${userEmail}!`);
+    console.log(`[Google OAuth Callback] ¡Tokens de Google Drive guardados con éxito para ${userEmail}! RefreshToken disponible.`);
 
     // Redirect to admin panel with success flag
     return res.redirect('/?admin_tab=config&drive_connected=true');
