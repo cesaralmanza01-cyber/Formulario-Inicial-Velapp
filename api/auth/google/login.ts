@@ -1,5 +1,27 @@
 import { google } from 'googleapis';
 
+function getCleanEnv(key: string): string {
+  const val = process.env[key] || '';
+  let trimmed = val.trim();
+  if ((trimmed.startsWith('"') && trimmed.endsWith('"')) || (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
+    trimmed = trimmed.slice(1, -1).trim();
+  }
+  return trimmed;
+}
+
+function getOAuthRedirectUri(req: any): string {
+  const customAppUrl = getCleanEnv('APP_URL');
+  if (customAppUrl) {
+    return `${customAppUrl.replace(/\/$/, '')}/api/auth/google/callback`;
+  }
+  const host = req.headers['x-forwarded-host'] || req.headers.host || '';
+  if (host.includes('vercel.app')) {
+    return 'https://formulario-inicial-velapp.vercel.app/api/auth/google/callback';
+  }
+  const proto = req.headers['x-forwarded-proto'] || 'https';
+  return `${proto}://${host}/api/auth/google/callback`;
+}
+
 export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -14,8 +36,8 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    const clientId = process.env.GOOGLE_CLIENT_ID?.trim();
-    const clientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim();
+    const clientId = getCleanEnv('GOOGLE_CLIENT_ID');
+    const clientSecret = getCleanEnv('GOOGLE_CLIENT_SECRET');
 
     if (!clientId || !clientSecret) {
       return res.status(400).send(
@@ -23,18 +45,8 @@ export default async function handler(req: any, res: any) {
       );
     }
 
-    const host = req.headers['x-forwarded-host'] || req.headers.host;
-    const proto = req.headers['x-forwarded-proto'] || 'https';
-    
-    // Exact redirect URI
-    let redirectUri = process.env.APP_URL 
-      ? `${process.env.APP_URL.replace(/\/$/, '')}/api/auth/google/callback`
-      : `${proto}://${host}/api/auth/google/callback`;
-
-    // Ensure production domain is preferred
-    if (host && host.includes('formulario-inicial-velapp.vercel.app')) {
-      redirectUri = 'https://formulario-inicial-velapp.vercel.app/api/auth/google/callback';
-    }
+    const redirectUri = getOAuthRedirectUri(req);
+    console.log(`[Google OAuth Login Init] Usando clientId=${clientId.substring(0, 15)}... redirectUri=${redirectUri}`);
 
     const oauth2Client = new google.auth.OAuth2(
       clientId,

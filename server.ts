@@ -32,34 +32,87 @@ interface StoredDriveTokens {
   updatedAt?: string;
 }
 
-function getAdminFirestore() {
-  if (getAdminApps().length === 0) {
-    const serviceAccountKey = process.env.FIREBASE_SERVICE_ACCOUNT?.trim();
-    if (serviceAccountKey) {
-      try {
-        const parsed = JSON.parse(serviceAccountKey);
-        initAdminApp({
-          credential: cert(parsed),
-          projectId: parsed.project_id || FIREBASE_PROJECT_ID,
-        });
-      } catch (e) {
-        console.warn("[Server] Could not parse FIREBASE_SERVICE_ACCOUNT, falling back to default:", e);
-        initAdminApp({ projectId: FIREBASE_PROJECT_ID });
-      }
-    } else {
-      initAdminApp({ projectId: FIREBASE_PROJECT_ID });
-    }
+function getCleanEnv(key: string): string {
+  const val = process.env[key] || "";
+  let trimmed = val.trim();
+  if ((trimmed.startsWith('"') && trimmed.endsWith('"')) || (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
+    trimmed = trimmed.slice(1, -1).trim();
   }
-  return getAdminFirestoreInstance(getAdminApp());
+  return trimmed;
+}
+
+function parseServiceAccount(raw: string | undefined): any | null {
+  if (!raw) return null;
+  let str = raw.trim();
+  if (!str) return null;
+
+  if ((str.startsWith('"') && str.endsWith('"')) || (str.startsWith("'") && str.endsWith("'"))) {
+    str = str.slice(1, -1).trim();
+  }
+
+  if (!str.startsWith('{') && str.length > 20) {
+    try {
+      const decoded = Buffer.from(str, 'base64').toString('utf-8');
+      if (decoded.startsWith('{')) {
+        str = decoded;
+      }
+    } catch {}
+  }
+
+  try {
+    const parsed = JSON.parse(str);
+    if (parsed.private_key && typeof parsed.private_key === 'string') {
+      parsed.private_key = parsed.private_key.replace(/\\n/g, '\n');
+    }
+    if (parsed.client_email && parsed.private_key) {
+      return parsed;
+    }
+    return null;
+  } catch (err: any) {
+    try {
+      const fixedStr = str.replace(/[\r\n]+/g, ' ');
+      const parsed = JSON.parse(fixedStr);
+      if (parsed.private_key && typeof parsed.private_key === 'string') {
+        parsed.private_key = parsed.private_key.replace(/\\n/g, '\n');
+      }
+      if (parsed.client_email && parsed.private_key) {
+        return parsed;
+      }
+    } catch {}
+    return null;
+  }
+}
+
+function getAdminFirestore() {
+  try {
+    if (getAdminApps().length > 0) {
+      return getAdminFirestoreInstance(getAdminApp());
+    }
+
+    const serviceAccount = parseServiceAccount(process.env.FIREBASE_SERVICE_ACCOUNT);
+    if (!serviceAccount) {
+      return null;
+    }
+
+    initAdminApp({
+      credential: cert(serviceAccount),
+      projectId: serviceAccount.project_id || FIREBASE_PROJECT_ID,
+    });
+
+    return getAdminFirestoreInstance(getAdminApp());
+  } catch (err: any) {
+    console.warn("[Server] Firebase Admin Init Notice:", err?.message || err);
+    return null;
+  }
 }
 
 async function getGoogleDriveStoredTokens(): Promise<StoredDriveTokens | null> {
   // Tier 1: Direct Environment Variable (Optional)
-  const envRefreshToken = process.env.GOOGLE_DRIVE_REFRESH_TOKEN?.trim();
+  const envRefreshToken = getCleanEnv("GOOGLE_DRIVE_REFRESH_TOKEN");
   if (envRefreshToken) {
     return {
       refreshToken: envRefreshToken,
-      authorizedEmail: process.env.GOOGLE_DRIVE_AUTHORIZED_EMAIL || "comerconcalma@gmail.com",
+      authorizedEmail: getCleanEnv("GOOGLE_DRIVE_AUTHORIZED_EMAIL") || "comerconcalma@gmail.com",
       updatedAt: new Date().toISOString(),
     };
   }
@@ -67,11 +120,13 @@ async function getGoogleDriveStoredTokens(): Promise<StoredDriveTokens | null> {
   // Tier 2: Firebase Admin SDK
   try {
     const dbAdmin = getAdminFirestore();
-    const snap = await dbAdmin.collection("_system_config").doc("google_drive_tokens").get();
-    if (snap.exists) {
-      const data = snap.data() as StoredDriveTokens;
-      if (data?.refreshToken) {
-        return data;
+    if (dbAdmin) {
+      const snap = await dbAdmin.collection("_system_config").doc("google_drive_tokens").get();
+      if (snap.exists) {
+        const data = snap.data() as StoredDriveTokens;
+        if (data?.refreshToken) {
+          return data;
+        }
       }
     }
   } catch (adminErr: any) {
@@ -106,9 +161,11 @@ async function saveGoogleDriveTokens(tokens: StoredDriveTokens): Promise<boolean
   // Tier 1: Firebase Admin SDK
   try {
     const dbAdmin = getAdminFirestore();
-    await dbAdmin.collection("_system_config").doc("google_drive_tokens").set(tokens, { merge: true });
-    console.log("[Server] Tokens guardados exitosamente con Firebase Admin SDK.");
-    return true;
+    if (dbAdmin) {
+      await dbAdmin.collection("_system_config").doc("google_drive_tokens").set(tokens, { merge: true });
+      console.log("[Server] Tokens guardados exitosamente con Firebase Admin SDK.");
+      return true;
+    }
   } catch (adminErr: any) {
     console.warn("[Server] Error guardando con Firebase Admin, intentando Client SDK:", adminErr?.message);
   }
@@ -154,21 +211,21 @@ async function startServer() {
   // Initiate OAuth login flow
   app.get("/api/auth/google/login", (req, res) => {
     try {
-      const clientId = process.env.GOOGLE_CLIENT_ID?.trim();
-      const clientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim();
+      const clientId = getCleanEnv("GOOGLE_CLIENT_ID");
+      const clientSecret = getCleanEnv("GOOGLE_CLIENT_SECRET");
 
       if (!clientId || !clientSecret) {
         return res.status(400).send("Error: Faltan las variables GOOGLE_CLIENT_ID y/o GOOGLE_CLIENT_SECRET.");
       }
 
-      const host = req.get("host");
+      const host = req.get("host") || "";
       const proto = req.protocol === "https" || req.headers["x-forwarded-proto"] === "https" ? "https" : "http";
 
-      let redirectUri = process.env.APP_URL
-        ? `${process.env.APP_URL.replace(/\/$/, "")}/api/auth/google/callback`
+      let redirectUri = getCleanEnv("APP_URL")
+        ? `${getCleanEnv("APP_URL").replace(/\/$/, "")}/api/auth/google/callback`
         : `${proto}://${host}/api/auth/google/callback`;
 
-      if (host && host.includes("formulario-inicial-velapp.vercel.app")) {
+      if (host.includes("formulario-inicial-velapp.vercel.app") || host.includes("vercel.app")) {
         redirectUri = "https://formulario-inicial-velapp.vercel.app/api/auth/google/callback";
       }
 
@@ -202,17 +259,17 @@ async function startServer() {
         return res.redirect("/?admin_tab=config&drive_error=no_code");
       }
 
-      const clientId = process.env.GOOGLE_CLIENT_ID?.trim();
-      const clientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim();
+      const clientId = getCleanEnv("GOOGLE_CLIENT_ID");
+      const clientSecret = getCleanEnv("GOOGLE_CLIENT_SECRET");
 
-      const host = req.get("host");
+      const host = req.get("host") || "";
       const proto = req.protocol === "https" || req.headers["x-forwarded-proto"] === "https" ? "https" : "http";
 
-      let redirectUri = process.env.APP_URL
-        ? `${process.env.APP_URL.replace(/\/$/, "")}/api/auth/google/callback`
+      let redirectUri = getCleanEnv("APP_URL")
+        ? `${getCleanEnv("APP_URL").replace(/\/$/, "")}/api/auth/google/callback`
         : `${proto}://${host}/api/auth/google/callback`;
 
-      if (host && host.includes("formulario-inicial-velapp.vercel.app")) {
+      if (host.includes("formulario-inicial-velapp.vercel.app") || host.includes("vercel.app")) {
         redirectUri = "https://formulario-inicial-velapp.vercel.app/api/auth/google/callback";
       }
 

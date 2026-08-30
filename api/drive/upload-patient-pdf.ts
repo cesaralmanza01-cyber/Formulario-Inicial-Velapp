@@ -24,34 +24,87 @@ interface StoredDriveTokens {
   updatedAt?: string;
 }
 
-function getAdminFirestore() {
-  if (getAdminApps().length === 0) {
-    const serviceAccountKey = process.env.FIREBASE_SERVICE_ACCOUNT?.trim();
-    if (serviceAccountKey) {
-      try {
-        const parsed = JSON.parse(serviceAccountKey);
-        initAdminApp({
-          credential: cert(parsed),
-          projectId: parsed.project_id || FIREBASE_PROJECT_ID,
-        });
-      } catch (e) {
-        console.warn('[Upload PDF] Could not parse FIREBASE_SERVICE_ACCOUNT, falling back to default:', e);
-        initAdminApp({ projectId: FIREBASE_PROJECT_ID });
-      }
-    } else {
-      initAdminApp({ projectId: FIREBASE_PROJECT_ID });
-    }
+function getCleanEnv(key: string): string {
+  const val = process.env[key] || '';
+  let trimmed = val.trim();
+  if ((trimmed.startsWith('"') && trimmed.endsWith('"')) || (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
+    trimmed = trimmed.slice(1, -1).trim();
   }
-  return getAdminFirestoreInstance(getAdminApp());
+  return trimmed;
+}
+
+function parseServiceAccount(raw: string | undefined): any | null {
+  if (!raw) return null;
+  let str = raw.trim();
+  if (!str) return null;
+
+  if ((str.startsWith('"') && str.endsWith('"')) || (str.startsWith("'") && str.endsWith("'"))) {
+    str = str.slice(1, -1).trim();
+  }
+
+  if (!str.startsWith('{') && str.length > 20) {
+    try {
+      const decoded = Buffer.from(str, 'base64').toString('utf-8');
+      if (decoded.startsWith('{')) {
+        str = decoded;
+      }
+    } catch {}
+  }
+
+  try {
+    const parsed = JSON.parse(str);
+    if (parsed.private_key && typeof parsed.private_key === 'string') {
+      parsed.private_key = parsed.private_key.replace(/\\n/g, '\n');
+    }
+    if (parsed.client_email && parsed.private_key) {
+      return parsed;
+    }
+    return null;
+  } catch (err: any) {
+    try {
+      const fixedStr = str.replace(/[\r\n]+/g, ' ');
+      const parsed = JSON.parse(fixedStr);
+      if (parsed.private_key && typeof parsed.private_key === 'string') {
+        parsed.private_key = parsed.private_key.replace(/\\n/g, '\n');
+      }
+      if (parsed.client_email && parsed.private_key) {
+        return parsed;
+      }
+    } catch {}
+    return null;
+  }
+}
+
+function getAdminFirestore() {
+  try {
+    if (getAdminApps().length > 0) {
+      return getAdminFirestoreInstance(getAdminApp());
+    }
+
+    const serviceAccount = parseServiceAccount(process.env.FIREBASE_SERVICE_ACCOUNT);
+    if (!serviceAccount) {
+      return null;
+    }
+
+    initAdminApp({
+      credential: cert(serviceAccount),
+      projectId: serviceAccount.project_id || FIREBASE_PROJECT_ID,
+    });
+
+    return getAdminFirestoreInstance(getAdminApp());
+  } catch (err: any) {
+    console.warn('[Upload PDF] Firebase Admin Init Notice:', err?.message || err);
+    return null;
+  }
 }
 
 async function getGoogleDriveStoredTokens(): Promise<StoredDriveTokens | null> {
   // Tier 1: Direct Environment Variable (Optional)
-  const envRefreshToken = process.env.GOOGLE_DRIVE_REFRESH_TOKEN?.trim();
+  const envRefreshToken = getCleanEnv('GOOGLE_DRIVE_REFRESH_TOKEN');
   if (envRefreshToken) {
     return {
       refreshToken: envRefreshToken,
-      authorizedEmail: process.env.GOOGLE_DRIVE_AUTHORIZED_EMAIL || 'comerconcalma@gmail.com',
+      authorizedEmail: getCleanEnv('GOOGLE_DRIVE_AUTHORIZED_EMAIL') || 'comerconcalma@gmail.com',
       updatedAt: new Date().toISOString(),
     };
   }
@@ -59,11 +112,13 @@ async function getGoogleDriveStoredTokens(): Promise<StoredDriveTokens | null> {
   // Tier 2: Firebase Admin SDK
   try {
     const dbAdmin = getAdminFirestore();
-    const snap = await dbAdmin.collection('_system_config').doc('google_drive_tokens').get();
-    if (snap.exists) {
-      const data = snap.data() as StoredDriveTokens;
-      if (data?.refreshToken) {
-        return data;
+    if (dbAdmin) {
+      const snap = await dbAdmin.collection('_system_config').doc('google_drive_tokens').get();
+      if (snap.exists) {
+        const data = snap.data() as StoredDriveTokens;
+        if (data?.refreshToken) {
+          return data;
+        }
       }
     }
   } catch (adminErr: any) {
@@ -138,9 +193,9 @@ export default async function handler(req: any, res: any) {
       return res.status(400).json({ success: false, error: 'No se proporcionaron datos de archivo PDF' });
     }
 
-    const clientId = process.env.GOOGLE_CLIENT_ID?.trim();
-    const clientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim();
-    const destinationFolderId = process.env.GOOGLE_DRIVE_FOLDER_ID?.trim() || DEFAULT_FOLDER_ID;
+    const clientId = getCleanEnv('GOOGLE_CLIENT_ID');
+    const clientSecret = getCleanEnv('GOOGLE_CLIENT_SECRET');
+    const destinationFolderId = getCleanEnv('GOOGLE_DRIVE_FOLDER_ID') || DEFAULT_FOLDER_ID;
 
     if (!clientId || !clientSecret) {
       console.warn('[Upload PDF] Faltan GOOGLE_CLIENT_ID y GOOGLE_CLIENT_SECRET. Fallando silenciosamente...');
