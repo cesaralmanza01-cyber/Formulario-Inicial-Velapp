@@ -6,6 +6,24 @@
 
 const memoryCache = new Map<string, string>();
 
+export const clearFileMemoryStore = (): void => {
+  memoryCache.clear();
+  try {
+    if (typeof window !== 'undefined' && window.sessionStorage) {
+      const keysToRemove: string[] = [];
+      for (let i = 0; i < sessionStorage.length; i++) {
+        const k = sessionStorage.key(i);
+        if (k && k.startsWith('file_data_')) {
+          keysToRemove.push(k);
+        }
+      }
+      keysToRemove.forEach((k) => sessionStorage.removeItem(k));
+    }
+  } catch {
+    // Ignore
+  }
+};
+
 export const storeFileDataUrl = (fileId: string, dataUrl: string, fileName?: string): void => {
   if (!fileId || !dataUrl) return;
   memoryCache.set(fileId, dataUrl);

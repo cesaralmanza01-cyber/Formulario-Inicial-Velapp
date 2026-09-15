@@ -17,6 +17,7 @@ import { StepCompletionModal } from './components/StepCompletionModal';
 import { AdminPortal } from './components/AdminPortal';
 import { VelaIcon } from './components/VelaIcon';
 import { saveQuestionnaireToFirestore } from './services/questionnaireService';
+import { checkAndHandleNuevoParam, clearDraftStorage } from './utils/draftStorage';
 import {
   PatientBasicInfo,
   PatientMotivationInfo,
@@ -31,6 +32,10 @@ import {
 import { ShieldCheck, Heart, Lock } from 'lucide-react';
 
 export default function App() {
+  // Check if ?nuevo=1 or ?nuevo=true is in the URL to start with a pristine, blank questionnaire.
+  // Runs synchronously before state initializers evaluate localStorage.
+  checkAndHandleNuevoParam();
+
   const [isAdminView, setIsAdminView] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
     return (
@@ -288,23 +293,18 @@ export default function App() {
   };
 
   const handleResetDraft = () => {
-    if (window.confirm('¿Deseas reiniciar los campos de este cuestionario?')) {
-      localStorage.removeItem('vela_step1_data');
-      localStorage.removeItem('vela_step2_data');
-      localStorage.removeItem('vela_step3_data');
-      localStorage.removeItem('vela_step4_data');
-      localStorage.removeItem('vela_step5_data');
-      localStorage.removeItem('vela_step6_data');
-      localStorage.removeItem('vela_step7_data');
-      localStorage.removeItem('vela_step9_data');
-      localStorage.removeItem('vela_step10_inbody_data');
-      localStorage.removeItem('vela_current_step');
-      localStorage.removeItem('vela_patient_has_saved');
-      localStorage.removeItem('vela_consent_accepted');
-      localStorage.removeItem('vela_consent_data');
-      localStorage.removeItem('vela_consent_scope');
-      window.location.reload();
-    }
+    clearDraftStorage();
+    setCurrentStep(0);
+    setStep1Data(null);
+    setStep2Data(null);
+    setStep3Data(null);
+    setStep4Data(null);
+    setStep5Data(null);
+    setStep6Data(null);
+    setStep7Data(null);
+    setStep9Data(null);
+    setStepInBodyData(null);
+    window.location.href = window.location.pathname;
   };
 
   if (isAdminView) {
