@@ -5,6 +5,8 @@ import {
   MealMomentEntry,
   WeightTrajectoryMilestone,
   ObesityFamilyMemberEntry,
+  WeightStagePoint,
+  LifeStageKey,
 } from '../types';
 import { getFileDataUrl } from './fileMemoryStore';
 
@@ -212,6 +214,210 @@ export function generatePatientQuestionnairePdfDoc(
     y += cardHeight;
   };
 
+  /**
+   * Renders the Weight Trajectory Chart (Curva de trayectoria de peso en las etapas de vida)
+   * Using native vector primitives in jsPDF for crisp medical-record rendering.
+   */
+  const drawWeightJourneyChart = (
+    points?: WeightStagePoint[] | null,
+    currentWeightStr?: string,
+    lowestWeightStr?: string,
+    highestWeightStr?: string
+  ) => {
+    const stagesMeta: { key: LifeStageKey; label: string; sub: string }[] = [
+      { key: 'infancia', label: 'Infancia', sub: '0-12 a' },
+      { key: 'adolescencia', label: 'Adolescencia', sub: '13-18 a' },
+      { key: 'juventud', label: 'Juventud', sub: '19-29 a' },
+      { key: 'adultez', label: 'Adultez', sub: '30-49 a' },
+      { key: 'actualidad', label: 'Actualidad', sub: 'Hoy' },
+    ];
+
+    const byStage = new Map<string, number | null>();
+    if (points && points.length > 0) {
+      points.forEach((p) => {
+        if (typeof p.weightKg === 'number' && !isNaN(p.weightKg)) {
+          byStage.set(p.stage, p.weightKg);
+        }
+      });
+    }
+
+    // Fallback for actualidad if missing in points
+    if (byStage.get('actualidad') === undefined && currentWeightStr) {
+      const parsedCurrent = parseFloat(currentWeightStr);
+      if (!isNaN(parsedCurrent) && parsedCurrent > 0) {
+        byStage.set('actualidad', parsedCurrent);
+      }
+    }
+
+    // Collect all valid weights
+    const validWeights: number[] = [];
+    stagesMeta.forEach((s) => {
+      const w = byStage.get(s.key);
+      if (typeof w === 'number' && !isNaN(w) && w > 0) {
+        validWeights.push(w);
+      }
+    });
+
+    // If no points at all, don't render empty chart
+    if (validWeights.length === 0) return;
+
+    const chartHeight = 150;
+    checkPageBreak(chartHeight + 20);
+
+    // Chart container box
+    const boxX = margin + 4;
+    const boxW = contentWidth - 8;
+    const boxY = y;
+    const boxH = chartHeight;
+
+    // Background card (Salvia clara / Crema Vela)
+    doc.setFillColor(252, 250, 247);
+    doc.roundedRect(boxX, boxY, boxW, boxH, 4, 4, 'F');
+    doc.setDrawColor(217, 211, 200);
+    doc.setLineWidth(0.6);
+    doc.roundedRect(boxX, boxY, boxW, boxH, 4, 4, 'S');
+
+    // Chart Header Title
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8.5);
+    doc.setTextColor(91, 136, 126); // #5B887E
+    doc.text('Curva de trayectoria de peso a lo largo de las etapas de vida', boxX + 12, boxY + 14);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.setTextColor(110, 125, 120);
+    doc.text('Evolución histórica y momentos de fluctuación registrados por el paciente', boxX + 12, boxY + 23);
+
+    // Dynamic min & max Y range
+    const rawMin = Math.min(...validWeights);
+    const rawMax = Math.max(...validWeights);
+    const yMin = Math.max(30, Math.floor((rawMin - 8) / 10) * 10);
+    const yMax = Math.max(yMin + 20, Math.ceil((rawMax + 8) / 10) * 10);
+
+    // Plot dimensions
+    const plotLeft = boxX + 44;
+    const plotRight = boxX + boxW - 24;
+    const plotTop = boxY + 36;
+    const plotBottom = boxY + boxH - 28;
+    const plotW = plotRight - plotLeft;
+    const plotH = plotBottom - plotTop;
+
+    // Helper to calculate coordinates
+    const getX = (index: number) => plotLeft + (plotW * index) / (stagesMeta.length - 1);
+    const getY = (weight: number) => {
+      const clamped = Math.max(yMin, Math.min(yMax, weight));
+      const ratio = (clamped - yMin) / (yMax - yMin);
+      return plotBottom - ratio * plotH;
+    };
+
+    // Draw horizontal grid lines (3 or 4 levels)
+    const gridSteps = 4;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(6.5);
+    doc.setTextColor(142, 158, 153); // #8E9E99
+
+    for (let i = 0; i <= gridSteps; i++) {
+      const levelWeight = Math.round(yMin + ((yMax - yMin) * i) / gridSteps);
+      const gridY = getY(levelWeight);
+
+      // Grid dashed line
+      doc.setDrawColor(232, 226, 216);
+      doc.setLineWidth(0.4);
+      doc.line(plotLeft, gridY, plotRight, gridY);
+
+      // Y-axis label (kg)
+      doc.text(`${levelWeight} kg`, plotLeft - 22, gridY + 2.5);
+    }
+
+    // Build plotted points coordinates
+    const plottedCoords: { x: number; y: number; weight: number; label: string; sub: string; index: number }[] = [];
+    stagesMeta.forEach((s, idx) => {
+      const w = byStage.get(s.key);
+      if (typeof w === 'number' && !isNaN(w) && w > 0) {
+        plottedCoords.push({
+          x: getX(idx),
+          y: getY(w),
+          weight: Math.round(w * 10) / 10,
+          label: s.label,
+          sub: s.sub,
+          index: idx,
+        });
+      }
+    });
+
+    // Draw connecting path line between valid points
+    if (plottedCoords.length >= 2) {
+      doc.setDrawColor(110, 158, 147); // #6E9E93 Sage
+      doc.setLineWidth(1.8);
+      for (let i = 0; i < plottedCoords.length - 1; i++) {
+        const p1 = plottedCoords[i];
+        const p2 = plottedCoords[i + 1];
+        doc.line(p1.x, p1.y, p2.x, p2.y);
+      }
+    }
+
+    // Draw nodes (points), weight pills, and X-axis stage markers
+    stagesMeta.forEach((s, idx) => {
+      const stageX = getX(idx);
+
+      // Vertical subtle guideline
+      doc.setDrawColor(240, 235, 227);
+      doc.setLineWidth(0.4);
+      doc.line(stageX, plotTop, stageX, plotBottom);
+
+      // Stage X label (below chart)
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(7);
+      doc.setTextColor(46, 58, 54);
+      const lblW = doc.getTextWidth(s.label);
+      doc.text(s.label, stageX - lblW / 2, plotBottom + 11);
+
+      // Stage sublabel (e.g. 0-12 a)
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(6);
+      doc.setTextColor(142, 158, 153);
+      const subW = doc.getTextWidth(s.sub);
+      doc.text(s.sub, stageX - subW / 2, plotBottom + 18);
+    });
+
+    // Draw circular dots and weight bubble values on plotted points
+    plottedCoords.forEach((p) => {
+      // Outer glow circle
+      doc.setFillColor(235, 243, 240); // #EBF3F0
+      doc.circle(p.x, p.y, 4.5, 'F');
+
+      // Main dot
+      doc.setFillColor(110, 158, 147); // #6E9E93
+      doc.circle(p.x, p.y, 2.8, 'F');
+
+      // Inner white center
+      doc.setFillColor(255, 255, 255);
+      doc.circle(p.x, p.y, 1.2, 'F');
+
+      // Weight label pill above or below point
+      const weightText = `${p.weight} kg`;
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(7.5);
+      const textW = doc.getTextWidth(weightText);
+      const pillW = textW + 6;
+      const pillH = 10;
+      const pillY = p.y - 14 < plotTop ? p.y + 6 : p.y - 15;
+
+      // Small background pill for legibility
+      doc.setFillColor(255, 255, 255);
+      doc.roundedRect(p.x - pillW / 2, pillY, pillW, pillH, 2, 2, 'F');
+      doc.setDrawColor(174, 201, 192);
+      doc.setLineWidth(0.4);
+      doc.roundedRect(p.x - pillW / 2, pillY, pillW, pillH, 2, 2, 'S');
+
+      // Value text
+      doc.setTextColor(46, 58, 54);
+      doc.text(weightText, p.x - textW / 2, pillY + 7.5);
+    });
+
+    y += boxH + 12;
+  };
+
   // ==========================================
   // 1. Header Banner (Vela Deep Sage #6E9E93)
   // ==========================================
@@ -313,6 +519,19 @@ export function generatePatientQuestionnairePdfDoc(
   }
   printField('Menor peso alcanzado (+18)', patient.relacion_peso?.lowestWeightSince18Kg ? `${patient.relacion_peso.lowestWeightSince18Kg} kg` : null);
   printField('Mayor peso alcanzado (+18)', patient.relacion_peso?.highestWeightSince18Kg ? `${patient.relacion_peso.highestWeightSince18Kg} kg` : null);
+
+  // Curva de trayectoria de peso en las etapas de vida (Interactive Journey Chart drawn into PDF)
+  if (
+    patient.relacion_peso?.weightJourneyPoints &&
+    patient.relacion_peso.weightJourneyPoints.length > 0
+  ) {
+    drawWeightJourneyChart(
+      patient.relacion_peso.weightJourneyPoints,
+      patient.relacion_peso.currentWeightKg,
+      patient.relacion_peso.lowestWeightSince18Kg,
+      patient.relacion_peso.highestWeightSince18Kg
+    );
+  }
 
   // Weight trajectory milestones if present
   if (
@@ -687,20 +906,45 @@ export function generatePatientQuestionnairePdfDoc(
     if (!files || files.length === 0) return;
 
     for (const f of files) {
-      const dataUrl = f.dataUrl || getFileDataUrl(f.id, f.name);
+      let dataUrl = f.dataUrl || getFileDataUrl(f.id, f.name);
+
+      // Check if dataUrl is in sessionStorage if still not found
+      if (!dataUrl && typeof window !== 'undefined' && window.sessionStorage) {
+        try {
+          dataUrl = window.sessionStorage.getItem(`file_data_${f.id}`) || undefined;
+        } catch {
+          // ignore
+        }
+      }
+
       const isImg =
-        dataUrl &&
+        Boolean(dataUrl) &&
         (f.type?.startsWith('image/') ||
-          dataUrl.startsWith('data:image/') ||
+          dataUrl?.startsWith('data:image/') ||
           /\.(jpe?g|png|webp|gif|bmp)$/i.test(f.name || ''));
 
       if (isImg && dataUrl) {
         try {
+          // Determine format cleanly
+          let imgFormat = 'JPEG';
+          if (f.type?.includes('png') || dataUrl.startsWith('data:image/png')) {
+            imgFormat = 'PNG';
+          } else if (f.type?.includes('webp') || dataUrl.startsWith('data:image/webp')) {
+            imgFormat = 'WEBP';
+          }
+
           // Get natural image dimensions using jsPDF image decoder
-          const imgProps = doc.getImageProperties(dataUrl);
-          const naturalWidth = imgProps.width || 800;
-          const naturalHeight = imgProps.height || 600;
-          const aspect = naturalWidth / naturalHeight;
+          let aspect = 4 / 3;
+          try {
+            const imgProps = doc.getImageProperties(dataUrl);
+            const naturalWidth = imgProps.width || 800;
+            const naturalHeight = imgProps.height || 600;
+            if (naturalHeight > 0) {
+              aspect = naturalWidth / naturalHeight;
+            }
+          } catch (propErr) {
+            console.warn('[PDF Generator] getImageProperties fallback to aspect 4/3:', propErr);
+          }
 
           // Maximum bounding box inside the page margin
           const maxAllowedW = contentWidth - 16;
@@ -727,9 +971,6 @@ export function generatePatientQuestionnairePdfDoc(
           doc.setTextColor(91, 136, 126); // #5B887E
           doc.text(`Documento adjunto: ${f.name || 'Reporte'} (Imagen)`, margin + 12, y + 12);
           y += 24;
-
-          const imgFormat =
-            f.type?.includes('png') || dataUrl.includes('image/png') ? 'PNG' : 'JPEG';
 
           // Render high-res image with exact proportional aspect ratio
           doc.addImage(

@@ -193,6 +193,14 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
     familyHistoryNotes: false,
   });
 
+  // UI toggle for showing/expanding the potential obesogenic medications list
+  const [showObesogenicDrugList, setShowObesogenicDrugList] = useState<boolean>(() => {
+    return (
+      (formData.selectedObesogenicDrugs && formData.selectedObesogenicDrugs.length > 0) ||
+      formData.takesObesogenicMedications === 'Sí'
+    );
+  });
+
   const [errors, setErrors] = useState<StepFourErrors>({});
 
   // Auto-save draft on every change
@@ -747,7 +755,7 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
           )}
         </div>
 
-        {/* 2. Antecedentes farmacológicos: Lista directa de fármacos y campo abierto para otros */}
+        {/* 2. Antecedentes farmacológicos: Pregunta inicial, lista condicional y campo abierto para otros */}
         <div id="field-pharmacologicalHistory" className="space-y-4">
           <div className="space-y-1">
             <label className="flex items-center justify-between text-sm font-semibold text-[#2E3A36]">
@@ -757,58 +765,163 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
               </span>
             </label>
             <p className="text-xs text-[#5C6E68] leading-relaxed">
-              ¿Tomas alguno de estos medicamentos? Selecciónalos si los consumes actualmente:
+              Muchos medicamentos de uso común pueden influir en el apetito, el metabolismo o la ganancia de peso. Queremos conocer todo lo que tomas actualmente.
             </p>
           </div>
 
-          {/* Tarjeta contenedora con la lista de medicamentos siempre visible */}
           <div className="p-4 sm:p-5 rounded-2xl bg-[#FAF6F0]/90 border border-[#AEC9C0]/40 space-y-4">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-[#2E3A36] uppercase tracking-wider">
-                Medicamentos frecuentes:
-              </span>
-              {(formData.selectedObesogenicDrugs?.length || 0) > 0 && (
-                <span className="text-xs px-2.5 py-0.5 rounded-full bg-[#6E9E93] text-white font-medium">
-                  {formData.selectedObesogenicDrugs?.length} seleccionado(s)
-                </span>
-              )}
+            {/* Pregunta inicial: ¿Tomas alguno de estos medicamentos con potencial de influir en el peso? */}
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-[#2E3A36] block">
+                ¿Tomas o sospechas que tomas algún medicamento que pueda influir en tu peso (antidepresivos, corticoides, antipsicóticos, anticonvulsivos, insulina, etc.)?
+              </label>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowObesogenicDrugList(true);
+                    if (formData.takesObesogenicMedications === 'No') {
+                      handleChange('takesObesogenicMedications', '');
+                      handleChange('pharmacologicalHistory', formData.otherMedicationsDetails || '');
+                    }
+                  }}
+                  className={`p-3 rounded-xl border text-left flex items-center justify-between transition-all cursor-pointer ${
+                    showObesogenicDrugList || (formData.selectedObesogenicDrugs || []).length > 0
+                      ? 'border-[#6E9E93] bg-[#EBF3F0] text-[#2E3A36] ring-1 ring-[#6E9E93]'
+                      : 'border-[#D9D3C8] bg-white text-[#5C6E68] hover:border-[#AEC9C0]'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <div
+                      className={`w-4 h-4 rounded-full border flex items-center justify-center ${
+                        showObesogenicDrugList || (formData.selectedObesogenicDrugs || []).length > 0
+                          ? 'border-[#6E9E93] bg-[#6E9E93]'
+                          : 'border-[#AEC9C0] bg-white'
+                      }`}
+                    >
+                      {(showObesogenicDrugList || (formData.selectedObesogenicDrugs || []).length > 0) && (
+                        <div className="w-1.5 h-1.5 rounded-full bg-white" />
+                      )}
+                    </div>
+                    <div>
+                      <span className="text-xs font-semibold block text-[#2E3A36]">
+                        Sí, tomo o quiero revisar la lista
+                      </span>
+                      <span className="text-[11px] text-[#5C6E68]">
+                        Ver y seleccionar de la lista de fármacos frecuentes
+                      </span>
+                    </div>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowObesogenicDrugList(false);
+                    if ((formData.selectedObesogenicDrugs || []).length > 0) {
+                      handleChange('selectedObesogenicDrugs', []);
+                      const other = formData.otherMedicationsDetails?.trim();
+                      handleChange('pharmacologicalHistory', other ? `Otros: ${other}` : '');
+                      if (!other) {
+                        handleChange('takesObesogenicMedications', '');
+                      }
+                    }
+                  }}
+                  className={`p-3 rounded-xl border text-left flex items-center justify-between transition-all cursor-pointer ${
+                    !showObesogenicDrugList && (formData.selectedObesogenicDrugs || []).length === 0
+                      ? 'border-[#6E9E93] bg-[#EBF3F0] text-[#2E3A36] ring-1 ring-[#6E9E93]'
+                      : 'border-[#D9D3C8] bg-white text-[#5C6E68] hover:border-[#AEC9C0]'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <div
+                      className={`w-4 h-4 rounded-full border flex items-center justify-center ${
+                        !showObesogenicDrugList && (formData.selectedObesogenicDrugs || []).length === 0
+                          ? 'border-[#6E9E93] bg-[#6E9E93]'
+                          : 'border-[#AEC9C0] bg-white'
+                      }`}
+                    >
+                      {!showObesogenicDrugList && (formData.selectedObesogenicDrugs || []).length === 0 && (
+                        <div className="w-1.5 h-1.5 rounded-full bg-white" />
+                      )}
+                    </div>
+                    <div>
+                      <span className="text-xs font-semibold block text-[#2E3A36]">
+                        No tomo ninguno de estos fármacos
+                      </span>
+                      <span className="text-[11px] text-[#5C6E68]">
+                        Continuar registrando solo otros medicamentos
+                      </span>
+                    </div>
+                  </div>
+                </button>
+              </div>
             </div>
 
-            {/* Grilla de medicamentos seleccionables */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-              {OBESOGENIC_DRUGS_LIST.map((drug) => {
-                const isSelected = (formData.selectedObesogenicDrugs || []).includes(drug);
-                return (
-                  <button
-                    key={drug}
-                    type="button"
-                    onClick={() => toggleObesogenicDrug(drug)}
-                    className={`px-3 py-2.5 rounded-xl text-xs font-medium border flex items-center justify-between transition-all duration-150 cursor-pointer text-left ${
-                      isSelected
-                        ? 'border-[#6E9E93] bg-[#6E9E93] text-white shadow-2xs font-semibold ring-1 ring-[#6E9E93]'
-                        : 'border-[#D9D3C8] bg-white text-[#2E3A36] hover:border-[#6E9E93] hover:bg-[#EBF3F0]'
-                    }`}
-                  >
-                    <span className="truncate">{drug}</span>
-                    {isSelected ? (
-                      <Check className="w-3.5 h-3.5 shrink-0 ml-1" />
-                    ) : (
-                      <span className="w-3.5 h-3.5 rounded-full border border-[#D9D3C8] shrink-0 ml-1 bg-[#FAF6F0]" />
+            {/* Lista de medicamentos con potencial obesogénico: SÓLO visible cuando el usuario decide verla o dice Sí */}
+            <AnimatePresence>
+              {showObesogenicDrugList && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="space-y-3 pt-3 border-t border-[#E8E2D8] overflow-hidden"
+                >
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="text-xs font-semibold text-[#2E3A36] uppercase tracking-wider block">
+                        ¿Tomas alguno de estos medicamentos?
+                      </span>
+                      <p className="text-[11px] text-[#5C6E68] mt-0.5">
+                        Selecciona todos los que tomes o hayas tomado recientemente:
+                      </p>
+                    </div>
+                    {(formData.selectedObesogenicDrugs?.length || 0) > 0 && (
+                      <span className="text-xs px-2.5 py-0.5 rounded-full bg-[#6E9E93] text-white font-medium shrink-0 ml-2">
+                        {formData.selectedObesogenicDrugs?.length} seleccionado(s)
+                      </span>
                     )}
-                  </button>
-                );
-              })}
-            </div>
+                  </div>
+
+                  {/* Grilla de medicamentos seleccionables */}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                    {OBESOGENIC_DRUGS_LIST.map((drug) => {
+                      const isSelected = (formData.selectedObesogenicDrugs || []).includes(drug);
+                      return (
+                        <button
+                          key={drug}
+                          type="button"
+                          onClick={() => toggleObesogenicDrug(drug)}
+                          className={`px-3 py-2.5 rounded-xl text-xs font-medium border flex items-center justify-between transition-all duration-150 cursor-pointer text-left ${
+                            isSelected
+                              ? 'border-[#6E9E93] bg-[#6E9E93] text-white shadow-2xs font-semibold ring-1 ring-[#6E9E93]'
+                              : 'border-[#D9D3C8] bg-white text-[#2E3A36] hover:border-[#6E9E93] hover:bg-[#EBF3F0]'
+                          }`}
+                        >
+                          <span className="truncate">{drug}</span>
+                          {isSelected ? (
+                            <Check className="w-3.5 h-3.5 shrink-0 ml-1" />
+                          ) : (
+                            <span className="w-3.5 h-3.5 rounded-full border border-[#D9D3C8] shrink-0 ml-1 bg-[#FAF6F0]" />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             {/* Espacio abierto para 'Otros medicamentos' */}
             <div className="pt-3 border-t border-[#E8E2D8] space-y-1.5">
               <label
                 htmlFor="otherMedications-input"
-                className="text-xs font-semibold text-[#2E3A36] flex items-center justify-between"
+                className="text-xs font-semibold text-[#2E3A36] flex items-center justify-between flex-wrap gap-1"
               >
-                <span>Otros medicamentos que tomes:</span>
+                <span>¿Qué otros medicamentos, suplementos o tratamientos tomas?</span>
                 <span className="text-[11px] text-[#5C6E68] font-normal">
-                  (anticonceptivos, tiroides, analgésicos, suplementos, etc.)
+                  (tiroides, anticonceptivos, antihipertensivos, analgésicos, vitaminas, etc.)
                 </span>
               </label>
               <textarea
@@ -817,7 +930,7 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
                 value={formData.otherMedicationsDetails || ''}
                 onChange={(e) => handleOtherMedsChange(e.target.value)}
                 onBlur={() => handleBlur('pharmacologicalHistory')}
-                placeholder="Escribe aquí si tomas otros medicamentos, dosis o suplementos habituales (ej. Levotiroxina 50mcg, pastillas anticonceptivas...)"
+                placeholder="Escribe aquí qué otros medicamentos tomas habitualmente, con dosis o frecuencia si las recuerdas (ej. Levotiroxina 50 mcg en ayunas, Losartán 50 mg, píldoras anticonceptivas, etc.)..."
                 className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-[#D9D3C8] text-[#2E3A36] placeholder-[#8E9E99] text-xs sm:text-sm transition-all duration-200 focus:outline-hidden focus:ring-2 focus:ring-[#6E9E93]/40 resize-y"
               />
             </div>
@@ -826,7 +939,10 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
             <div className="pt-2 border-t border-[#E8E2D8]/60 flex items-center justify-between">
               <button
                 type="button"
-                onClick={handleNoMedications}
+                onClick={() => {
+                  setShowObesogenicDrugList(false);
+                  handleNoMedications();
+                }}
                 className={`px-3.5 py-2 rounded-xl text-xs font-medium border flex items-center gap-2 transition-all duration-200 cursor-pointer ${
                   formData.takesObesogenicMedications === 'No' &&
                   (formData.selectedObesogenicDrugs || []).length === 0 &&
