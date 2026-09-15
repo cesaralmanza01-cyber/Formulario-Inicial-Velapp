@@ -4,6 +4,7 @@ import {
   UploadedLabFile,
   MealMomentEntry,
   WeightTrajectoryMilestone,
+  ObesityFamilyMemberEntry,
 } from '../types';
 import { getFileDataUrl } from './fileMemoryStore';
 
@@ -387,7 +388,19 @@ export function generatePatientQuestionnairePdfDoc(
   // ==========================================
   printSectionTitle('4. MAPA DE SALUD Y ANTECEDENTES');
   printField('Antecedentes patológicos (diagnósticos)', patient.mapa_salud?.pathologicalHistory || 'Niega');
-  printField('Antecedentes farmacológicos (medicamentos habituales)', patient.mapa_salud?.pharmacologicalHistory || 'Niega');
+  // Pharmacological history & Obesogenic drugs
+  let pharmDisplay = patient.mapa_salud?.pharmacologicalHistory || '';
+  if (patient.mapa_salud?.selectedObesogenicDrugs && patient.mapa_salud.selectedObesogenicDrugs.length > 0) {
+    const drugsFormatted = `Fármacos con potencial obesogénico identificados: ${patient.mapa_salud.selectedObesogenicDrugs.join(', ')}`;
+    pharmDisplay = pharmDisplay ? `${drugsFormatted}\nOtros medicamentos: ${pharmDisplay}` : drugsFormatted;
+  }
+  if (patient.mapa_salud?.otherMedicationsDetails && patient.mapa_salud.otherMedicationsDetails.trim()) {
+    pharmDisplay = pharmDisplay ? `${pharmDisplay}\nOtros: ${patient.mapa_salud.otherMedicationsDetails.trim()}` : `Otros medicamentos: ${patient.mapa_salud.otherMedicationsDetails.trim()}`;
+  }
+  if (!pharmDisplay.trim()) {
+    pharmDisplay = patient.mapa_salud?.takesObesogenicMedications === 'No' ? 'Niega fármacos obesogénicos o de uso habitual' : 'Niega';
+  }
+  printField('Antecedentes farmacológicos (medicamentos habituales)', pharmDisplay, true);
   printField('Antecedentes quirúrgicos', patient.mapa_salud?.surgicalHistory || 'Niega');
   printField('Antecedentes hospitalarios', patient.mapa_salud?.hospitalHistory || 'Niega');
   printField('Antecedentes tóxico-alérgicos (alergias / hábitos)', patient.mapa_salud?.toxicAllergicHistory || 'Niega');
@@ -425,8 +438,34 @@ export function generatePatientQuestionnairePdfDoc(
   printSubSectionTitle('Antecedentes familiares');
   printField(
     'Condiciones en familiares de primer grado',
-    patient.mapa_salud?.familyHistory?.length ? patient.mapa_salud.familyHistory.join(', ') : 'No reporta antecedentes de importancia'
+    patient.mapa_salud?.familyHistory?.length ? patient.mapa_salud.familyHistory.join(', ') : 'No reporta antecedentes generales'
   );
+
+  // Detalle de antecedentes familiares de obesidad y comorbilidades
+  const hasFamObesity = patient.mapa_salud?.hasFamilyObesityHistory;
+  if (hasFamObesity === 'Sí') {
+    const members = patient.mapa_salud?.familyObesityMembers || [];
+    if (members.length > 0) {
+      printSubSectionTitle('Familiares con antecedentes de obesidad y comorbilidades');
+      members.forEach((m: ObesityFamilyMemberEntry, idx: number) => {
+        const relation = m.relationship === 'Otro familiar' && m.otherRelationship?.trim()
+          ? `Otro (${m.otherRelationship.trim()})`
+          : (m.relationship || `Familiar ${idx + 1}`);
+        const onset = m.onsetAge || 'Inicio no especificado';
+        const comorbs = m.comorbidities && m.comorbidities.length > 0
+          ? m.comorbidities.join(', ')
+          : 'Sin comorbilidades reportadas';
+        const otherComorb = m.otherComorbidities?.trim() ? ` (Otros: ${m.otherComorbidities.trim()})` : '';
+        const memberDetails = `Parentesco: ${relation}\nInicio del exceso de peso: ${onset}\nComorbilidades asociadas: ${comorbs}${otherComorb}`;
+        printField(`Familiar #${idx + 1} - ${relation}`, memberDetails, true);
+      });
+    } else {
+      printField('Antecedentes familiares de obesidad', 'Refiere familiares con obesidad, sin miembros especificados');
+    }
+  } else if (hasFamObesity === 'No') {
+    printField('Antecedentes familiares de obesidad', 'Niega antecedentes familiares de obesidad');
+  }
+
   printField('Notas y especificaciones familiares', patient.mapa_salud?.familyHistoryNotes, true);
 
   // ==========================================

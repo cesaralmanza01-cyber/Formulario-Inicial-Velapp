@@ -22,8 +22,11 @@ import {
   FolderSync,
   CloudCheck,
   Paperclip,
+  ListChecks,
+  ChevronRight,
 } from 'lucide-react';
 import { VelaIcon } from './VelaIcon';
+import { evaluateAllSteps } from '../utils/formCompleteness';
 import {
   PatientBasicInfo,
   PatientMotivationInfo,
@@ -60,6 +63,7 @@ interface StepClosureScreenProps {
   onBack: () => void;
   onViewSummary: () => void;
   onSaveQuestionnaire: () => Promise<void>;
+  onJumpToStep: (step: number) => void;
 }
 
 export const StepClosureScreen: React.FC<StepClosureScreenProps> = ({
@@ -75,6 +79,7 @@ export const StepClosureScreen: React.FC<StepClosureScreenProps> = ({
   onBack,
   onViewSummary,
   onSaveQuestionnaire,
+  onJumpToStep,
 }) => {
   const [isGeneratingPdf, setIsGeneratingPdf] = useState<boolean>(true);
   const [isDownloadingPdf, setIsDownloadingPdf] = useState<boolean>(false);
@@ -89,6 +94,22 @@ export const StepClosureScreen: React.FC<StepClosureScreenProps> = ({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [directWaLink, setDirectWaLink] = useState<string | null>(null);
   const backupInitiatedRef = useRef<boolean>(false);
+
+  // Checklist de completitud: se valida todo el cuestionario solo hasta acá,
+  // en vez de bloquear paso a paso durante el llenado.
+  const stepsCompleteness = evaluateAllSteps({
+    step1: basicInfo || null,
+    step2: motivationInfo || null,
+    step3: weightInfo || null,
+    step4: healthMapInfo || null,
+    step5: symptomsInfo || null,
+    step6: nutritionInfo || null,
+    step7: activityInfo || null,
+    step9: labInfo || null,
+    stepInBody: inBodyInfo || null,
+  });
+  const incompleteSteps = stepsCompleteness.filter((s) => !s.complete);
+  const allStepsComplete = incompleteSteps.length === 0;
 
   const patientFullName = basicInfo?.fullName?.trim() || 'Paciente';
   const patientFirstName = patientFullName !== 'Paciente' ? patientFullName.split(' ')[0] : '¡Hola!';
@@ -130,6 +151,9 @@ export const StepClosureScreen: React.FC<StepClosureScreenProps> = ({
    * 3. Automatically upload a copy to Google Drive in folder "Vela - Cuestionarios Pacientes"
    */
   useEffect(() => {
+    // No generamos PDF ni disparamos respaldos mientras falten pasos por
+    // completar — primero se le pide al paciente volver a completarlos.
+    if (!allStepsComplete) return;
     if (backupInitiatedRef.current) return;
     backupInitiatedRef.current = true;
     let isMounted = true;
@@ -392,7 +416,54 @@ export const StepClosureScreen: React.FC<StepClosureScreenProps> = ({
         </div>
       </div>
 
+      {/* Completeness gate: solo se muestra si faltan pasos por completar */}
+      {!allStepsComplete && (
+        <div className="bg-white rounded-3xl p-6 sm:p-8 border-2 border-[#F2A488]/50 shadow-sm space-y-5">
+          <div className="flex items-start gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-[#FDEEE9] text-[#C66A4D] flex items-center justify-center shrink-0 shadow-xs">
+              <ListChecks className="w-6 h-6" />
+            </div>
+            <div className="space-y-1">
+              <h2
+                className="text-lg sm:text-xl font-semibold text-[#2E3A36]"
+                style={{ fontFamily: "'Fraunces', Georgia, serif" }}
+              >
+                Antes de guardar, completemos estos pasos
+              </h2>
+              <p className="text-xs sm:text-sm text-[#5C6E68] leading-relaxed">
+                Falta información en {incompleteSteps.length === 1 ? 'esta sección' : 'estas secciones'} para
+                poder generar tu PDF y agendar tu cita. Toca cualquiera para ir directo a completarla.
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-2.5">
+            {incompleteSteps.map((s) => (
+              <button
+                key={s.step}
+                type="button"
+                onClick={() => onJumpToStep(s.step)}
+                className="w-full flex items-center justify-between gap-3 p-3.5 rounded-2xl bg-[#FAF6F0]/80 border border-[#E8E2D8] hover:border-[#F2A488] hover:bg-[#FDEEE9]/40 transition-all text-left cursor-pointer"
+              >
+                <span className="flex items-center gap-2.5 text-sm text-[#2E3A36] font-medium">
+                  <span className="w-6 h-6 rounded-full bg-[#F2A488]/20 text-[#C66A4D] text-xs font-bold flex items-center justify-center shrink-0">
+                    {s.step}
+                  </span>
+                  {s.label}
+                </span>
+                <span className="text-xs font-semibold text-[#C66A4D] flex items-center gap-1 shrink-0">
+                  Completar
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Main Action Hub Card */}
+      {allStepsComplete && (
+      <>
       <div className="bg-gradient-to-br from-[#FAF6F0] to-[#F2F8F5] rounded-3xl p-6 sm:p-8 border-2 border-[#6E9E93]/40 shadow-sm space-y-6">
         <div className="flex items-start gap-4">
           <div className="w-12 h-12 rounded-2xl bg-[#6E9E93] text-white flex items-center justify-center shrink-0 shadow-xs">
@@ -639,6 +710,8 @@ export const StepClosureScreen: React.FC<StepClosureScreenProps> = ({
           </p>
         </div>
       </div>
+      </>
+      )}
 
       {/* Footer Navigation */}
       <div className="pt-2 pb-6 flex flex-col sm:flex-row items-center justify-between gap-4">

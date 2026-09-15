@@ -11,6 +11,15 @@ import {
   Info,
   Check,
   HelpCircle,
+  Baby,
+  GraduationCap,
+  Briefcase,
+  Compass,
+  Heart,
+  TrendingUp,
+  Zap,
+  RefreshCw,
+  ShieldQuestion,
 } from 'lucide-react';
 import {
   PatientWeightHistoryInfo,
@@ -20,9 +29,13 @@ import {
   PreviousMethodOption,
   ExerciseInAttempts,
   WeightTrajectoryMilestone,
+  LifeStageKey,
+  WeightTrajectoryPattern,
+  WeightStigmaContext,
 } from '../types';
 import { VelaIcon } from './VelaIcon';
 import { WeightTrajectoryTimeline } from './WeightTrajectoryTimeline';
+import { WeightJourneyChart } from './WeightJourneyChart';
 
 interface StepThreeFormProps {
   initialData?: PatientWeightHistoryInfo;
@@ -55,6 +68,56 @@ const PREVIOUS_METHODS_OPTIONS: PreviousMethodOption[] = [
 
 const EXERCISE_OPTIONS: ExerciseInAttempts[] = ['Sí', 'No', 'A veces'];
 
+const ONSET_STAGE_OPTIONS: {
+  key: LifeStageKey;
+  label: string;
+  sublabel: string;
+  icon: React.ElementType;
+}[] = [
+  { key: 'infancia', label: 'Infancia', sublabel: '0-12 años', icon: Baby },
+  { key: 'adolescencia', label: 'Adolescencia', sublabel: '13-18 años', icon: GraduationCap },
+  { key: 'juventud', label: 'Juventud', sublabel: '19-29 años', icon: Compass },
+  { key: 'adultez', label: 'Adultez', sublabel: '30-49 años', icon: Briefcase },
+];
+
+// Las 3 "rutas" de trayectoria — cada una orienta hacia un enfoque clínico distinto
+// (guía ADA 2026 / anamnesis dirigida).
+const TRAJECTORY_PATTERN_OPTIONS: {
+  key: WeightTrajectoryPattern;
+  icon: React.ElementType;
+  title: string;
+  description: string;
+}[] = [
+  {
+    key: 'ascenso_lento',
+    icon: TrendingUp,
+    title: 'Ha sido así casi toda mi vida',
+    description: 'Un ascenso lento y constante, desde temprano.',
+  },
+  {
+    key: 'salto_detonante',
+    icon: Zap,
+    title: 'Subió de golpe, en un momento puntual',
+    description: 'Un salto ligado a un evento o etapa específica.',
+  },
+  {
+    key: 'oscilaciones_repetidas',
+    icon: RefreshCw,
+    title: 'He subido y bajado varias veces (efecto yo-yo)',
+    description: 'Ciclos repetidos de subir y bajar de peso.',
+  },
+];
+
+const STIGMA_CONTEXT_OPTIONS: WeightStigmaContext[] = [
+  'En consultorios médicos / con personal de salud',
+  'En el trabajo',
+  'En la familia',
+  'Con amistades o pareja',
+  'En redes sociales o medios',
+  'En espacios públicos (calle, transporte, tiendas)',
+  'Otro',
+];
+
 export const StepThreeForm: React.FC<StepThreeFormProps> = ({
   initialData,
   onBack,
@@ -76,6 +139,16 @@ export const StepThreeForm: React.FC<StepThreeFormProps> = ({
         lowestWeightSince18Kg: '',
         highestWeightSince18Kg: '',
         weightTrajectoryMilestones: [],
+        weightJourneyPoints: [],
+        overweightOnsetStage: '',
+        feltBestWeightKg: '',
+        currentWeightDifficulty: '',
+        weightTrajectoryPattern: '',
+        trajectoryDetonanteEvent: '',
+        weightStigmaExperience: '',
+        weightStigmaContexts: [],
+        weightStigmaContextOtherDetails: '',
+        weightStigmaDetails: '',
         hasPreviousAttempts: '',
         fluctuationCount: '',
         regainSpeed: '',
@@ -307,6 +380,15 @@ export const StepThreeForm: React.FC<StepThreeFormProps> = ({
     setTouched((prev) => ({ ...prev, previousMethods: true }));
   };
 
+  const toggleStigmaContext = (context: WeightStigmaContext) => {
+    const currentList = formData.weightStigmaContexts || [];
+    const exists = currentList.includes(context);
+    const updatedList = exists
+      ? currentList.filter((c) => c !== context)
+      : [...currentList, context];
+    handleChange('weightStigmaContexts', updatedList);
+  };
+
   // Evaluate form completeness
   const isFormComplete = (() => {
     // 1. Pesos y talla obligatorios
@@ -444,7 +526,9 @@ export const StepThreeForm: React.FC<StepThreeFormProps> = ({
         const el = document.getElementById(`field-${firstErrorKey}`);
         el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
-      return;
+      // Nota: ya no bloqueamos el avance — se valida todo el cuestionario
+      // al llegar al paso final. Los errores quedan visibles para quien
+      // quiera completarlos ahora mismo, pero no impiden continuar.
     }
 
     setIsSubmitting(true);
@@ -513,7 +597,9 @@ export const StepThreeForm: React.FC<StepThreeFormProps> = ({
               </h2>
             </div>
             <p className="text-xs text-[#5C6E68] mt-1">
-              Valores aproximados de peso y estatura que nos orientan sobre el rango de tu cuerpo.
+              Valores aproximados de peso y estatura que nos orientan sobre el rango de tu cuerpo. Las
+              próximas preguntas exploran tu historia con el peso — puedes responder con la
+              confianza que tengas, a tu ritmo.
             </p>
           </div>
 
@@ -727,12 +813,328 @@ export const StepThreeForm: React.FC<StepThreeFormProps> = ({
       </div>
 
       {/* =========================================================================
-          SUB-SECCIÓN 1.5: "Línea de tiempo y trayectoria de peso" (Momentos clave)
+          SUB-SECCIÓN 1.4: Las 2 preguntas ADA que completan la trayectoria
+          (peso más alto/más bajo ya capturados arriba)
+         ========================================================================= */}
+      <div className="space-y-6 bg-white/70 backdrop-blur-xs p-6 sm:p-8 rounded-3xl border border-[#AEC9C0]/30 shadow-xs">
+        <div className="border-b border-[#E8E2D8] pb-3">
+          <div className="flex items-center gap-2">
+            <Heart className="w-5 h-5 text-[#6E9E93]" />
+            <h2
+              className="text-xl sm:text-2xl text-[#2E3A36] font-normal"
+              style={{ fontFamily: "'Fraunces', Georgia, serif" }}
+            >
+              Más allá de la báscula
+            </h2>
+          </div>
+          <p className="text-xs text-[#5C6E68] mt-1">
+            Estas dos preguntas nos dicen tanto o más que el número en la báscula.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 items-start">
+          <div id="field-feltBestWeightKg" className="flex flex-col space-y-2">
+            <div className="min-h-[42px] flex flex-col justify-end">
+              <label
+                htmlFor="feltBestWeightKg-input"
+                className="text-sm font-semibold text-[#2E3A36] block leading-tight"
+              >
+                ¿Con qué peso te sentiste mejor?
+              </label>
+              <span className="text-xs text-[#8E9E99] leading-normal mt-0.5">
+                No es "el peso ideal" — es con el que te sentiste bien, funcional y a gusto.
+              </span>
+            </div>
+            <div className="relative">
+              <input
+                id="feltBestWeightKg-input"
+                type="number"
+                step="0.1"
+                min="25"
+                max="350"
+                value={formData.feltBestWeightKg || ''}
+                onChange={(e) => handleChange('feltBestWeightKg', e.target.value)}
+                placeholder="Ej. 68"
+                className="w-full pl-4 pr-11 py-3.5 rounded-xl bg-[#FAF6F0]/80 border border-[#D9D3C8] hover:border-[#AEC9C0] text-[#2E3A36] placeholder-[#8E9E99] text-base transition-all duration-200 focus:outline-hidden focus:ring-2 focus:ring-[#6E9E93]/40 focus:bg-white"
+              />
+              <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-semibold text-[#8E9E99] pointer-events-none select-none">
+                kg
+              </span>
+            </div>
+          </div>
+
+          <div id="field-currentWeightDifficulty" className="flex flex-col space-y-2">
+            <div className="min-h-[42px] flex flex-col justify-end">
+              <label
+                htmlFor="currentWeightDifficulty-input"
+                className="text-sm font-semibold text-[#2E3A36] block leading-tight"
+              >
+                ¿Qué se te dificulta hacer con tu peso actual?
+              </label>
+              <span className="text-xs text-[#8E9E99] leading-normal mt-0.5">
+                Por ejemplo: subir escaleras, jugar con tus hijos, dormir bien, viajar.
+              </span>
+            </div>
+            <textarea
+              id="currentWeightDifficulty-input"
+              value={formData.currentWeightDifficulty || ''}
+              onChange={(e) => handleChange('currentWeightDifficulty', e.target.value)}
+              placeholder="Cuéntanos con tus palabras..."
+              rows={2}
+              className="w-full px-4 py-3 rounded-xl bg-[#FAF6F0]/80 border border-[#D9D3C8] hover:border-[#AEC9C0] text-[#2E3A36] placeholder-[#8E9E99] text-sm transition-all duration-200 focus:outline-hidden focus:ring-2 focus:ring-[#6E9E93]/40 focus:bg-white resize-none"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* =========================================================================
+          SUB-SECCIÓN 1.5: Gráfico interactivo de trayectoria de peso
+         ========================================================================= */}
+      <WeightJourneyChart
+        points={formData.weightJourneyPoints || []}
+        onChange={(points) => handleChange('weightJourneyPoints', points)}
+        currentWeightKg={formData.currentWeightKg}
+        lowestWeightSince18Kg={formData.lowestWeightSince18Kg}
+        highestWeightSince18Kg={formData.highestWeightSince18Kg}
+      />
+
+      {/* =========================================================================
+          SUB-SECCIÓN 1.6: ¿En qué etapa se estableció el sobrepeso/obesidad?
+         ========================================================================= */}
+      <div className="space-y-4 bg-white/70 backdrop-blur-xs p-6 sm:p-8 rounded-3xl border border-[#AEC9C0]/30 shadow-xs">
+        <div>
+          <label className="text-sm font-semibold text-[#2E3A36] block">
+            Mirando tu curva, ¿en qué etapa dirías que tu peso empezó a ser un tema para ti?
+          </label>
+          <p className="text-xs text-[#5C6E68] mt-1">
+            No hay respuesta incorrecta — esto nos ayuda a entender el origen de tu proceso.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+          {ONSET_STAGE_OPTIONS.map((opt) => {
+            const isSelected = formData.overweightOnsetStage === opt.key;
+            const Icon = opt.icon;
+            return (
+              <button
+                type="button"
+                key={opt.key}
+                onClick={() => handleChange('overweightOnsetStage', opt.key)}
+                className={`flex flex-col items-center gap-1.5 p-3.5 rounded-2xl border text-center transition-all duration-200 cursor-pointer ${
+                  isSelected
+                    ? 'bg-[#EBF3F0] border-[#6E9E93] text-[#2E3A36] shadow-2xs font-semibold ring-2 ring-[#6E9E93]/30'
+                    : 'bg-[#FAF6F0]/60 border-[#D9D3C8] text-[#5C6E68] hover:border-[#AEC9C0] hover:bg-[#FAF6F0]'
+                }`}
+              >
+                <span
+                  className={`p-2 rounded-xl ${
+                    isSelected ? 'bg-white text-[#5B887E]' : 'bg-white/70 text-[#8E9E99]'
+                  }`}
+                >
+                  <Icon className="w-4 h-4" />
+                </span>
+                <span className="text-xs font-semibold">{opt.label}</span>
+                <span className="text-[10px] text-[#8E9E99]">{opt.sublabel}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* =========================================================================
+          SUB-SECCIÓN 1.7: "Línea de tiempo y trayectoria de peso" (Momentos clave)
          ========================================================================= */}
       <WeightTrajectoryTimeline
         milestones={formData.weightTrajectoryMilestones || []}
         onChange={(milestones) => handleChange('weightTrajectoryMilestones', milestones)}
       />
+
+      {/* =========================================================================
+          SUB-SECCIÓN 1.8: Patrón de trayectoria (las 3 "rutas")
+         ========================================================================= */}
+      <div className="space-y-4 bg-white/70 backdrop-blur-xs p-6 sm:p-8 rounded-3xl border border-[#AEC9C0]/30 shadow-xs">
+        <div>
+          <label className="text-sm font-semibold text-[#2E3A36] block">
+            Viendo tu curva completa, ¿cuál de estas frases describe mejor tu historia?
+          </label>
+          <p className="text-xs text-[#5C6E68] mt-1">
+            Esto nos ayuda a entender qué tipo de acompañamiento te va a servir más.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {TRAJECTORY_PATTERN_OPTIONS.map((opt) => {
+            const isSelected = formData.weightTrajectoryPattern === opt.key;
+            const Icon = opt.icon;
+            return (
+              <button
+                type="button"
+                key={opt.key}
+                onClick={() => handleChange('weightTrajectoryPattern', opt.key)}
+                className={`flex flex-col items-start gap-2 p-4 rounded-2xl border text-left transition-all duration-200 cursor-pointer ${
+                  isSelected
+                    ? 'bg-[#EBF3F0] border-[#6E9E93] shadow-2xs ring-2 ring-[#6E9E93]/30'
+                    : 'bg-[#FAF6F0]/60 border-[#D9D3C8] hover:border-[#AEC9C0] hover:bg-[#FAF6F0]'
+                }`}
+              >
+                <span
+                  className={`p-2 rounded-xl ${
+                    isSelected ? 'bg-white text-[#5B887E]' : 'bg-white/70 text-[#8E9E99]'
+                  }`}
+                >
+                  <Icon className="w-4 h-4" />
+                </span>
+                <span className="text-sm font-semibold text-[#2E3A36] leading-snug">
+                  {opt.title}
+                </span>
+                <span className="text-xs text-[#8E9E99] leading-snug">{opt.description}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        <AnimatePresence>
+          {formData.weightTrajectoryPattern === 'salto_detonante' && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="overflow-hidden"
+            >
+              <div className="pt-2 flex flex-col space-y-2">
+                <label
+                  htmlFor="trajectoryDetonanteEvent-input"
+                  className="text-sm font-semibold text-[#2E3A36]"
+                >
+                  ¿Qué evento o momento asocias con ese cambio?
+                </label>
+                <input
+                  id="trajectoryDetonanteEvent-input"
+                  type="text"
+                  value={formData.trajectoryDetonanteEvent || ''}
+                  onChange={(e) => handleChange('trajectoryDetonanteEvent', e.target.value)}
+                  placeholder="Ej. un embarazo, un cambio de trabajo, una pérdida, un medicamento nuevo..."
+                  className="w-full px-4 py-3 rounded-xl bg-[#FAF6F0]/80 border border-[#D9D3C8] hover:border-[#AEC9C0] text-[#2E3A36] placeholder-[#8E9E99] text-sm transition-all duration-200 focus:outline-hidden focus:ring-2 focus:ring-[#6E9E93]/40 focus:bg-white"
+                />
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {formData.weightTrajectoryPattern === 'oscilaciones_repetidas' && (
+          <motion.p
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="text-xs text-[#5C6E68] bg-[#FAF6F0]/80 border border-[#D9D3C8] rounded-xl px-3.5 py-2.5"
+          >
+            Gracias por compartirlo. Los ciclos de subir y bajar de peso a veces se relacionan con
+            la forma en que nos relacionamos con la comida — lo platicaremos con calma en tu
+            consulta.
+          </motion.p>
+        )}
+      </div>
+
+      {/* =========================================================================
+          SUB-SECCIÓN 1.9: Estigma de peso / entorno social
+         ========================================================================= */}
+      <div className="space-y-4 bg-white/70 backdrop-blur-xs p-6 sm:p-8 rounded-3xl border border-[#AEC9C0]/30 shadow-xs">
+        <div className="flex items-center gap-2">
+          <ShieldQuestion className="w-5 h-5 text-[#6E9E93]" />
+          <div>
+            <label className="text-sm font-semibold text-[#2E3A36] block">
+              ¿Alguna vez has sentido que te trataron distinto por tu peso?
+            </label>
+            <p className="text-xs text-[#5C6E68] mt-1">
+              Puedes responder con la confianza que tengas — esto no cambia tu atención, solo nos
+              ayuda a acompañarte mejor. Si prefieres no contestar, está bien.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-2.5">
+          {(['Sí', 'No', 'Prefiero no responder'] as const).map((opt) => {
+            const isSelected = formData.weightStigmaExperience === opt;
+            return (
+              <button
+                type="button"
+                key={opt}
+                onClick={() => handleChange('weightStigmaExperience', opt)}
+                className={`px-4 py-2.5 rounded-xl border text-sm font-medium transition-all duration-200 cursor-pointer ${
+                  isSelected
+                    ? 'bg-[#EBF3F0] border-[#6E9E93] text-[#2E3A36] shadow-2xs ring-2 ring-[#6E9E93]/30'
+                    : 'bg-[#FAF6F0]/60 border-[#D9D3C8] text-[#5C6E68] hover:border-[#AEC9C0] hover:bg-[#FAF6F0]'
+                }`}
+              >
+                {opt}
+              </button>
+            );
+          })}
+        </div>
+
+        <AnimatePresence>
+          {formData.weightStigmaExperience === 'Sí' && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="overflow-hidden space-y-4"
+            >
+              <div className="pt-2 space-y-2">
+                <label className="text-xs font-semibold text-[#5C6E68] block">
+                  ¿En qué momentos o espacios? (puedes elegir varios)
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {STIGMA_CONTEXT_OPTIONS.map((context) => {
+                    const isSelected = (formData.weightStigmaContexts || []).includes(context);
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => toggleStigmaContext(context)}
+                        className={`px-3.5 py-2 rounded-xl border text-xs font-medium transition-all duration-200 cursor-pointer ${
+                          isSelected
+                            ? 'bg-[#EBF3F0] border-[#6E9E93] text-[#2E3A36]'
+                            : 'bg-white/70 border-[#D9D3C8] text-[#5C6E68] hover:border-[#AEC9C0]'
+                        }`}
+                      >
+                        {context}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {(formData.weightStigmaContexts || []).includes('Otro') && (
+                <input
+                  type="text"
+                  value={formData.weightStigmaContextOtherDetails || ''}
+                  onChange={(e) =>
+                    handleChange('weightStigmaContextOtherDetails', e.target.value)
+                  }
+                  placeholder="Cuéntanos dónde..."
+                  className="w-full px-4 py-3 rounded-xl bg-[#FAF6F0]/80 border border-[#D9D3C8] hover:border-[#AEC9C0] text-[#2E3A36] placeholder-[#8E9E99] text-sm transition-all duration-200 focus:outline-hidden focus:ring-2 focus:ring-[#6E9E93]/40 focus:bg-white"
+                />
+              )}
+
+              <div className="space-y-2">
+                <label
+                  htmlFor="weightStigmaDetails-input"
+                  className="text-xs font-semibold text-[#5C6E68] block"
+                >
+                  Si quieres contarnos más, aquí hay espacio (opcional)
+                </label>
+                <textarea
+                  id="weightStigmaDetails-input"
+                  value={formData.weightStigmaDetails || ''}
+                  onChange={(e) => handleChange('weightStigmaDetails', e.target.value)}
+                  rows={2}
+                  placeholder="Lo que quieras compartir..."
+                  className="w-full px-4 py-3 rounded-xl bg-[#FAF6F0]/80 border border-[#D9D3C8] hover:border-[#AEC9C0] text-[#2E3A36] placeholder-[#8E9E99] text-sm transition-all duration-200 focus:outline-hidden focus:ring-2 focus:ring-[#6E9E93]/40 focus:bg-white resize-none"
+                />
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
 
       {/* =========================================================================
           SUB-SECCIÓN 2: "Intentos previos para bajar de peso"
@@ -1639,9 +2041,9 @@ export const StepThreeForm: React.FC<StepThreeFormProps> = ({
           <button
             type="submit"
             id="continue-button"
-            disabled={!isFormComplete || isSubmitting}
+            disabled={isSubmitting}
             className={`w-full sm:w-auto min-w-[200px] px-8 py-4 rounded-2xl font-semibold text-white shadow-md flex items-center justify-center gap-2.5 transition-all duration-300 ${
-              isFormComplete && !isSubmitting
+              !isSubmitting
                 ? 'bg-[#6E9E93] hover:bg-[#5B887E] active:bg-[#4B736A] hover:shadow-lg cursor-pointer transform hover:-translate-y-0.5'
                 : 'bg-[#6E9E93]/40 text-white/80 cursor-not-allowed shadow-none'
             }`}
@@ -1661,7 +2063,7 @@ export const StepThreeForm: React.FC<StepThreeFormProps> = ({
 
           {!isFormComplete && (
             <p className="text-[11px] text-[#8E9E99] mt-2 text-center sm:text-right">
-              Completa los campos obligatorios (*) para avanzar al siguiente paso
+              Puedes continuar y completar lo que falte más adelante. Te lo recordaremos antes de guardar.
             </p>
           )}
         </div>

@@ -324,7 +324,14 @@ export default function App() {
       <Header onResetDraft={handleResetDraft} />
 
       {/* Multi-step Wizard Progress Bar */}
-      <WizardProgress currentStep={currentStep} totalSteps={11} />
+      <WizardProgress
+        currentStep={currentStep}
+        totalSteps={11}
+        onStepClick={(step) => {
+          setCurrentStep(step);
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }}
+      />
 
       {/* Main Content Area with smooth step transitions */}
       <main className="flex-1 max-w-3xl w-full mx-auto px-4 sm:px-8 py-8 sm:py-12">
@@ -512,6 +519,10 @@ export default function App() {
                 onBack={handleStepClosureBack}
                 onViewSummary={() => setIsModalOpen(true)}
                 onSaveQuestionnaire={handleSaveQuestionnaire}
+                onJumpToStep={(step) => {
+                  setCurrentStep(step);
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
               />
             </motion.div>
           )}

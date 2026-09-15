@@ -6,6 +6,7 @@ interface WizardProgressProps {
   currentStep: number;
   totalSteps?: number;
   steps?: StepItem[];
+  onStepClick?: (step: number) => void;
 }
 
 export const defaultSteps: StepItem[] = [
@@ -92,6 +93,7 @@ export const WizardProgress: React.FC<WizardProgressProps> = ({
   currentStep = 1,
   totalSteps = 11,
   steps = defaultSteps,
+  onStepClick,
 }) => {
   const rawPercentage = totalSteps > 0 ? Math.round((currentStep / totalSteps) * 100) : 5;
   const percentage = Math.max(5, Math.min(100, isNaN(rawPercentage) ? 5 : rawPercentage));
@@ -136,11 +138,20 @@ export const WizardProgress: React.FC<WizardProgressProps> = ({
             const isCurrent = step.id === currentStep;
             const isCompleted = step.id < currentStep;
 
+            const isClickable = Boolean(onStepClick);
+
             return (
-              <div
+              <button
                 key={step.id}
-                className="flex items-center gap-1.5"
-                title={`${step.id}. ${step.title}: ${step.description}`}
+                type="button"
+                disabled={!isClickable}
+                onClick={() => onStepClick?.(step.id)}
+                className={`flex items-center gap-1.5 ${
+                  isClickable ? 'cursor-pointer hover:opacity-80' : 'cursor-default'
+                }`}
+                title={`${step.id}. ${step.title}: ${step.description}${
+                  isClickable ? ' — toca para ir directo a este paso' : ''
+                }`}
               >
                 <div
                   className={`w-2 h-2 rounded-full transition-all duration-300 ${
@@ -162,7 +173,7 @@ export const WizardProgress: React.FC<WizardProgressProps> = ({
                 >
                   {step.shortTitle}
                 </span>
-              </div>
+              </button>
             );
           })}
         </div>

@@ -37,6 +37,15 @@ const COMMON_PRESET_MOMENTS = [
   'Menopausia o cambios hormonales',
 ];
 
+const WEIGHT_LOSS_METHOD_PRESETS = [
+  'Cambio de alimentación',
+  'Ejercicio',
+  'Medicamento o inyectable',
+  'Cirugía bariátrica',
+  'Acompañamiento profesional',
+  'Ayuno intermitente',
+];
+
 const COMMON_TRIGGERS = [
   'Estrés laboral o académico',
   'Ansiedad / Comer emocional',
@@ -116,7 +125,10 @@ export const WeightTrajectoryTimeline: React.FC<WeightTrajectoryTimelineProps> =
   const [selectedTriggers, setSelectedTriggers] = useState<string[]>([]);
   const [customTriggerInput, setCustomTriggerInput] = useState('');
   const [lifeContext, setLifeContext] = useState('');
+  const [weightLossMethod, setWeightLossMethod] = useState('');
   const [formError, setFormError] = useState('');
+
+  const showWeightLossMethod = shiftType === 'bajada' || shiftType === 'rebote';
 
   const openNewMilestoneForm = (presetMoment?: string) => {
     setEditingId(null);
@@ -126,6 +138,7 @@ export const WeightTrajectoryTimeline: React.FC<WeightTrajectoryTimelineProps> =
     setSelectedTriggers([]);
     setCustomTriggerInput('');
     setLifeContext('');
+    setWeightLossMethod('');
     setFormError('');
     setIsAdding(true);
   };
@@ -138,8 +151,22 @@ export const WeightTrajectoryTimeline: React.FC<WeightTrajectoryTimelineProps> =
     setSelectedTriggers(item.triggers || []);
     setCustomTriggerInput('');
     setLifeContext(item.lifeContext);
+    setWeightLossMethod(item.weightLossMethod || '');
     setFormError('');
     setIsAdding(true);
+  };
+
+  const toggleWeightLossPreset = (preset: string) => {
+    setWeightLossMethod((prev) => {
+      const parts = prev
+        .split(',')
+        .map((p) => p.trim())
+        .filter(Boolean);
+      if (parts.includes(preset)) {
+        return parts.filter((p) => p !== preset).join(', ');
+      }
+      return [...parts, preset].join(', ');
+    });
   };
 
   const handleToggleTrigger = (trigger: string) => {
@@ -176,6 +203,7 @@ export const WeightTrajectoryTimeline: React.FC<WeightTrajectoryTimelineProps> =
       approxWeightOrChange: approxWeightOrChange.trim(),
       triggers: selectedTriggers,
       lifeContext: lifeContext.trim(),
+      weightLossMethod: showWeightLossMethod ? weightLossMethod.trim() : undefined,
     };
 
     if (editingId) {
@@ -308,6 +336,17 @@ export const WeightTrajectoryTimeline: React.FC<WeightTrajectoryTimelineProps> =
                     </p>
                     <p className="italic text-[#2E3A36]">"{milestone.lifeContext}"</p>
                   </div>
+
+                  {/* Weight loss method, only shown for bajada/rebote when provided */}
+                  {milestone.weightLossMethod && (
+                    <div className="bg-[#EBF3F0]/70 p-3 rounded-xl border border-[#6E9E93]/30 text-xs sm:text-sm text-[#2E3A36] leading-relaxed">
+                      <p className="font-medium text-[#477369] text-[11px] uppercase tracking-wider mb-1 flex items-center gap-1">
+                        <HeartHandshake className="w-3 h-3 text-[#477369]" />
+                        Cómo logró bajar:
+                      </p>
+                      <p className="text-[#2E3A36]">{milestone.weightLossMethod}</p>
+                    </div>
+                  )}
                 </div>
               </motion.div>
             );
@@ -570,6 +609,59 @@ export const WeightTrajectoryTimeline: React.FC<WeightTrajectoryTimelineProps> =
                 Describe el contexto de forma natural y honesta. Toda la información es confidencial.
               </p>
             </div>
+
+            {/* 6. ¿Qué hiciste para lograr bajar en ese momento? (solo si bajada o rebote) */}
+            <AnimatePresence>
+              {showWeightLossMethod && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="space-y-2 overflow-hidden"
+                >
+                  <label
+                    htmlFor="weightLossMethod-input"
+                    className="text-xs font-semibold text-[#2E3A36] flex items-center gap-1.5"
+                  >
+                    <HeartHandshake className="w-3.5 h-3.5 text-[#477369]" />
+                    ¿Qué hiciste para lograr bajar en ese momento?
+                  </label>
+
+                  <div className="flex flex-wrap gap-1.5">
+                    {WEIGHT_LOSS_METHOD_PRESETS.map((preset, idx) => {
+                      const isSelected = weightLossMethod
+                        .split(',')
+                        .map((p) => p.trim())
+                        .includes(preset);
+                      return (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => toggleWeightLossPreset(preset)}
+                          className={`text-xs px-2.5 py-1 rounded-lg border transition-all flex items-center gap-1.5 ${
+                            isSelected
+                              ? 'bg-[#477369] text-white border-[#477369] font-medium'
+                              : 'bg-white text-[#5C6E68] border-[#D9D3C8] hover:border-[#6E9E93]'
+                          }`}
+                        >
+                          {isSelected ? <Check className="w-3 h-3" /> : <Plus className="w-3 h-3 text-[#8E9E99]" />}
+                          {preset}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <textarea
+                    id="weightLossMethod-input"
+                    rows={2}
+                    value={weightLossMethod}
+                    onChange={(e) => setWeightLossMethod(e.target.value)}
+                    placeholder="Ej. Bajé haciendo ejercicio 4 veces por semana y controlando porciones..."
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#FAF6F0]/80 border border-[#D9D3C8] focus:border-[#6E9E93] focus:bg-white text-sm text-[#2E3A36] leading-relaxed resize-y"
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             {/* Form actions */}
             <div className="flex items-center justify-end gap-3 pt-2 border-t border-[#E8E2D8]">

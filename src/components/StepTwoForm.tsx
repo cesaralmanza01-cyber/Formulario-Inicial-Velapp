@@ -145,7 +145,7 @@ export const StepTwoForm: React.FC<StepTwoFormProps> = ({
         const el = document.getElementById(`field-${firstErrorKey}`);
         el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
-      return;
+      // Ya no bloqueamos el avance — se valida todo al llegar al paso final.
     }
 
     setIsSubmitting(true);
@@ -456,9 +456,9 @@ export const StepTwoForm: React.FC<StepTwoFormProps> = ({
           <button
             type="submit"
             id="continue-button"
-            disabled={!isFormComplete || isSubmitting}
+            disabled={isSubmitting}
             className={`w-full sm:w-auto min-w-[200px] px-8 py-4 rounded-2xl font-semibold text-white shadow-md flex items-center justify-center gap-2.5 transition-all duration-300 ${
-              isFormComplete && !isSubmitting
+              !isSubmitting
                 ? 'bg-[#6E9E93] hover:bg-[#5B887E] active:bg-[#4B736A] hover:shadow-lg cursor-pointer transform hover:-translate-y-0.5'
                 : 'bg-[#6E9E93]/40 text-white/80 cursor-not-allowed shadow-none'
             }`}
@@ -478,7 +478,7 @@ export const StepTwoForm: React.FC<StepTwoFormProps> = ({
 
           {!isFormComplete && (
             <p className="text-[11px] text-[#8E9E99] mt-2 text-center sm:text-right">
-              Completa los 4 campos (*) para avanzar al siguiente paso
+              Puedes continuar y completar lo que falte más adelante. Te lo recordaremos antes de guardar.
             </p>
           )}
         </div>

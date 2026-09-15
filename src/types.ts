@@ -62,7 +62,44 @@ export interface WeightTrajectoryMilestone {
   approxWeightOrChange?: string;
   triggers: string[];
   lifeContext: string;
+  // Solo aplica cuando shiftType es 'bajada' o 'rebote': qué hizo el paciente
+  // para lograr bajar de peso en ese momento de su vida.
+  weightLossMethod?: string;
 }
+
+// Etapas de vida fijas usadas en el gráfico interactivo de trayectoria de peso
+// y en la pregunta de "etapa de origen" del sobrepeso/obesidad.
+export type LifeStageKey =
+  | 'infancia'
+  | 'adolescencia'
+  | 'juventud'
+  | 'adultez'
+  | 'actualidad';
+
+export interface WeightStagePoint {
+  stage: LifeStageKey;
+  // null = el paciente no marcó/recuerda un peso para esta etapa
+  weightKg: number | null;
+}
+
+// Las 3 "rutas" de trayectoria de peso (guía ADA 2026 / anamnesis dirigida):
+// cada patrón orienta hacia un enfoque clínico distinto.
+export type WeightTrajectoryPattern =
+  | 'ascenso_lento' // obesidad de toda la vida, se estableció temprano
+  | 'salto_detonante' // subida repentina asociada a un evento/detonante
+  | 'oscilaciones_repetidas' // ciclos de subida y bajada repetidos (yo-yo)
+  | '';
+
+export type WeightStigmaExperience = 'Sí' | 'No' | 'Prefiero no responder' | '';
+
+export type WeightStigmaContext =
+  | 'En consultorios médicos / con personal de salud'
+  | 'En el trabajo'
+  | 'En la familia'
+  | 'Con amistades o pareja'
+  | 'En redes sociales o medios'
+  | 'En espacios públicos (calle, transporte, tiendas)'
+  | 'Otro';
 
 export type PreviousMethodOption =
   | 'Por mi cuenta'
@@ -81,6 +118,31 @@ export interface PatientWeightHistoryInfo {
 
   // Sub-sección 1.5: Trayectoria de peso y momentos clave de vida (Weight trajectory)
   weightTrajectoryMilestones?: WeightTrajectoryMilestone[];
+  // Curva de peso a lo largo de la vida, dibujada por el paciente (gráfico interactivo)
+  weightJourneyPoints?: WeightStagePoint[];
+  // ¿En qué etapa de vida se estableció por primera vez el sobrepeso/obesidad?
+  overweightOnsetStage?: LifeStageKey | '';
+
+  // Sub-sección 1.6: Las 4 preguntas guía ADA 2026 (tabla 3.4) — se usan
+  // "tal cual" según la guía, distintas de simplemente preguntar el peso actual.
+  // 1) Peso más alto como adulto -> highestWeightSince18Kg (ya existente)
+  // 2) Peso más bajo -> lowestWeightSince18Kg (ya existente)
+  // 3) Peso con el que se sintió mejor (NO es el peso ideal teórico — es una
+  //    meta más realista y motivante, elegida por el propio paciente)
+  feltBestWeightKg?: string;
+  // 4) Qué se le dificulta hacer con su peso actual (funcionalidad, no estética)
+  currentWeightDifficulty?: string;
+
+  // Sub-sección 1.7: Patrón/ruta de la trayectoria de peso (ver WeightTrajectoryPattern)
+  weightTrajectoryPattern?: WeightTrajectoryPattern;
+  // Solo si el patrón es 'salto_detonante': qué evento asocia el paciente
+  trajectoryDetonanteEvent?: string;
+
+  // Sub-sección 1.8: Estigma de peso / determinantes sociales / trauma (ADA 2026)
+  weightStigmaExperience?: WeightStigmaExperience;
+  weightStigmaContexts?: WeightStigmaContext[];
+  weightStigmaContextOtherDetails?: string;
+  weightStigmaDetails?: string;
 
   // Sub-sección 2: Intentos previos
   hasPreviousAttempts: 'Sí' | 'No' | '';
@@ -115,6 +177,48 @@ export type FamilyHistoryCondition =
   | 'Cáncer'
   | 'Enfermedad renal';
 
+export const FAMILY_OBESITY_MEMBERS = [
+  'Madre',
+  'Padre',
+  'Hermano(a)',
+  'Abuela materna',
+  'Abuelo materno',
+  'Abuela paterna',
+  'Abuelo paterno',
+  'Tío(a)',
+  'Otro familiar',
+] as const;
+
+export type FamilyObesityMember = (typeof FAMILY_OBESITY_MEMBERS)[number];
+
+export const FAMILY_OBESITY_ONSET_AGES = [
+  'Desde la infancia / niñez',
+  'En la adolescencia',
+  'En la edad adulta',
+  'No sabe con certeza',
+] as const;
+
+export type FamilyObesityOnsetAge = (typeof FAMILY_OBESITY_ONSET_AGES)[number];
+
+export const FAMILY_COMORBIDITIES_LIST = [
+  'Diabetes mellitus tipo 2',
+  'Hipertensión arterial',
+  'Dislipidemia (colesterol o triglicéridos elevados)',
+  'Evento cardiovascular a temprana edad (infarto / ACV)',
+  'Síndrome de ovario poliquístico (SOP) o infertilidad (mujeres)',
+] as const;
+
+export type FamilyComorbidity = (typeof FAMILY_COMORBIDITIES_LIST)[number];
+
+export interface ObesityFamilyMemberEntry {
+  id: string;
+  relationship: FamilyObesityMember | string;
+  otherRelationship?: string;
+  onsetAge: FamilyObesityOnsetAge | string;
+  comorbidities: string[];
+  otherComorbidities?: string;
+}
+
 export type MenopauseStage =
   | 'No estoy en perimenopausia ni menopausia'
   | 'Perimenopausia'
@@ -128,10 +232,44 @@ export type CycleRegularity =
   | 'Ya no menstruo (menopausia / histerectomía)'
   | '';
 
+export const OBESOGENIC_DRUGS_LIST = [
+  'Olanzapina',
+  'Clozapina',
+  'Quetiapina',
+  'Risperidona',
+  'Paroxetina',
+  'Mirtazapina',
+  'Amitriptilina',
+  'Litio',
+  'Valproato',
+  'Gabapentina',
+  'Pregabalina',
+  'Prednisona',
+  'Dexametasona',
+  'Glibenclamida',
+  'Glimepirida',
+  'Gliclazida',
+  'Glipizida',
+  'Clorpropamida',
+  'Tolbutamida',
+  'Insulina',
+  'Propranolol',
+  'Metoprolol',
+  'Bisoprolol',
+] as const;
+
+export type ObesogenicDrug = (typeof OBESOGENIC_DRUGS_LIST)[number];
+
 export interface PatientHealthMapInfo {
   // Sub-sección 1: Antecedentes generales
   pathologicalHistory: string;
   pharmacologicalHistory: string;
+
+  // Pregunta estructurada sobre fármacos obesogénicos
+  takesObesogenicMedications?: 'Sí' | 'No' | '';
+  selectedObesogenicDrugs?: string[]; // Lista seleccionable de fármacos obesogénicos
+  otherMedicationsDetails?: string; // Campo para 'otros' medicamentos no listados
+
   surgicalHistory: string;
   hospitalHistory: string;
   toxicAllergicHistory: string;
@@ -155,6 +293,8 @@ export interface PatientHealthMapInfo {
 
   // Sub-sección 2: Antecedentes familiares
   familyHistory: FamilyHistoryCondition[];
+  hasFamilyObesityHistory?: 'Sí' | 'No' | '';
+  familyObesityMembers?: ObesityFamilyMemberEntry[];
   familyHistoryNotes?: string;
 }
 
@@ -435,6 +575,7 @@ export interface StepThreeErrors {
 export interface StepFourErrors {
   pathologicalHistory?: string;
   pharmacologicalHistory?: string;
+  takesObesogenicMedications?: string;
   surgicalHistory?: string;
   hospitalHistory?: string;
   toxicAllergicHistory?: string;
@@ -450,6 +591,8 @@ export interface StepFourErrors {
   hasEatingDisorderHistory?: string;
   eatingDisorderDetails?: string;
   familyHistory?: string;
+  hasFamilyObesityHistory?: string;
+  familyObesityMembers?: string;
   familyHistoryNotes?: string;
 }
 

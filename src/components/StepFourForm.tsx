@@ -13,6 +13,10 @@ import {
   Baby,
   Calendar,
   Sparkles,
+  Plus,
+  Trash2,
+  AlertCircle,
+  Pill,
 } from 'lucide-react';
 import {
   PatientHealthMapInfo,
@@ -20,6 +24,11 @@ import {
   CycleRegularity,
   MenopauseStage,
   StepFourErrors,
+  OBESOGENIC_DRUGS_LIST,
+  FAMILY_OBESITY_MEMBERS,
+  FAMILY_OBESITY_ONSET_AGES,
+  FAMILY_COMORBIDITIES_LIST,
+  ObesityFamilyMemberEntry,
 } from '../types';
 
 interface StepFourFormProps {
@@ -133,6 +142,9 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
       initialData || {
         pathologicalHistory: '',
         pharmacologicalHistory: '',
+        takesObesogenicMedications: '',
+        selectedObesogenicDrugs: [],
+        otherMedicationsDetails: '',
         surgicalHistory: '',
         hospitalHistory: '',
         toxicAllergicHistory: '',
@@ -150,6 +162,8 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
         hasEatingDisorderHistory: '',
         eatingDisorderDetails: '',
         familyHistory: [],
+        hasFamilyObesityHistory: '',
+        familyObesityMembers: [],
         familyHistoryNotes: '',
       }
     );
@@ -158,6 +172,7 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
   const [touched, setTouched] = useState<Record<string, boolean>>({
     pathologicalHistory: false,
     pharmacologicalHistory: false,
+    takesObesogenicMedications: false,
     surgicalHistory: false,
     hospitalHistory: false,
     toxicAllergicHistory: false,
@@ -173,6 +188,8 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
     hasEatingDisorderHistory: false,
     eatingDisorderDetails: false,
     familyHistory: false,
+    hasFamilyObesityHistory: false,
+    familyObesityMembers: false,
     familyHistoryNotes: false,
   });
 
@@ -196,10 +213,16 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
         return '';
 
       case 'pharmacologicalHistory':
-        if (!currentForm.pharmacologicalHistory.trim()) {
-          return 'Por favor registra tus medicamentos actuales o escribe "Ninguno".';
+      case 'takesObesogenicMedications': {
+        const hasSelectedDrugs = (currentForm.selectedObesogenicDrugs || []).length > 0;
+        const hasOtherMeds = !!currentForm.otherMedicationsDetails?.trim();
+        const saysNo = currentForm.takesObesogenicMedications === 'No';
+
+        if (!hasSelectedDrugs && !hasOtherMeds && !saysNo) {
+          return 'Por favor selecciona si tomas alguno de los medicamentos de la lista, escribe tus medicamentos en "Otros" o marca "No tomo ningún medicamento".';
         }
         return '';
+      }
 
       case 'surgicalHistory':
         if (!currentForm.surgicalHistory.trim()) {
@@ -259,6 +282,28 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
         }
         return '';
 
+      case 'hasFamilyObesityHistory':
+        if (!currentForm.hasFamilyObesityHistory) {
+          return 'Por favor indica si algún familiar cercano ha presentado antecedentes de obesidad.';
+        }
+        return '';
+
+      case 'familyObesityMembers': {
+        if (currentForm.hasFamilyObesityHistory === 'Sí') {
+          const members = currentForm.familyObesityMembers || [];
+          if (members.length === 0) {
+            return 'Por favor agrega al menos un familiar con antecedentes de obesidad o selecciona "No".';
+          }
+          const hasIncompleteMember = members.some(
+            (m) => !m.relationship || (m.relationship === 'Otro familiar' && !m.otherRelationship?.trim())
+          );
+          if (hasIncompleteMember) {
+            return 'Por favor especifica el parentesco de cada familiar agregado.';
+          }
+        }
+        return '';
+      }
+
       default:
         return '';
     }
@@ -303,10 +348,101 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
     handleChange('menopauseSymptoms', updated);
   };
 
+  const toggleObesogenicDrug = (drugName: string) => {
+    const current = formData.selectedObesogenicDrugs || [];
+    const exists = current.includes(drugName);
+    const updated = exists
+      ? current.filter((d) => d !== drugName)
+      : [...current, drugName];
+
+    // Compute updated narrative summary for pharmacologicalHistory
+    const parts: string[] = [];
+    if (updated.length > 0) {
+      parts.push(`Fármacos de la lista: ${updated.join(', ')}`);
+    }
+    if (formData.otherMedicationsDetails?.trim()) {
+      parts.push(`Otros: ${formData.otherMedicationsDetails.trim()}`);
+    }
+
+    const hasAnyMed = updated.length > 0 || !!formData.otherMedicationsDetails?.trim();
+    const updatedFormData: PatientHealthMapInfo = {
+      ...formData,
+      takesObesogenicMedications: hasAnyMed ? 'Sí' : (formData.takesObesogenicMedications === 'No' ? 'No' : ''),
+      selectedObesogenicDrugs: updated,
+      pharmacologicalHistory: parts.join(' | ') || (formData.takesObesogenicMedications === 'No' ? 'Ninguno actualmente' : ''),
+    };
+
+    setFormData(updatedFormData);
+    if (touched.pharmacologicalHistory || touched.takesObesogenicMedications) {
+      const err = validateField('pharmacologicalHistory', updatedFormData);
+      setErrors((prev) => ({
+        ...prev,
+        pharmacologicalHistory: err,
+        takesObesogenicMedications: err,
+      }));
+    }
+  };
+
+  const handleOtherMedsChange = (text: string) => {
+    const selected = formData.selectedObesogenicDrugs || [];
+    const parts: string[] = [];
+    if (selected.length > 0) {
+      parts.push(`Fármacos de la lista: ${selected.join(', ')}`);
+    }
+    if (text.trim()) {
+      parts.push(`Otros: ${text.trim()}`);
+    }
+
+    const hasAnyMed = selected.length > 0 || !!text.trim();
+    const updatedFormData: PatientHealthMapInfo = {
+      ...formData,
+      otherMedicationsDetails: text,
+      takesObesogenicMedications: hasAnyMed ? 'Sí' : (formData.takesObesogenicMedications === 'No' ? 'No' : ''),
+      pharmacologicalHistory: parts.join(' | ') || (formData.takesObesogenicMedications === 'No' ? 'Ninguno actualmente' : ''),
+    };
+
+    setFormData(updatedFormData);
+    if (touched.pharmacologicalHistory || touched.takesObesogenicMedications) {
+      const err = validateField('pharmacologicalHistory', updatedFormData);
+      setErrors((prev) => ({
+        ...prev,
+        pharmacologicalHistory: err,
+        takesObesogenicMedications: err,
+      }));
+    }
+  };
+
+  const handleNoMedications = () => {
+    const updatedFormData: PatientHealthMapInfo = {
+      ...formData,
+      takesObesogenicMedications: 'No',
+      selectedObesogenicDrugs: [],
+      otherMedicationsDetails: '',
+      pharmacologicalHistory: 'Ninguno (no toma medicamentos actualmente)',
+    };
+    setFormData(updatedFormData);
+    setTouched((prev) => ({
+      ...prev,
+      pharmacologicalHistory: true,
+      takesObesogenicMedications: true,
+    }));
+    setErrors((prev) => ({
+      ...prev,
+      pharmacologicalHistory: '',
+      takesObesogenicMedications: '',
+    }));
+  };
+
   // Form validity check
   const isFormValid = (() => {
     if (!formData.pathologicalHistory.trim()) return false;
-    if (!formData.pharmacologicalHistory.trim()) return false;
+    
+    // Validar antecedentes farmacológicos (debe haber marcado fármacos, escrito en Otros o marcado No tomo ningún medicamento)
+    const hasSelectedDrugs = (formData.selectedObesogenicDrugs || []).length > 0;
+    const hasOtherMeds = !!formData.otherMedicationsDetails?.trim();
+    const saysNo = formData.takesObesogenicMedications === 'No';
+    if (!hasSelectedDrugs && !hasOtherMeds && !saysNo) return false;
+
     if (!formData.surgicalHistory.trim()) return false;
     if (!formData.hospitalHistory.trim()) return false;
     if (!formData.toxicAllergicHistory.trim()) return false;
@@ -328,8 +464,135 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
     // TCA
     if (!formData.hasEatingDisorderHistory) return false;
 
+    // Antecedentes familiares de obesidad
+    if (!formData.hasFamilyObesityHistory) return false;
+    if (formData.hasFamilyObesityHistory === 'Sí') {
+      const members = formData.familyObesityMembers || [];
+      if (members.length === 0) return false;
+      const hasInvalid = members.some(
+        (m) => !m.relationship || (m.relationship === 'Otro familiar' && !m.otherRelationship?.trim())
+      );
+      if (hasInvalid) return false;
+    }
+
     return true;
   })();
+
+  // Handlers para antecedentes familiares de obesidad
+  const handleSelectHasFamilyObesity = (val: 'Sí' | 'No') => {
+    let updatedMembers = formData.familyObesityMembers || [];
+    let updatedFamilyHistory = formData.familyHistory || [];
+
+    if (val === 'Sí') {
+      // Si dice Sí y no hay miembros, creamos uno por defecto
+      if (updatedMembers.length === 0) {
+        updatedMembers = [
+          {
+            id: `fam-ob-${Date.now()}`,
+            relationship: 'Madre',
+            onsetAge: 'En la edad adulta',
+            comorbidities: [],
+            otherComorbidities: '',
+          },
+        ];
+      }
+      // Marcar también 'Obesidad' en familyHistory si no está
+      if (!updatedFamilyHistory.includes('Obesidad')) {
+        updatedFamilyHistory = [...updatedFamilyHistory, 'Obesidad'];
+      }
+    } else {
+      updatedMembers = [];
+      // Quitar Obesidad de familyHistory si estaba
+      updatedFamilyHistory = updatedFamilyHistory.filter((c) => c !== 'Obesidad');
+    }
+
+    const updatedFormData: PatientHealthMapInfo = {
+      ...formData,
+      hasFamilyObesityHistory: val,
+      familyObesityMembers: updatedMembers,
+      familyHistory: updatedFamilyHistory,
+    };
+
+    setFormData(updatedFormData);
+    setTouched((prev) => ({
+      ...prev,
+      hasFamilyObesityHistory: true,
+      familyObesityMembers: true,
+    }));
+    setErrors((prev) => ({
+      ...prev,
+      hasFamilyObesityHistory: validateField('hasFamilyObesityHistory', updatedFormData),
+      familyObesityMembers: validateField('familyObesityMembers', updatedFormData),
+    }));
+  };
+
+  const handleAddFamilyObesityMember = () => {
+    const newMember: ObesityFamilyMemberEntry = {
+      id: `fam-ob-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      relationship: 'Padre',
+      onsetAge: 'En la edad adulta',
+      comorbidities: [],
+      otherComorbidities: '',
+    };
+    const updatedMembers = [...(formData.familyObesityMembers || []), newMember];
+    const updatedFormData: PatientHealthMapInfo = {
+      ...formData,
+      hasFamilyObesityHistory: 'Sí',
+      familyObesityMembers: updatedMembers,
+    };
+    setFormData(updatedFormData);
+    setTouched((prev) => ({ ...prev, familyObesityMembers: true }));
+    setErrors((prev) => ({
+      ...prev,
+      familyObesityMembers: validateField('familyObesityMembers', updatedFormData),
+    }));
+  };
+
+  const handleRemoveFamilyObesityMember = (id: string) => {
+    const current = formData.familyObesityMembers || [];
+    const updatedMembers = current.filter((m) => m.id !== id);
+    const updatedFormData: PatientHealthMapInfo = {
+      ...formData,
+      familyObesityMembers: updatedMembers,
+      hasFamilyObesityHistory: updatedMembers.length === 0 ? 'No' : formData.hasFamilyObesityHistory,
+    };
+    setFormData(updatedFormData);
+    setTouched((prev) => ({ ...prev, familyObesityMembers: true }));
+    setErrors((prev) => ({
+      ...prev,
+      familyObesityMembers: validateField('familyObesityMembers', updatedFormData),
+    }));
+  };
+
+  const handleUpdateFamilyObesityMember = (
+    id: string,
+    updates: Partial<ObesityFamilyMemberEntry>
+  ) => {
+    const current = formData.familyObesityMembers || [];
+    const updatedMembers = current.map((m) => (m.id === id ? { ...m, ...updates } : m));
+    const updatedFormData: PatientHealthMapInfo = {
+      ...formData,
+      familyObesityMembers: updatedMembers,
+    };
+    setFormData(updatedFormData);
+    setTouched((prev) => ({ ...prev, familyObesityMembers: true }));
+    setErrors((prev) => ({
+      ...prev,
+      familyObesityMembers: validateField('familyObesityMembers', updatedFormData),
+    }));
+  };
+
+  const handleToggleMemberComorbidity = (id: string, comorbidity: string) => {
+    const current = formData.familyObesityMembers || [];
+    const member = current.find((m) => m.id === id);
+    if (!member) return;
+    const exists = (member.comorbidities || []).includes(comorbidity);
+    const updatedComorbidities = exists
+      ? member.comorbidities.filter((c) => c !== comorbidity)
+      : [...(member.comorbidities || []), comorbidity];
+
+    handleUpdateFamilyObesityMember(id, { comorbidities: updatedComorbidities });
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -337,6 +600,7 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
     const allTouched: Record<string, boolean> = {
       pathologicalHistory: true,
       pharmacologicalHistory: true,
+      takesObesogenicMedications: true,
       surgicalHistory: true,
       hospitalHistory: true,
       toxicAllergicHistory: true,
@@ -352,6 +616,8 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
       hasEatingDisorderHistory: true,
       eatingDisorderDetails: true,
       familyHistory: true,
+      hasFamilyObesityHistory: true,
+      familyObesityMembers: true,
       familyHistoryNotes: true,
     };
     setTouched(allTouched);
@@ -359,6 +625,7 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
     const newErrors: StepFourErrors = {
       pathologicalHistory: validateField('pathologicalHistory', formData),
       pharmacologicalHistory: validateField('pharmacologicalHistory', formData),
+      takesObesogenicMedications: validateField('takesObesogenicMedications', formData),
       surgicalHistory: validateField('surgicalHistory', formData),
       hospitalHistory: validateField('hospitalHistory', formData),
       toxicAllergicHistory: validateField('toxicAllergicHistory', formData),
@@ -368,6 +635,8 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
       cycleDuration: validateField('cycleDuration', formData),
       menopauseStage: validateField('menopauseStage', formData),
       hasEatingDisorderHistory: validateField('hasEatingDisorderHistory', formData),
+      hasFamilyObesityHistory: validateField('hasFamilyObesityHistory', formData),
+      familyObesityMembers: validateField('familyObesityMembers', formData),
     };
 
     setErrors(newErrors);
@@ -478,43 +747,131 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
           )}
         </div>
 
-        {/* 2. Antecedentes farmacológicos */}
-        <div id="field-pharmacologicalHistory" className="space-y-2">
-          <label
-            htmlFor="pharmacologicalHistory-input"
-            className="flex items-center justify-between text-sm font-semibold text-[#2E3A36]"
-          >
-            <span>
-              2. Antecedentes farmacológicos <span className="text-[#F2A488] font-bold">*</span>
-            </span>
-          </label>
-          <p className="text-xs text-[#5C6E68]">
-            Medicamentos que tomes actualmente, todos, aunque no sean para el peso (incluye
-            anticonceptivos, suplementos o tratamientos continuos).
-          </p>
-          <textarea
-            id="pharmacologicalHistory-input"
-            rows={3}
-            value={formData.pharmacologicalHistory}
-            onChange={(e) => handleChange('pharmacologicalHistory', e.target.value)}
-            onBlur={() => handleBlur('pharmacologicalHistory')}
-            placeholder="Ej. Levotiroxina 50mcg en ayunas, suplemento de vitamina D... (o 'Ninguno actualmente')"
-            className={`w-full px-4 py-3 rounded-xl bg-[#FAF6F0]/80 border text-[#2E3A36] placeholder-[#8E9E99] text-sm transition-all duration-200 focus:outline-hidden focus:ring-2 focus:ring-[#6E9E93]/40 focus:bg-white resize-y ${
-              touched.pharmacologicalHistory && errors.pharmacologicalHistory
-                ? 'border-[#F2A488] bg-[#FDEEE9]/40'
-                : 'border-[#D9D3C8] hover:border-[#AEC9C0]'
-            }`}
-          />
-          {touched.pharmacologicalHistory && errors.pharmacologicalHistory && (
-            <motion.p
-              initial={{ opacity: 0, y: -4 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="text-xs text-[#C66A4D] flex items-center gap-1.5 pl-1"
-            >
-              <Info className="w-3.5 h-3.5 shrink-0" />
-              {errors.pharmacologicalHistory}
-            </motion.p>
-          )}
+        {/* 2. Antecedentes farmacológicos: Lista directa de fármacos y campo abierto para otros */}
+        <div id="field-pharmacologicalHistory" className="space-y-4">
+          <div className="space-y-1">
+            <label className="flex items-center justify-between text-sm font-semibold text-[#2E3A36]">
+              <span className="flex items-center gap-2">
+                <Pill className="w-4 h-4 text-[#6E9E93]" />
+                2. Antecedentes farmacológicos y medicamentos actuales <span className="text-[#F2A488] font-bold">*</span>
+              </span>
+            </label>
+            <p className="text-xs text-[#5C6E68] leading-relaxed">
+              ¿Tomas alguno de estos medicamentos? Selecciónalos si los consumes actualmente:
+            </p>
+          </div>
+
+          {/* Tarjeta contenedora con la lista de medicamentos siempre visible */}
+          <div className="p-4 sm:p-5 rounded-2xl bg-[#FAF6F0]/90 border border-[#AEC9C0]/40 space-y-4">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-[#2E3A36] uppercase tracking-wider">
+                Medicamentos frecuentes:
+              </span>
+              {(formData.selectedObesogenicDrugs?.length || 0) > 0 && (
+                <span className="text-xs px-2.5 py-0.5 rounded-full bg-[#6E9E93] text-white font-medium">
+                  {formData.selectedObesogenicDrugs?.length} seleccionado(s)
+                </span>
+              )}
+            </div>
+
+            {/* Grilla de medicamentos seleccionables */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+              {OBESOGENIC_DRUGS_LIST.map((drug) => {
+                const isSelected = (formData.selectedObesogenicDrugs || []).includes(drug);
+                return (
+                  <button
+                    key={drug}
+                    type="button"
+                    onClick={() => toggleObesogenicDrug(drug)}
+                    className={`px-3 py-2.5 rounded-xl text-xs font-medium border flex items-center justify-between transition-all duration-150 cursor-pointer text-left ${
+                      isSelected
+                        ? 'border-[#6E9E93] bg-[#6E9E93] text-white shadow-2xs font-semibold ring-1 ring-[#6E9E93]'
+                        : 'border-[#D9D3C8] bg-white text-[#2E3A36] hover:border-[#6E9E93] hover:bg-[#EBF3F0]'
+                    }`}
+                  >
+                    <span className="truncate">{drug}</span>
+                    {isSelected ? (
+                      <Check className="w-3.5 h-3.5 shrink-0 ml-1" />
+                    ) : (
+                      <span className="w-3.5 h-3.5 rounded-full border border-[#D9D3C8] shrink-0 ml-1 bg-[#FAF6F0]" />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Espacio abierto para 'Otros medicamentos' */}
+            <div className="pt-3 border-t border-[#E8E2D8] space-y-1.5">
+              <label
+                htmlFor="otherMedications-input"
+                className="text-xs font-semibold text-[#2E3A36] flex items-center justify-between"
+              >
+                <span>Otros medicamentos que tomes:</span>
+                <span className="text-[11px] text-[#5C6E68] font-normal">
+                  (anticonceptivos, tiroides, analgésicos, suplementos, etc.)
+                </span>
+              </label>
+              <textarea
+                id="otherMedications-input"
+                rows={2}
+                value={formData.otherMedicationsDetails || ''}
+                onChange={(e) => handleOtherMedsChange(e.target.value)}
+                onBlur={() => handleBlur('pharmacologicalHistory')}
+                placeholder="Escribe aquí si tomas otros medicamentos, dosis o suplementos habituales (ej. Levotiroxina 50mcg, pastillas anticonceptivas...)"
+                className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-[#D9D3C8] text-[#2E3A36] placeholder-[#8E9E99] text-xs sm:text-sm transition-all duration-200 focus:outline-hidden focus:ring-2 focus:ring-[#6E9E93]/40 resize-y"
+              />
+            </div>
+
+            {/* Botón explícito para indicar que no toma ningún medicamento */}
+            <div className="pt-2 border-t border-[#E8E2D8]/60 flex items-center justify-between">
+              <button
+                type="button"
+                onClick={handleNoMedications}
+                className={`px-3.5 py-2 rounded-xl text-xs font-medium border flex items-center gap-2 transition-all duration-200 cursor-pointer ${
+                  formData.takesObesogenicMedications === 'No' &&
+                  (formData.selectedObesogenicDrugs || []).length === 0 &&
+                  !formData.otherMedicationsDetails?.trim()
+                    ? 'border-[#6E9E93] bg-[#EBF3F0] text-[#2E3A36] ring-1 ring-[#6E9E93]'
+                    : 'border-[#D9D3C8] bg-white text-[#5C6E68] hover:border-[#AEC9C0] hover:bg-[#FAF6F0]'
+                }`}
+              >
+                <div
+                  className={`w-4 h-4 rounded-full border flex items-center justify-center ${
+                    formData.takesObesogenicMedications === 'No' &&
+                    (formData.selectedObesogenicDrugs || []).length === 0 &&
+                    !formData.otherMedicationsDetails?.trim()
+                      ? 'border-[#6E9E93] bg-[#6E9E93]'
+                      : 'border-[#AEC9C0] bg-white'
+                  }`}
+                >
+                  {formData.takesObesogenicMedications === 'No' &&
+                    (formData.selectedObesogenicDrugs || []).length === 0 &&
+                    !formData.otherMedicationsDetails?.trim() && (
+                      <div className="w-1.5 h-1.5 rounded-full bg-white" />
+                    )}
+                </div>
+                <span>No tomo ningún medicamento actualmente</span>
+              </button>
+
+              {((formData.selectedObesogenicDrugs || []).length > 0 || !!formData.otherMedicationsDetails?.trim()) && (
+                <span className="text-[11px] text-[#5B887E] font-medium hidden sm:inline-block">
+                  ✓ Medicación registrada
+                </span>
+              )}
+            </div>
+          </div>
+
+          {(touched.takesObesogenicMedications || touched.pharmacologicalHistory) &&
+            (errors.takesObesogenicMedications || errors.pharmacologicalHistory) && (
+              <motion.p
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="text-xs text-[#C66A4D] flex items-center gap-1.5 pl-1"
+              >
+                <Info className="w-3.5 h-3.5 shrink-0" />
+                {errors.takesObesogenicMedications || errors.pharmacologicalHistory}
+              </motion.p>
+            )}
         </div>
 
         {/* 3. Antecedentes quirúrgicos */}
@@ -1142,18 +1499,297 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
             </h2>
           </div>
           <p className="text-xs text-[#5C6E68] mt-1">
-            Factores biológicos y hereditarios en tu familia directa (padres, hermanos, abuelos).
+            Factores biológicos, metabólicos y hereditarios en tu familia biológica (padres, hermanos, abuelos, tíos).
           </p>
         </div>
 
-        {/* Checklist selección múltiple */}
-        <div id="field-familyHistory" className="space-y-3">
+        {/* 8. Pregunta ampliada y detallada: Antecedentes familiares de obesidad */}
+        <div id="field-hasFamilyObesityHistory" className="space-y-4">
+          <div className="space-y-1">
+            <label className="text-sm font-semibold text-[#2E3A36] flex items-center justify-between">
+              <span className="flex items-center gap-2">
+                <Activity className="w-4 h-4 text-[#6E9E93]" />
+                8. ¿Algún familiar cercano ha presentado antecedentes de obesidad o dificultad importante con el peso? <span className="text-[#F2A488] font-bold">*</span>
+              </span>
+            </label>
+            <p className="text-xs text-[#5C6E68]">
+              La predisposición genética y el entorno metabólico familiar son piezas clave para personalizar tu abordaje integral.
+            </p>
+          </div>
+
+          {/* Selector Sí / No */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={() => handleSelectHasFamilyObesity('Sí')}
+              className={`p-3.5 rounded-2xl border text-left flex items-center justify-between transition-all duration-200 cursor-pointer ${
+                formData.hasFamilyObesityHistory === 'Sí'
+                  ? 'border-[#6E9E93] bg-[#EBF3F0] text-[#2E3A36] ring-1 ring-[#6E9E93]'
+                  : 'border-[#D9D3C8] bg-[#FAF6F0]/60 text-[#5C6E68] hover:border-[#AEC9C0] hover:bg-white'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <div
+                  className={`w-4 h-4 rounded-full border flex items-center justify-center ${
+                    formData.hasFamilyObesityHistory === 'Sí'
+                      ? 'border-[#6E9E93] bg-[#6E9E93]'
+                      : 'border-[#AEC9C0] bg-white'
+                  }`}
+                >
+                  {formData.hasFamilyObesityHistory === 'Sí' && (
+                    <div className="w-1.5 h-1.5 rounded-full bg-white" />
+                  )}
+                </div>
+                <div>
+                  <span className="text-sm font-medium block text-[#2E3A36]">
+                    Sí, en mi familia hay antecedentes
+                  </span>
+                  <span className="text-xs text-[#5C6E68]">Indicar quién, edad de inicio y comorbilidades asociadas</span>
+                </div>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleSelectHasFamilyObesity('No')}
+              className={`p-3.5 rounded-2xl border text-left flex items-center justify-between transition-all duration-200 cursor-pointer ${
+                formData.hasFamilyObesityHistory === 'No'
+                  ? 'border-[#6E9E93] bg-[#EBF3F0] text-[#2E3A36] ring-1 ring-[#6E9E93]'
+                  : 'border-[#D9D3C8] bg-[#FAF6F0]/60 text-[#5C6E68] hover:border-[#AEC9C0] hover:bg-white'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <div
+                  className={`w-4 h-4 rounded-full border flex items-center justify-center ${
+                    formData.hasFamilyObesityHistory === 'No'
+                      ? 'border-[#6E9E93] bg-[#6E9E93]'
+                      : 'border-[#AEC9C0] bg-white'
+                  }`}
+                >
+                  {formData.hasFamilyObesityHistory === 'No' && (
+                    <div className="w-1.5 h-1.5 rounded-full bg-white" />
+                  )}
+                </div>
+                <div>
+                  <span className="text-sm font-medium block text-[#2E3A36]">
+                    No, que yo sepa
+                  </span>
+                  <span className="text-xs text-[#5C6E68]">No hay familiares con obesidad conocida</span>
+                </div>
+              </div>
+            </button>
+          </div>
+
+          {touched.hasFamilyObesityHistory && errors.hasFamilyObesityHistory && (
+            <motion.p
+              initial={{ opacity: 0, y: -4 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="text-xs text-[#C66A4D] flex items-center gap-1.5 pl-1"
+            >
+              <Info className="w-3.5 h-3.5 shrink-0" />
+              {errors.hasFamilyObesityHistory}
+            </motion.p>
+          )}
+
+          {/* Desglose detallado por familiar si responde Sí */}
+          <AnimatePresence>
+            {formData.hasFamilyObesityHistory === 'Sí' && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="space-y-4 pt-1 overflow-hidden"
+              >
+                <div className="p-4 sm:p-5 rounded-2xl bg-[#FAF6F0]/90 border border-[#AEC9C0]/50 space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#E8E2D8] pb-3">
+                    <div>
+                      <h3 className="text-sm font-semibold text-[#2E3A36] flex items-center gap-2">
+                        <Users className="w-4 h-4 text-[#6E9E93]" />
+                        Familiares con obesidad o exceso de peso
+                      </h3>
+                      <p className="text-[11px] text-[#5C6E68] mt-0.5">
+                        Indica quién es cada familiar, cuándo inició y qué comorbilidades presenta (diabetes tipo 2, hipertensión, dislipidemia, eventos cardiovasculares tempranos o SOP/infertilidad).
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleAddFamilyObesityMember}
+                      className="px-3 py-1.5 rounded-xl bg-white border border-[#6E9E93] text-[#2E3A36] text-xs font-semibold hover:bg-[#EBF3F0] transition-colors flex items-center gap-1.5 shrink-0 cursor-pointer self-start sm:self-auto shadow-2xs"
+                    >
+                      <Plus className="w-3.5 h-3.5 text-[#6E9E93]" />
+                      <span>Agregar otro familiar</span>
+                    </button>
+                  </div>
+
+                  {/* Listado de tarjetas de familiares */}
+                  <div className="space-y-4">
+                    {(formData.familyObesityMembers || []).map((member, index) => (
+                      <div
+                        key={member.id || index}
+                        className="p-4 rounded-xl bg-white border border-[#D9D3C8] space-y-3.5 shadow-2xs relative"
+                      >
+                        {/* Encabezado del familiar */}
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs font-bold uppercase tracking-wider text-[#6E9E93] flex items-center gap-1.5">
+                            <span className="w-5 h-5 rounded-full bg-[#EBF3F0] text-[#2E3A36] flex items-center justify-center text-[10px]">
+                              {index + 1}
+                            </span>
+                            Familiar #{index + 1}
+                          </span>
+
+                          {(formData.familyObesityMembers || []).length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveFamilyObesityMember(member.id)}
+                              className="text-[#8E9E99] hover:text-[#C66A4D] transition-colors p-1 rounded-lg hover:bg-[#FDEEE9]/60 cursor-pointer"
+                              title="Eliminar este familiar"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          {/* Parentesco */}
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-semibold text-[#2E3A36] block">
+                              ¿Quién es exactamente? <span className="text-[#F2A488] font-bold">*</span>
+                            </label>
+                            <select
+                              value={member.relationship}
+                              onChange={(e) =>
+                                handleUpdateFamilyObesityMember(member.id, {
+                                  relationship: e.target.value as any,
+                                })
+                              }
+                              className="w-full px-3 py-2.5 rounded-xl bg-[#FAF6F0]/70 border border-[#D9D3C8] text-[#2E3A36] text-xs font-medium focus:outline-hidden focus:ring-2 focus:ring-[#6E9E93]/40 focus:bg-white"
+                            >
+                              {FAMILY_OBESITY_MEMBERS.map((rel) => (
+                                <option key={rel} value={rel}>
+                                  {rel}
+                                </option>
+                              ))}
+                            </select>
+
+                            {member.relationship === 'Otro familiar' && (
+                              <input
+                                type="text"
+                                value={member.otherRelationship || ''}
+                                onChange={(e) =>
+                                  handleUpdateFamilyObesityMember(member.id, {
+                                    otherRelationship: e.target.value,
+                                  })
+                                }
+                                placeholder="Especifica el parentesco (ej. Primo hermano, Sobrina...)"
+                                className="w-full mt-1.5 px-3 py-2 rounded-xl bg-white border border-[#D9D3C8] text-xs text-[#2E3A36] placeholder-[#8E9E99] focus:outline-hidden focus:ring-2 focus:ring-[#6E9E93]/40"
+                              />
+                            )}
+                          </div>
+
+                          {/* Edad de inicio */}
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-semibold text-[#2E3A36] block">
+                              ¿A qué edad comenzó con obesidad o sobrepeso? <span className="text-[#F2A488] font-bold">*</span>
+                            </label>
+                            <select
+                              value={member.onsetAge}
+                              onChange={(e) =>
+                                handleUpdateFamilyObesityMember(member.id, {
+                                  onsetAge: e.target.value as any,
+                                })
+                              }
+                              className="w-full px-3 py-2.5 rounded-xl bg-[#FAF6F0]/70 border border-[#D9D3C8] text-[#2E3A36] text-xs font-medium focus:outline-hidden focus:ring-2 focus:ring-[#6E9E93]/40 focus:bg-white"
+                            >
+                              {FAMILY_OBESITY_ONSET_AGES.map((onset) => (
+                                <option key={onset} value={onset}>
+                                  {onset}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+
+                        {/* Comorbilidades asociadas a este familiar */}
+                        <div className="space-y-2 pt-1 border-t border-[#E8E2D8]">
+                          <label className="text-xs font-semibold text-[#2E3A36] block">
+                            ¿Qué comorbilidades o enfermedades tiene o tuvo este familiar?
+                            <span className="text-[11px] text-[#5C6E68] font-normal block mt-0.5">
+                              Selecciona todas las que correspondan a {member.relationship || 'este familiar'}:
+                            </span>
+                          </label>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {FAMILY_COMORBIDITIES_LIST.map((comorb) => {
+                              const isChecked = (member.comorbidities || []).includes(comorb);
+                              return (
+                                <button
+                                  type="button"
+                                  key={comorb}
+                                  onClick={() => handleToggleMemberComorbidity(member.id, comorb)}
+                                  className={`px-3 py-2 rounded-xl text-left text-xs border flex items-center justify-between transition-all cursor-pointer ${
+                                    isChecked
+                                      ? 'border-[#6E9E93] bg-[#EBF3F0] text-[#2E3A36] font-semibold ring-1 ring-[#6E9E93]'
+                                      : 'border-[#D9D3C8] bg-[#FAF6F0]/50 text-[#5C6E68] hover:border-[#AEC9C0] hover:bg-white'
+                                  }`}
+                                >
+                                  <span className="pr-1">{comorb}</span>
+                                  <div
+                                    className={`w-4 h-4 rounded-md border flex items-center justify-center shrink-0 ${
+                                      isChecked
+                                        ? 'bg-[#6E9E93] border-[#6E9E93] text-white'
+                                        : 'border-[#C8C2B7] bg-white'
+                                    }`}
+                                  >
+                                    {isChecked && <Check className="w-3 h-3 stroke-[3]" />}
+                                  </div>
+                                </button>
+                              );
+                            })}
+                          </div>
+
+                          {/* Campo abierto opcional de otras comorbilidades para este familiar */}
+                          <div className="pt-1">
+                            <input
+                              type="text"
+                              value={member.otherComorbidities || ''}
+                              onChange={(e) =>
+                                handleUpdateFamilyObesityMember(member.id, {
+                                  otherComorbidities: e.target.value,
+                                })
+                              }
+                              placeholder="Otras condiciones médicas conocidas de este familiar (opcional)..."
+                              className="w-full px-3 py-2 rounded-xl bg-[#FAF6F0]/40 border border-[#D9D3C8] text-xs text-[#2E3A36] placeholder-[#8E9E99] focus:outline-hidden focus:ring-2 focus:ring-[#6E9E93]/40 focus:bg-white"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {errors.familyObesityMembers && (
+                    <motion.p
+                      initial={{ opacity: 0, y: -4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="text-xs text-[#C66A4D] flex items-center gap-1.5 pl-1"
+                    >
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                      {errors.familyObesityMembers}
+                    </motion.p>
+                  )}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        {/* 9. Otras condiciones familiares biológicas (Checklist general) */}
+        <div id="field-familyHistory" className="space-y-3 pt-4 border-t border-[#E8E2D8]">
           <label className="text-sm font-semibold text-[#2E3A36] block">
-            8. ¿Alguien en tu familia directa (padres, hermanos, abuelos) ha tenido...?
+            9. Además, ¿alguien en tu familia directa (padres, hermanos, abuelos) ha tenido alguna de estas condiciones?
           </label>
           <p className="text-xs text-[#5C6E68]">
-            Selecciona todas las condiciones que apliquen. Si no aplica ninguna, puedes dejarlas sin
-            marcar.
+            Selecciona todas las condiciones adicionales que apliquen en tu linaje familiar. Si no aplica ninguna, déjalas sin marcar.
           </p>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
