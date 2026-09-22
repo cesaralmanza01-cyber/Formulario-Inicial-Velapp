@@ -286,7 +286,7 @@ export function generatePatientQuestionnairePdfDoc(
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7.5);
     doc.setTextColor(110, 125, 120);
-    doc.text('Evolución histórica y momentos de fluctuación registrados por el paciente', boxX + 12, boxY + 23);
+    doc.text('Evolución histórica y momentos de fluctuación registrados en el cuestionario', boxX + 12, boxY + 23);
 
     // Dynamic min & max Y range
     const rawMin = Math.min(...validWeights);
@@ -905,6 +905,15 @@ export function generatePatientQuestionnairePdfDoc(
   ) => {
     if (!files || files.length === 0) return;
 
+    checkPageBreak(30);
+    doc.setFillColor(235, 243, 240);
+    doc.roundedRect(margin + 6, y, contentWidth - 12, 16, 2, 2, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8.5);
+    doc.setTextColor(52, 106, 96);
+    doc.text(`Documentos y Archivos Adjuntos - ${categoryTitle} (${files.length})`, margin + 14, y + 11);
+    y += 22;
+
     for (const f of files) {
       let dataUrl = f.dataUrl || getFileDataUrl(f.id, f.name);
 
@@ -1001,18 +1010,24 @@ export function generatePatientQuestionnairePdfDoc(
         }
       } else {
         // PDF or remote document representation card
-        checkPageBreak(36);
-        const cardH = f.description ? 34 : 26;
+        checkPageBreak(40);
+        const cardH = f.description ? 38 : 30;
         doc.setFillColor(250, 246, 240);
         doc.roundedRect(margin + 6, y, contentWidth - 12, cardH, 3, 3, 'F');
         doc.setDrawColor(217, 211, 200);
         doc.setLineWidth(0.5);
         doc.roundedRect(margin + 6, y, contentWidth - 12, cardH, 3, 3, 'S');
 
+        const sizeStr = f.size
+          ? f.size > 1024 * 1024
+            ? ` (${(f.size / (1024 * 1024)).toFixed(1)} MB)`
+            : ` (${Math.round(f.size / 1024)} KB)`
+          : '';
+
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(8.5);
-        doc.setTextColor(91, 136, 126);
-        doc.text(`• Documento PDF adjunto: ${f.name || 'Archivo'}`, margin + 14, y + 12);
+        doc.setTextColor(52, 106, 96);
+        doc.text(`• Documento PDF adjunto: ${f.name || 'Archivo'}${sizeStr}`, margin + 14, y + 11);
 
         const targetUrl =
           f.downloadUrl ||
@@ -1024,14 +1039,14 @@ export function generatePatientQuestionnairePdfDoc(
           doc.setFont('helvetica', 'bold');
           doc.setFontSize(8);
           doc.setTextColor(52, 106, 96);
-          doc.textWithLink('→ Ver documento completo en Google Drive / Nube', margin + 14, y + (f.description ? 22 : 20), {
+          doc.textWithLink('→ Ver documento completo en Google Drive / Nube', margin + 14, y + 20, {
             url: targetUrl,
           });
         } else {
           doc.setFont('helvetica', 'normal');
           doc.setFontSize(8);
           doc.setTextColor(92, 110, 104);
-          doc.text('Documento PDF registrado y respaldado en el expediente clínico', margin + 14, y + (f.description ? 22 : 20));
+          doc.text('Documento PDF registrado y respaldado en el expediente clínico', margin + 14, y + 20);
         }
 
         if (f.description) {
@@ -1053,7 +1068,7 @@ export function generatePatientQuestionnairePdfDoc(
     printSectionTitle('8. REPORTE INBODY / COMPOSICIÓN CORPORAL');
     printField('¿Cuenta con reporte InBody o examen de bioimpedancia?', patient.inbody.hasInBodyReport || 'No');
     printField('Fecha del examen y/o Centro médico', patient.inbody.testDateOrCenter);
-    printField('Métricas conocidas por la paciente', patient.inbody.knownMetrics, true);
+    printField('Métricas conocidas por el/la paciente', patient.inbody.knownMetrics, true);
 
     // If intelligent extraction exists, render full structured metrics table
     if (patient.inbody.extractedMetrics) {

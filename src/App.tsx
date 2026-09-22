@@ -15,9 +15,14 @@ import { StepInBodyForm } from './components/StepInBodyForm';
 import { StepClosureScreen } from './components/StepClosureScreen';
 import { StepCompletionModal } from './components/StepCompletionModal';
 import { AdminPortal } from './components/AdminPortal';
+import { LoginScreen } from './components/LoginScreen';
+import { InvitationActivationScreen } from './components/InvitationActivationScreen';
+import { DoctorDashboard } from './components/DoctorDashboard';
 import { VelaIcon } from './components/VelaIcon';
 import { saveQuestionnaireToFirestore } from './services/questionnaireService';
+import { authService } from './services/authService';
 import { checkAndHandleNuevoParam, clearDraftStorage } from './utils/draftStorage';
+import { rehydrateUploadedFiles } from './utils/fileMemoryStore';
 import {
   PatientBasicInfo,
   PatientMotivationInfo,
@@ -28,6 +33,7 @@ import {
   PatientPhysicalActivityInfo,
   PatientLabExamsInfo,
   PatientInBodyInfo,
+  AppUser,
 } from './types';
 import { ShieldCheck, Heart, Lock } from 'lucide-react';
 
@@ -35,6 +41,17 @@ export default function App() {
   // Check if ?nuevo=1 or ?nuevo=true is in the URL to start with a pristine, blank questionnaire.
   // Runs synchronously before state initializers evaluate localStorage.
   checkAndHandleNuevoParam();
+
+  // Authentication & Session State
+  const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
+  const [isAuthChecking, setIsAuthChecking] = useState<boolean>(true);
+
+  // Check for invitation token in URL query (e.g. ?invitacion=XYZ or ?token=XYZ)
+  const [invitationToken, setInvitationToken] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null;
+    const params = new URLSearchParams(window.location.search);
+    return params.get('invitacion') || params.get('token') || null;
+  });
 
   const [isAdminView, setIsAdminView] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
@@ -44,6 +61,27 @@ export default function App() {
       window.location.search.includes('admin=true')
     );
   });
+
+  useEffect(() => {
+    let isMounted = true;
+    authService
+      .checkCurrentSession()
+      .then(({ authenticated, user }) => {
+        if (isMounted) {
+          if (authenticated && user) {
+            setCurrentUser(user);
+          }
+          setIsAuthChecking(false);
+        }
+      })
+      .catch(() => {
+        if (isMounted) setIsAuthChecking(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     const handleHashChange = () => {
@@ -110,6 +148,28 @@ export default function App() {
     return saved ? JSON.parse(saved) : null;
   });
 
+  // Rehydrate any missing file dataUrls from IndexedDB on initial mount
+  useEffect(() => {
+    let isMounted = true;
+    if (step9Data?.files && step9Data.files.some((f) => !f.dataUrl)) {
+      rehydrateUploadedFiles(step9Data.files).then((restored) => {
+        if (isMounted) {
+          setStep9Data((prev) => (prev ? { ...prev, files: restored } : prev));
+        }
+      });
+    }
+    if (stepInBodyData?.files && stepInBodyData.files.some((f) => !f.dataUrl)) {
+      rehydrateUploadedFiles(stepInBodyData.files).then((restored) => {
+        if (isMounted) {
+          setStepInBodyData((prev) => (prev ? { ...prev, files: restored } : prev));
+        }
+      });
+    }
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
 
   // Sync to Firestore whenever state changes or step advances without causing unneeded re-renders
@@ -132,6 +192,8 @@ export default function App() {
       const isSaved = overrides?.isSavedByPatient ?? (localStorage.getItem('vela_patient_has_saved') === 'true');
       await saveQuestionnaireToFirestore({
         currentStep: targetStep,
+        userId: currentUser?.id,
+        userEmail: currentUser?.email,
         isComplete: overrides?.isComplete ?? isSaved,
         isSavedByPatient: isSaved,
         step1Data: overrides?.step1 !== undefined ? overrides.step1 : step1Data,
@@ -148,6 +210,7 @@ export default function App() {
       console.warn('Firestore autosync notice (data kept in local storage safely):', e);
     }
   }, [
+    currentUser,
     currentStep,
     step1Data,
     step2Data,
@@ -292,6 +355,35 @@ export default function App() {
     });
   };
 
+  // Pre-fill patient name from authenticated account if not yet entered
+  useEffect(() => {
+    if (currentUser && currentUser.rol === 'paciente' && currentUser.nombre) {
+      setStep1Data((prev) => {
+        if (!prev || !prev.fullName) {
+          return {
+            fullName: currentUser.nombre,
+            documentType: prev?.documentType || 'CC',
+            documentNumber: prev?.documentNumber || '',
+            birthDate: prev?.birthDate || '',
+            age: prev?.age || '',
+            occupation: prev?.occupation || '',
+            civilStatus: prev?.civilStatus || '',
+            referralSource: prev?.referralSource || '',
+            referralOtherDetails: prev?.referralOtherDetails || '',
+          };
+        }
+        return prev;
+      });
+    }
+  }, [currentUser]);
+
+  const handleLogout = async () => {
+    await authService.logout();
+    setCurrentUser(null);
+    setIsAdminView(false);
+    window.location.hash = '';
+  };
+
   const handleResetDraft = () => {
     clearDraftStorage();
     setCurrentStep(0);
@@ -304,24 +396,108 @@ export default function App() {
     setStep7Data(null);
     setStep9Data(null);
     setStepInBodyData(null);
-    window.location.href = window.location.pathname;
+    if (currentUser?.nombre) {
+      setStep1Data({
+        fullName: currentUser.nombre,
+        documentType: 'CC',
+        documentNumber: '',
+        birthDate: '',
+        age: '',
+        occupation: '',
+        civilStatus: '',
+        referralSource: '',
+        referralOtherDetails: '',
+      });
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  if (isAdminView) {
+  // 1. Initial Auth Check (Gentle loading state)
+  if (isAuthChecking) {
     return (
-      <AdminPortal
-        onBackToApp={() => {
-          setIsAdminView(false);
-          window.location.hash = '';
+      <div id="auth_checking_container" className="min-h-screen bg-[#faf6f0] flex flex-col justify-center items-center px-4 font-sans text-center">
+        <div className="w-16 h-16 rounded-2xl bg-[#346a60] flex items-center justify-center shadow-md mb-4 animate-pulse">
+          <VelaIcon className="w-10 h-10 text-[#fdfbf7]" />
+        </div>
+        <h2 className="text-xl font-serif text-[#1b3d36] mb-1">Vela Medicina & Nutrición</h2>
+        <p className="text-xs text-[#526a63]">Cargando espacio clínico...</p>
+      </div>
+    );
+  }
+
+  // 2. Patient Invitation Activation Screen
+  if (invitationToken && !currentUser) {
+    return (
+      <InvitationActivationScreen
+        token={invitationToken}
+        onActivationSuccess={(user) => {
+          setCurrentUser(user);
+          setInvitationToken(null);
+          try {
+            const url = new URL(window.location.href);
+            url.searchParams.delete('invitacion');
+            url.searchParams.delete('token');
+            window.history.replaceState({}, '', url.pathname);
+          } catch {
+            // non-blocking
+          }
+        }}
+        onGoToLogin={() => {
+          setInvitationToken(null);
+          try {
+            const url = new URL(window.location.href);
+            url.searchParams.delete('invitacion');
+            url.searchParams.delete('token');
+            window.history.replaceState({}, '', url.pathname);
+          } catch {
+            // non-blocking
+          }
         }}
       />
     );
   }
 
+  // 3. Unauthenticated Screen (Protects questionnaire and doctor panel)
+  if (!currentUser) {
+    return (
+      <LoginScreen
+        onLoginSuccess={(user) => {
+          setCurrentUser(user);
+        }}
+        defaultRole={isAdminView ? 'doctora' : 'paciente'}
+      />
+    );
+  }
+
+  // 4. Doctor Role Screen
+  if (currentUser.rol === 'doctora') {
+    if (isAdminView) {
+      return (
+        <AdminPortal
+          onBackToApp={() => {
+            setIsAdminView(false);
+            window.location.hash = '';
+          }}
+        />
+      );
+    }
+    return (
+      <DoctorDashboard
+        currentUser={currentUser}
+        onLogout={handleLogout}
+      />
+    );
+  }
+
+  // 5. Patient Role Screen (Protected Questionnaire)
   return (
     <div className="min-h-screen bg-[#FAF6F0] flex flex-col selection:bg-[#AEC9C0]/40 selection:text-[#2E3A36]">
-      {/* Brand Header */}
-      <Header onResetDraft={handleResetDraft} />
+      {/* Brand Header with Patient Info & Logout */}
+      <Header
+        onResetDraft={handleResetDraft}
+        currentUser={currentUser}
+        onLogout={handleLogout}
+      />
 
       {/* Multi-step Wizard Progress Bar */}
       <WizardProgress
@@ -477,6 +653,7 @@ export default function App() {
                 initialData={step9Data || undefined}
                 onBack={handleStepNineBack}
                 onContinue={handleStepNineContinue}
+                onAutoSave={(data) => setStep9Data(data)}
               />
             </motion.div>
           )}
@@ -494,6 +671,7 @@ export default function App() {
                 onBack={handleStepInBodyBack}
                 onContinue={handleStepInBodyContinue}
                 onSaveResponses={handleSaveStepInBodyResponses}
+                onAutoSave={(data) => setStepInBodyData(data)}
               />
             </motion.div>
           )}

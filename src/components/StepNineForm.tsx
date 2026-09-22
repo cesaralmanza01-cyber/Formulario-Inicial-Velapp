@@ -27,12 +27,14 @@ import {
   compressImageFileToDataUrl,
   storeFileDataUrl,
   getFileDataUrl,
+  rehydrateUploadedFiles,
 } from '../utils/fileMemoryStore';
 
 interface StepNineFormProps {
   initialData?: PatientLabExamsInfo;
   onBack: () => void;
   onContinue: (data: PatientLabExamsInfo) => void;
+  onAutoSave?: (data: PatientLabExamsInfo) => void;
 }
 
 const formatFileSize = (bytes: number): string => {
@@ -47,6 +49,7 @@ export const StepNineForm: React.FC<StepNineFormProps> = ({
   initialData,
   onBack,
   onContinue,
+  onAutoSave,
 }) => {
   const [formData, setFormData] = useState<PatientLabExamsInfo>(() => {
     let baseData: PatientLabExamsInfo | null = initialData || null;
@@ -85,15 +88,45 @@ export const StepNineForm: React.FC<StepNineFormProps> = ({
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Auto-save draft with safety for localStorage quota and persistence in memory
+  // Mount effect: Ensure all files with missing dataUrls are rehydrated from IndexedDB/memory
   useEffect(() => {
-    // Store all current dataUrls in fileMemoryStore
+    let isMounted = true;
+    if (formData.files && formData.files.length > 0) {
+      const hasMissing = formData.files.some((f) => !f.dataUrl);
+      if (hasMissing) {
+        rehydrateUploadedFiles(formData.files).then((restored) => {
+          if (isMounted) {
+            const hasUpdates = restored.some((r, i) => r.dataUrl && !formData.files[i]?.dataUrl);
+            if (hasUpdates) {
+              setFormData((prev) => ({
+                ...prev,
+                files: restored,
+              }));
+            }
+          }
+        });
+      }
+    }
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // Auto-save draft with safety for localStorage quota and persistence in IndexedDB + App state
+  useEffect(() => {
+    // 1. Store all current dataUrls in fileMemoryStore (memory + IndexedDB)
     formData.files.forEach((f) => {
       if (f.dataUrl) {
         storeFileDataUrl(f.id, f.dataUrl, f.name);
       }
     });
 
+    // 2. Notify parent App state immediately so cross-step navigation never loses state
+    if (onAutoSave) {
+      onAutoSave(formData);
+    }
+
+    // 3. Persist to localStorage with fallback if base64 exceeds quota
     try {
       localStorage.setItem('vela_step9_data', JSON.stringify(formData));
     } catch (e) {
@@ -115,7 +148,7 @@ export const StepNineForm: React.FC<StepNineFormProps> = ({
         console.warn('Could not cache lab exams to localStorage', err);
       }
     }
-  }, [formData]);
+  }, [formData, onAutoSave]);
 
   const validate = (): boolean => {
     const errs: StepNineErrors = {};
@@ -299,13 +332,11 @@ export const StepNineForm: React.FC<StepNineFormProps> = ({
                         ...prev,
                         hasRecentLabs: val,
                       }));
-                      if (attemptedSubmit) {
-                        setErrors((prev) => ({
-                          ...prev,
-                          hasRecentLabs: undefined,
-                          files: undefined,
-                        }));
-                      }
+                      setErrors((prev) => ({
+                        ...prev,
+                        hasRecentLabs: undefined,
+                        ...(val === 'No' ? { files: undefined } : {}),
+                      }));
                     }}
                     className={`px-6 py-2.5 rounded-xl text-xs sm:text-sm font-medium border transition-all cursor-pointer ${
                       isSelected

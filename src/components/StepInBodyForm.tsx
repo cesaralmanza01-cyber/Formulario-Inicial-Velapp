@@ -34,6 +34,7 @@ import {
   compressImageFileToDataUrl,
   storeFileDataUrl,
   getFileDataUrl,
+  rehydrateUploadedFiles,
 } from '../utils/fileMemoryStore';
 
 interface StepInBodyFormProps {
@@ -41,6 +42,7 @@ interface StepInBodyFormProps {
   onBack: () => void;
   onContinue: (data: PatientInBodyInfo) => void;
   onSaveResponses?: (data: PatientInBodyInfo) => Promise<void>;
+  onAutoSave?: (data: PatientInBodyInfo) => void;
 }
 
 const formatFileSize = (bytes: number): string => {
@@ -56,6 +58,7 @@ export const StepInBodyForm: React.FC<StepInBodyFormProps> = ({
   onBack,
   onContinue,
   onSaveResponses,
+  onAutoSave,
 }) => {
   const [formData, setFormData] = useState<PatientInBodyInfo>(() => {
     let baseData: PatientInBodyInfo | null = initialData || null;
@@ -101,13 +104,42 @@ export const StepInBodyForm: React.FC<StepInBodyFormProps> = ({
   const [saveSuccessMessage, setSaveSuccessMessage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Auto-save draft with safety for storage limits and preserve dataUrl in memory
+  // Mount effect: Ensure any files with missing dataUrls are rehydrated from IndexedDB/memory
+  useEffect(() => {
+    let isMounted = true;
+    if (formData.files && formData.files.length > 0) {
+      const hasMissing = formData.files.some((f) => !f.dataUrl);
+      if (hasMissing) {
+        rehydrateUploadedFiles(formData.files).then((restored) => {
+          if (isMounted) {
+            const hasUpdates = restored.some((r, i) => r.dataUrl && !formData.files[i]?.dataUrl);
+            if (hasUpdates) {
+              setFormData((prev) => ({
+                ...prev,
+                files: restored,
+              }));
+            }
+          }
+        });
+      }
+    }
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // Auto-save draft with safety for storage limits and preserve dataUrl in memory & IndexedDB
   useEffect(() => {
     formData.files.forEach((f) => {
       if (f.dataUrl) {
         storeFileDataUrl(f.id, f.dataUrl, f.name);
       }
     });
+
+    // Notify parent so App state is always synchronized
+    if (onAutoSave) {
+      onAutoSave(formData);
+    }
 
     try {
       localStorage.setItem('vela_step10_inbody_data', JSON.stringify(formData));
@@ -129,7 +161,7 @@ export const StepInBodyForm: React.FC<StepInBodyFormProps> = ({
         console.warn('Could not save InBody draft to localStorage', err);
       }
     }
-  }, [formData]);
+  }, [formData, onAutoSave]);
 
   // Extract InBody metrics automatically from uploaded document
   const analyzeInBodyDocument = async (fileDataUrl: string, fileType: string, fileName: string) => {
@@ -421,13 +453,11 @@ export const StepInBodyForm: React.FC<StepInBodyFormProps> = ({
                         ...prev,
                         hasInBodyReport: val,
                       }));
-                      if (attemptedSubmit) {
-                        setErrors((prev) => ({
-                          ...prev,
-                          hasInBodyReport: undefined,
-                          files: undefined,
-                        }));
-                      }
+                      setErrors((prev) => ({
+                        ...prev,
+                        hasInBodyReport: undefined,
+                        ...(val === 'No' ? { files: undefined } : {}),
+                      }));
                     }}
                     className={`px-6 py-2.5 rounded-xl text-xs sm:text-sm font-medium border transition-all cursor-pointer ${
                       isSelected

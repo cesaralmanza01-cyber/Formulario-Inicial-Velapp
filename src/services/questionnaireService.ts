@@ -144,11 +144,15 @@ function sanitizeLabFiles(files?: UploadedLabFile[]): UploadedLabFile[] {
   }));
 }
 
+import { authService } from './authService';
+
 /**
  * Saves or updates the patient questionnaire in Firestore and local backup
  */
 export async function saveQuestionnaireToFirestore(params: {
   currentStep: number;
+  userId?: string;
+  userEmail?: string;
   isComplete?: boolean;
   isSavedByPatient?: boolean;
   step1Data?: PatientBasicInfo | null;
@@ -165,7 +169,7 @@ export async function saveQuestionnaireToFirestore(params: {
   driveWebViewLink?: string;
   driveFolderId?: string;
 }): Promise<string> {
-  const patientId = await ensurePatientAuth();
+  const patientId = params.userId || (await ensurePatientAuth());
 
   // Combine passed data with cached localStorage data so nothing is ever overwritten with null
   const step1 = params.step1Data ?? getCachedStepData<PatientBasicInfo>('vela_step1_data');
@@ -215,6 +219,8 @@ export async function saveQuestionnaireToFirestore(params: {
 
   const rawDocData: Record<string, any> = {
     patientId,
+    userId: params.userId || null,
+    userEmail: params.userEmail || null,
     patientName: step1?.fullName?.trim() || 'Paciente en registro',
     patientDocument: step1?.documentNumber?.trim() || '',
     status,
@@ -272,6 +278,13 @@ export async function saveQuestionnaireToFirestore(params: {
     localStorage.setItem('vela_submitted_questionnaires', JSON.stringify(filtered.slice(0, 20)));
   } catch (err) {
     console.warn('Local backup write notice:', err);
+  }
+
+  // 3. Link progress with authenticated user record
+  if (params.userId) {
+    authService.linkQuestionnaire(patientId, isDone, driveLink || undefined).catch(() => {
+      // non-blocking
+    });
   }
 
   return patientId;

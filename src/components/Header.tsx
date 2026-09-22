@@ -2,14 +2,17 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { VelaLogo } from './VelaLogo';
 import { VelaIcon } from './VelaIcon';
-import { Heart, RotateCcw, Link2, Check, AlertTriangle } from 'lucide-react';
+import { Heart, RotateCcw, Link2, Check, AlertTriangle, LogOut, User } from 'lucide-react';
 import { getCleanNewPatientUrl } from '../utils/draftStorage';
+import { AppUser } from '../types';
 
 interface HeaderProps {
   onResetDraft?: () => void;
+  currentUser?: AppUser | null;
+  onLogout?: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ onResetDraft }) => {
+export const Header: React.FC<HeaderProps> = ({ onResetDraft, currentUser, onLogout }) => {
   const [showConfirmModal, setShowConfirmModal] = useState<boolean>(false);
   const [copied, setCopied] = useState<boolean>(false);
 
@@ -102,6 +105,28 @@ export const Header: React.FC<HeaderProps> = ({ onResetDraft }) => {
               </span>
             </div>
 
+            {/* Patient session badge & Logout button */}
+            {currentUser && onLogout && (
+              <div className="flex items-center gap-2 pl-2 border-l border-[#AEC9C0]/30">
+                <div className="hidden sm:flex flex-col items-end text-right">
+                  <span className="text-xs font-bold text-[#1b3d36] max-w-[130px] truncate" title={currentUser.nombre}>
+                    {currentUser.nombre.split(' ')[0]}
+                  </span>
+                  <span className="text-[10px] text-[#526a63]">Paciente</span>
+                </div>
+                <button
+                  type="button"
+                  id="btn-header-logout"
+                  onClick={onLogout}
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-medium text-[#5C6E68] hover:text-[#C05646] bg-white/90 hover:bg-[#FDF2F0] border border-[#D9D3C8] hover:border-[#E8B4A6] transition-all cursor-pointer shadow-2xs"
+                  title="Cerrar sesión"
+                >
+                  <LogOut className="w-3.5 h-3.5 text-[#8E9E99] hover:text-[#C05646]" />
+                  <span className="hidden sm:inline">Cerrar sesión</span>
+                </button>
+              </div>
+            )}
+
             <div
               title="Vela — Dra. Lorena Castro"
               className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-white border border-[#AEC9C0]/40 shadow-xs flex items-center justify-center transition-transform hover:scale-105 shrink-0"
@@ -142,7 +167,7 @@ export const Header: React.FC<HeaderProps> = ({ onResetDraft }) => {
                   ¿Reiniciar cuestionario?
                 </h3>
                 <p className="text-xs text-[#5C6E68] leading-relaxed">
-                  ¿Seguro que quieres reiniciar? Se perderá el progreso actual guardado en este navegador y el cuestionario volverá a comenzar en blanco desde el inicio.
+                  ¿Confirmas que deseas reiniciar? Se perderá el progreso actual guardado en este navegador y el cuestionario volverá a comenzar en blanco desde el inicio.
                 </p>
               </div>
 

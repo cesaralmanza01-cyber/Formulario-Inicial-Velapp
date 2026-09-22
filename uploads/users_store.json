@@ -1,0 +1,22 @@
+[
+  {
+    "id": "doc_comerconcalma_gmail_com",
+    "email": "comerconcalma@gmail.com",
+    "nombre": "Dra. Lorena Castro",
+    "rol": "doctora",
+    "password": "$2b$10$M6XOW3F06mGlfDEz0B5wBOrJvtvCK9/LSxLsHARU6tmXOWe9ASv7e",
+    "estado": "registrado",
+    "fechaCreacion": "2026-09-16T21:05:51.067Z",
+    "fechaActualizacion": "2026-09-22T20:09:54.474Z"
+  },
+  {
+    "id": "pac_1789602044570_e09894b5",
+    "email": "paciente.ejemplo@vela.co",
+    "nombre": "Paciente Ejemplo",
+    "rol": "paciente",
+    "estado": "invitado",
+    "invitationToken": "9f58d6539adc67393c735a6ad52b874342cd7250f02ce5a3",
+    "invitationCreatedAt": "2026-09-16T23:40:44.570Z",
+    "fechaCreacion": "2026-09-16T23:40:44.570Z"
+  }
+]

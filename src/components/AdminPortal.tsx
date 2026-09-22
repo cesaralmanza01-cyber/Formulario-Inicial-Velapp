@@ -572,7 +572,7 @@ export function AdminPortal({ onBackToApp }: AdminPortalProps) {
                   Autorización única del Administrador Médico (OAuth con Refresh Token)
                 </p>
                 <p className="text-[#5C6E68]">
-                  Al presionar <strong>"Conectar Google Drive"</strong>, autorizas a la aplicación a subir archivos en tu cuenta de Google (<code className="bg-white/80 px-1.5 py-0.5 rounded border border-[#588377]/20 font-mono text-[11px]">comerconcalma@gmail.com</code>). El servidor guardará el token de actualización de forma segura en Firestore para que cuando cualquier paciente complete su formulario, el PDF se deposite automáticamente en tu carpeta sin que la paciente deba iniciar sesión.
+                  Al presionar <strong>"Conectar Google Drive"</strong>, autorizas a la aplicación a subir archivos en tu cuenta de Google (<code className="bg-white/80 px-1.5 py-0.5 rounded border border-[#588377]/20 font-mono text-[11px]">comerconcalma@gmail.com</code>). El servidor guardará el token de actualización de forma segura en Firestore para que cuando cualquier paciente complete su formulario, el PDF se deposite automáticamente en tu carpeta sin que cada paciente deba iniciar sesión en Google.
                 </p>
               </div>
             </div>

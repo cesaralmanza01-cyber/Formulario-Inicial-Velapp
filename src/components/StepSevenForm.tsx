@@ -121,11 +121,11 @@ const INTENSITY_OPTIONS = [
 ];
 
 const MOTIVATION_LABELS: Record<number, string> = {
-  1: '1 • Nada motivada',
-  2: '2 • Poco motivada',
+  1: '1 • Sin motivación / Nula',
+  2: '2 • Motivación baja',
   3: '3 • Moderada / Con dudas',
-  4: '4 • Bastante motivada',
-  5: '5 • Muy motivada y lista',
+  4: '4 • Buena motivación',
+  5: '5 • Muy alta motivación y disposición',
 };
 
 export const StepSevenForm: React.FC<StepSevenFormProps> = ({
@@ -838,7 +838,7 @@ export const StepSevenForm: React.FC<StepSevenFormProps> = ({
         >
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
             <label className="text-xs sm:text-sm font-semibold text-[#2E3A36]">
-              11. ¿Qué tan motivada te sientes hoy para empezar o retomar una rutina de ejercicio estructurado? <strong className="text-[#C66A4D]">*</strong>
+              11. ¿Qué nivel de motivación tienes hoy para empezar o retomar una rutina de ejercicio estructurado? <strong className="text-[#C66A4D]">*</strong>
             </label>
             <span className="text-xs font-semibold text-[#5B887E] bg-[#EBF3F0] px-3 py-1 rounded-full border border-[#6E9E93]/30 self-start sm:self-auto">
               {MOTIVATION_LABELS[formData.motivationStructuredExercise || 3]}
@@ -873,9 +873,9 @@ export const StepSevenForm: React.FC<StepSevenFormProps> = ({
               })}
             </div>
             <div className="flex justify-between text-[11px] text-[#5C6E68] font-medium px-1">
-              <span>1 = Nada motivada</span>
+              <span>1 = Sin motivación</span>
               <span className="hidden sm:inline">3 = Intermedia</span>
-              <span>5 = Muy motivada</span>
+              <span>5 = Muy alta motivación</span>
             </div>
           </div>
         </div>
@@ -887,7 +887,7 @@ export const StepSevenForm: React.FC<StepSevenFormProps> = ({
         >
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
             <label className="text-xs sm:text-sm font-semibold text-[#2E3A36]">
-              12. ¿Qué tan motivada te sientes para incluir más movimiento en tu día a día (caminar más, escaleras, pararte más)? <strong className="text-[#C66A4D]">*</strong>
+              12. ¿Qué nivel de motivación tienes para incluir más movimiento en tu día a día (caminar más, escaleras, pararte más)? <strong className="text-[#C66A4D]">*</strong>
             </label>
             <span className="text-xs font-semibold text-[#C66A4D] bg-[#FDEEE9] px-3 py-1 rounded-full border border-[#F2A488]/40 self-start sm:self-auto">
               {MOTIVATION_LABELS[formData.motivationDailyMovement || 4]}
@@ -922,9 +922,9 @@ export const StepSevenForm: React.FC<StepSevenFormProps> = ({
               })}
             </div>
             <div className="flex justify-between text-[11px] text-[#5C6E68] font-medium px-1">
-              <span>1 = Nada motivada</span>
+              <span>1 = Sin motivación</span>
               <span className="hidden sm:inline">3 = Intermedia</span>
-              <span>5 = Muy motivada</span>
+              <span>5 = Muy alta motivación</span>
             </div>
           </div>
         </div>

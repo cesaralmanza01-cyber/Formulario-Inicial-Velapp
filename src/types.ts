@@ -1,10 +1,14 @@
 export type CivilStatus =
+  | 'Soltero/a'
+  | 'Casado/a'
+  | 'Unión libre'
+  | 'Divorciado/a'
+  | 'Viudo/a'
+  | 'Prefiero no decir'
   | 'Soltera'
   | 'Casada'
-  | 'Unión libre'
   | 'Divorciada'
-  | 'Viuda'
-  | 'Prefiero no decir';
+  | 'Viuda';
 
 export type ReferralSource =
   | 'Instagram'
@@ -205,7 +209,7 @@ export const FAMILY_COMORBIDITIES_LIST = [
   'Hipertensión arterial',
   'Dislipidemia (colesterol o triglicéridos elevados)',
   'Evento cardiovascular a temprana edad (infarto / ACV)',
-  'Síndrome de ovario poliquístico (SOP) o infertilidad (mujeres)',
+  'Síndrome de ovario poliquístico (SOP) o problemas de fertilidad',
 ] as const;
 
 export type FamilyComorbidity = (typeof FAMILY_COMORBIDITIES_LIST)[number];
@@ -421,9 +425,60 @@ export interface UploadedLabFile {
   uploadedAt?: string;
 }
 
+export type UserRole = 'doctora' | 'paciente';
+export type UserStatus = 'invitado' | 'registrado';
+export type PatientClinicalStatus = 'invitado' | 'cuenta creada' | 'cuestionario completado';
+
+export interface AppUser {
+  id: string;
+  email: string;
+  nombre: string;
+  rol: UserRole;
+  estado: UserStatus;
+  fechaCreacion?: string;
+  fechaRegistro?: string;
+  cuestionarioCompletado?: boolean;
+  cuestionarioId?: string;
+}
+
+export interface PatientListItem {
+  id: string;
+  nombre: string;
+  email: string;
+  rol: 'paciente';
+  estado: UserStatus;
+  clinicalStatus: PatientClinicalStatus;
+  fechaCreacion: string;
+  fechaRegistro?: string;
+  invitationToken?: string;
+  inviteLink?: string;
+  cuestionarioCompletado: boolean;
+  cuestionarioId?: string;
+  cuestionarioUpdatedAt?: string;
+  cuestionarioDriveLink?: string;
+  cuestionarioStep?: number;
+}
+
+export interface InvitationDetails {
+  token: string;
+  email: string;
+  nombre: string;
+  estado: UserStatus;
+  valid: boolean;
+}
+
+export interface AuthResponse {
+  success: boolean;
+  user?: AppUser;
+  token?: string;
+  error?: string;
+}
+
 export interface FirestoreQuestionnaireDocument {
   id?: string;
   patientId: string;
+  userId?: string | null;
+  userEmail?: string | null;
   patientName: string;
   patientDocument: string;
   status: 'en progreso' | 'completado';

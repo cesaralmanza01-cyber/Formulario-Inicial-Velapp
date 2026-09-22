@@ -8,6 +8,24 @@ import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
 import { initializeApp as initAdminApp, getApps as getAdminApps, cert, getApp as getAdminApp } from "firebase-admin/app";
 import { getFirestore as getAdminFirestoreInstance } from "firebase-admin/firestore";
+import cookieParser from "cookie-parser";
+import bcrypt from "bcryptjs";
+import crypto from "crypto";
+import {
+  ensureDoctorAccounts,
+  getUserByEmail,
+  getUserById,
+  getUserByInvitationToken,
+  saveUserRecord,
+  getAllPatientsWithStatus,
+  signUserToken,
+  extractAuthPayload,
+  setSessionCookie,
+  clearSessionCookie,
+  requireAuth,
+  requireDoctorRole,
+  UserRecord,
+} from "./server/auth";
 
 dotenv.config();
 
@@ -161,6 +179,343 @@ async function startServer() {
 
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ extended: true, limit: "50mb" }));
+  app.use(cookieParser());
+
+  // Helper for computing base URL for invitation links
+  const getBaseUrl = (req: express.Request): string => {
+    const envAppUrl = getCleanEnv("APP_URL");
+    if (envAppUrl) {
+      return envAppUrl.replace(/\/$/, "");
+    }
+    const host = req.get("host") || `localhost:${PORT}`;
+    const proto = req.protocol === "https" || req.headers["x-forwarded-proto"] === "https" ? "https" : "http";
+    return `${proto}://${host}`;
+  };
+
+  // Seed fixed doctor account on startup
+  ensureDoctorAccounts(getAdminFirestore).catch((err) => {
+    console.warn("[Server] Doctor account seed notice:", err?.message || err);
+  });
+
+  // ==========================================
+  // CUSTOM AUTHENTICATION & PATIENT SESSIONS
+  // ==========================================
+
+  // 1. Login endpoint (for both Doctora and Paciente)
+  app.post("/api/auth/login", async (req, res) => {
+    try {
+      const { email, password } = req.body;
+      if (!email || !password) {
+        return res.status(400).json({ success: false, error: "Por favor ingresa tu correo y contraseña." });
+      }
+
+      await ensureDoctorAccounts(getAdminFirestore);
+
+      const user = await getUserByEmail(email, getAdminFirestore);
+      if (!user) {
+        return res.status(401).json({ success: false, error: "Correo o contraseña incorrectos." });
+      }
+
+      if (!user.password) {
+        if (user.estado === "invitado") {
+          return res.status(400).json({
+            success: false,
+            isInvited: true,
+            error: "Esta cuenta está en estado invitado. Por favor utiliza el enlace de invitación de la doctora para crear tu contraseña.",
+          });
+        }
+        return res.status(401).json({ success: false, error: "Contraseña no configurada." });
+      }
+
+      const isValid = await bcrypt.compare(password, user.password);
+      if (!isValid) {
+        return res.status(401).json({ success: false, error: "Correo o contraseña incorrectos." });
+      }
+
+      const token = signUserToken(user);
+      setSessionCookie(req, res, token);
+
+      return res.json({
+        success: true,
+        token,
+        user: {
+          id: user.id,
+          email: user.email,
+          nombre: user.nombre,
+          rol: user.rol,
+          estado: user.estado,
+          cuestionarioCompletado: Boolean(user.cuestionarioCompletado),
+        },
+      });
+    } catch (err: any) {
+      console.error("[Login Error]:", err);
+      return res.status(500).json({ success: false, error: "Error al iniciar sesión: " + (err?.message || "Desconocido") });
+    }
+  });
+
+  // 2. Check current session / verify token
+  app.get("/api/auth/me", async (req, res) => {
+    try {
+      const payload = extractAuthPayload(req);
+      if (!payload) {
+        return res.json({ authenticated: false, user: null });
+      }
+
+      const user = await getUserById(payload.userId, getAdminFirestore);
+      if (!user) {
+        return res.json({ authenticated: false, user: null });
+      }
+
+      return res.json({
+        authenticated: true,
+        user: {
+          id: user.id,
+          email: user.email,
+          nombre: user.nombre,
+          rol: user.rol,
+          estado: user.estado,
+          cuestionarioCompletado: Boolean(user.cuestionarioCompletado),
+          cuestionarioId: user.cuestionarioId || null,
+        },
+      });
+    } catch (err: any) {
+      return res.json({ authenticated: false, user: null, error: err?.message });
+    }
+  });
+
+  // 3. Logout endpoint
+  app.post("/api/auth/logout", (req, res) => {
+    clearSessionCookie(res);
+    return res.json({ success: true, message: "Sesión cerrada exitosamente." });
+  });
+
+  // 4. Verify invitation token (used by patient when clicking the invitation link)
+  app.get("/api/auth/invitation/:token", async (req, res) => {
+    try {
+      const token = req.params.token;
+      if (!token) {
+        return res.status(400).json({ valid: false, error: "Token de invitación no suministrado." });
+      }
+
+      const user = await getUserByInvitationToken(token, getAdminFirestore);
+      if (!user) {
+        return res.status(404).json({ valid: false, error: "Invitación no encontrada o enlace inválido." });
+      }
+
+      if (user.estado === "registrado" && user.password) {
+        return res.status(400).json({
+          valid: false,
+          alreadyRegistered: true,
+          email: user.email,
+          nombre: user.nombre,
+          error: "Esta invitación ya fue activada previamente. Por favor inicia sesión con tu correo y contraseña.",
+        });
+      }
+
+      return res.json({
+        valid: true,
+        invitation: {
+          token: user.invitationToken,
+          email: user.email,
+          nombre: user.nombre,
+          estado: user.estado,
+        },
+      });
+    } catch (err: any) {
+      return res.status(500).json({ valid: false, error: err?.message || "Error al verificar invitación." });
+    }
+  });
+
+  // 5. Activate account from invitation (set password)
+  app.post("/api/auth/register-invited", async (req, res) => {
+    try {
+      const { token, password } = req.body;
+      if (!token || !password) {
+        return res.status(400).json({ success: false, error: "Por favor proporciona la contraseña y el token." });
+      }
+
+      if (password.length < 6) {
+        return res.status(400).json({ success: false, error: "La contraseña debe tener un mínimo de 6 caracteres." });
+      }
+
+      const user = await getUserByInvitationToken(token, getAdminFirestore);
+      if (!user) {
+        return res.status(404).json({ success: false, error: "Invitación no encontrada o token inválido." });
+      }
+
+      if (user.estado === "registrado" && user.password) {
+        return res.status(400).json({
+          success: false,
+          error: "Esta cuenta ya fue activada. Por favor inicia sesión con tu contraseña.",
+        });
+      }
+
+      const hashedPassword = await bcrypt.hash(password, 10);
+      const updatedUser: UserRecord = {
+        ...user,
+        password: hashedPassword,
+        estado: "registrado",
+        fechaRegistro: new Date().toISOString(),
+        invitationToken: null, // Consume invitation token
+      };
+
+      await saveUserRecord(updatedUser, getAdminFirestore);
+
+      const authToken = signUserToken(updatedUser);
+      setSessionCookie(req, res, authToken);
+
+      return res.json({
+        success: true,
+        token: authToken,
+        user: {
+          id: updatedUser.id,
+          email: updatedUser.email,
+          nombre: updatedUser.nombre,
+          rol: updatedUser.rol,
+          estado: updatedUser.estado,
+          cuestionarioCompletado: Boolean(updatedUser.cuestionarioCompletado),
+        },
+      });
+    } catch (err: any) {
+      console.error("[Register Invited Error]:", err);
+      return res.status(500).json({ success: false, error: "Error al activar la cuenta: " + err?.message });
+    }
+  });
+
+  // 6. Doctor endpoint: List patients with clinical status
+  app.get("/api/admin/patients", requireDoctorRole, async (req, res) => {
+    try {
+      const baseUrl = getBaseUrl(req);
+      const patients = await getAllPatientsWithStatus(getAdminFirestore);
+
+      const formatted = patients.map((p) => {
+        let inviteLink: string | undefined = undefined;
+        if (p.invitationToken) {
+          inviteLink = `${baseUrl}/?invitacion=${p.invitationToken}`;
+        }
+        return {
+          ...p,
+          inviteLink,
+        };
+      });
+
+      return res.json({ success: true, patients: formatted });
+    } catch (err: any) {
+      console.error("[Get Patients Error]:", err);
+      return res.status(500).json({ success: false, error: err?.message || "Error al obtener pacientes" });
+    }
+  });
+
+  // 7. Doctor endpoint: Create invitation for a new patient
+  app.post("/api/admin/invitations", requireDoctorRole, async (req, res) => {
+    try {
+      const { nombre, email } = req.body;
+      if (!nombre || !email) {
+        return res.status(400).json({ success: false, error: "Ingresa el nombre completo y correo del paciente." });
+      }
+
+      const cleanEmail = String(email).toLowerCase().trim();
+      const cleanNombre = String(nombre).trim();
+
+      if (!cleanEmail.includes("@") || !cleanEmail.includes(".")) {
+        return res.status(400).json({ success: false, error: "Ingresa un correo electrónico válido." });
+      }
+
+      const existingUser = await getUserByEmail(cleanEmail, getAdminFirestore);
+      const token = crypto.randomBytes(24).toString("hex");
+      const baseUrl = getBaseUrl(req);
+      const inviteLink = `${baseUrl}/?invitacion=${token}`;
+
+      if (existingUser) {
+        if (existingUser.estado === "registrado") {
+          return res.status(400).json({
+            success: false,
+            error: `Ya existe una cuenta activa para ${cleanEmail}. El paciente ya puede ingresar con su correo y contraseña.`,
+          });
+        }
+
+        // Renew invitation token for pending invited patient
+        const updated = {
+          ...existingUser,
+          nombre: cleanNombre || existingUser.nombre,
+          invitationToken: token,
+          invitationCreatedAt: new Date().toISOString(),
+        };
+        await saveUserRecord(updated, getAdminFirestore);
+
+        return res.json({
+          success: true,
+          token,
+          inviteLink,
+          message: "Invitación renovada exitosamente.",
+          patient: {
+            id: updated.id,
+            nombre: updated.nombre,
+            email: updated.email,
+            estado: updated.estado,
+            clinicalStatus: "invitado",
+          },
+        });
+      }
+
+      // Create new patient record
+      const newPatient: UserRecord = {
+        id: `pac_${Date.now()}_${crypto.randomBytes(4).toString("hex")}`,
+        email: cleanEmail,
+        nombre: cleanNombre,
+        rol: "paciente",
+        estado: "invitado",
+        invitationToken: token,
+        invitationCreatedAt: new Date().toISOString(),
+        fechaCreacion: new Date().toISOString(),
+      };
+
+      await saveUserRecord(newPatient, getAdminFirestore);
+
+      return res.json({
+        success: true,
+        token,
+        inviteLink,
+        message: "Invitación creada exitosamente.",
+        patient: {
+          id: newPatient.id,
+          nombre: newPatient.nombre,
+          email: newPatient.email,
+          estado: newPatient.estado,
+          clinicalStatus: "invitado",
+        },
+      });
+    } catch (err: any) {
+      console.error("[Create Invitation Error]:", err);
+      return res.status(500).json({ success: false, error: err?.message || "Error al generar invitación" });
+    }
+  });
+
+  // 8. Link questionnaire progress to authenticated patient
+  app.post("/api/patient/link-questionnaire", requireAuth, async (req, res) => {
+    try {
+      const authUser = (req as any).authUser;
+      const { questionnaireId, isComplete, driveLink } = req.body;
+
+      if (authUser && authUser.userId) {
+        const user = await getUserById(authUser.userId, getAdminFirestore);
+        if (user) {
+          const updated: UserRecord = {
+            ...user,
+            cuestionarioId: questionnaireId || user.cuestionarioId,
+            cuestionarioCompletado: isComplete !== undefined ? Boolean(isComplete) : user.cuestionarioCompletado,
+            cuestionarioUpdatedAt: new Date().toISOString(),
+            cuestionarioDriveLink: driveLink || user.cuestionarioDriveLink,
+          };
+          await saveUserRecord(updated, getAdminFirestore);
+        }
+      }
+
+      return res.json({ success: true });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err?.message });
+    }
+  });
 
   // ==========================================
   // GOOGLE DRIVE OAUTH 2.0 API ENDPOINTS
@@ -659,6 +1014,10 @@ Devuelve un JSON estrictamente estructurado según el schema con las mediciones 
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);
+    // Ensure the doctor credentials and account in Firestore / store are in sync
+    ensureDoctorAccounts(getAdminFirestore).catch((err) => {
+      console.warn("[Server Auth Startup] Notice ensuring doctor account:", err?.message || err);
+    });
   });
 }
 

@@ -28,11 +28,11 @@ interface StepOneFormProps {
 }
 
 const CIVIL_STATUS_OPTIONS: CivilStatus[] = [
-  'Soltera',
-  'Casada',
+  'Soltero/a',
+  'Casado/a',
   'Unión libre',
-  'Divorciada',
-  'Viuda',
+  'Divorciado/a',
+  'Viudo/a',
   'Prefiero no decir',
 ];
 
@@ -536,7 +536,12 @@ export const StepOneForm: React.FC<StepOneFormProps> = ({
             className="grid grid-cols-2 sm:grid-cols-3 gap-2.5"
           >
             {CIVIL_STATUS_OPTIONS.map((status) => {
-              const isSelected = formData.civilStatus === status;
+              const isSelected =
+                formData.civilStatus === status ||
+                (status === 'Soltero/a' && formData.civilStatus === 'Soltera') ||
+                (status === 'Casado/a' && formData.civilStatus === 'Casada') ||
+                (status === 'Divorciado/a' && formData.civilStatus === 'Divorciada') ||
+                (status === 'Viudo/a' && formData.civilStatus === 'Viuda');
               return (
                 <button
                   type="button"

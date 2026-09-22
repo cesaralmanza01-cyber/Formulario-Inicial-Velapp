@@ -967,7 +967,7 @@ export const StepCompletionModal: React.FC<StepCompletionModalProps> = ({
             <div className="flex items-center justify-between">
               <span className="font-semibold text-[#2E3A36] text-xs sm:text-sm flex items-center gap-1.5">
                 <Sparkles className="w-4 h-4 text-[#5B887E]" />
-                ¿Lista para agendar tu consulta?
+                ¿Todo listo para agendar tu consulta?
               </span>
               <span className="text-[10px] text-[#5B887E] font-medium bg-white px-2 py-0.5 rounded-full border border-[#AEC9C0]">
                 WhatsApp oficial

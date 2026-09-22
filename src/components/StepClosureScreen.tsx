@@ -43,6 +43,7 @@ import {
   generatePatientQuestionnairePdfBlob,
   downloadPatientRecordPdf,
 } from '../utils/pdfGenerator';
+import { rehydrateUploadedFiles } from '../utils/fileMemoryStore';
 import {
   uploadPatientPdfToServerDrive,
   generateDrivePdfFileName,
@@ -120,7 +121,10 @@ export const StepClosureScreen: React.FC<StepClosureScreenProps> = ({
   const whatsAppMessage = `Hola, soy ${patientFullName}, ya completé mi Cuestionario Médico Inicial. Adjunto mi PDF a continuación. Me gustaría agendar mi primera consulta.`;
 
   // Construct complete patient document object for PDF and persistence
-  const buildPatientDocument = (): FirestoreQuestionnaireDocument => {
+  const buildPatientDocument = async (): Promise<FirestoreQuestionnaireDocument> => {
+    const rehydratedLabFiles = labInfo?.files ? await rehydrateUploadedFiles(labInfo.files) : [];
+    const rehydratedInBodyFiles = inBodyInfo?.files ? await rehydrateUploadedFiles(inBodyInfo.files) : [];
+
     return {
       patientId: basicInfo?.documentNumber || 'paciente-vela',
       patientName: patientFullName,
@@ -139,8 +143,8 @@ export const StepClosureScreen: React.FC<StepClosureScreenProps> = ({
       revision_sistemas: symptomsInfo || null,
       entrevista_dietetica: nutritionInfo || null,
       actividad_fisica: activityInfo || null,
-      paraclinicos: labInfo || null,
-      inbody: inBodyInfo || null,
+      paraclinicos: labInfo ? { ...labInfo, files: rehydratedLabFiles } : null,
+      inbody: inBodyInfo ? { ...inBodyInfo, files: rehydratedInBodyFiles } : null,
     };
   };
 
@@ -164,7 +168,7 @@ export const StepClosureScreen: React.FC<StepClosureScreenProps> = ({
       try {
         setIsGeneratingPdf(true);
         setErrorMessage(null);
-        const patientDoc = buildPatientDocument();
+        const patientDoc = await buildPatientDocument();
 
         // 1. Generate in-memory PDF Blob
         const blob = await generatePatientQuestionnairePdfBlob(patientDoc);
@@ -247,14 +251,14 @@ export const StepClosureScreen: React.FC<StepClosureScreenProps> = ({
         setTimeout(() => URL.revokeObjectURL(url), 2000);
         return true;
       } else {
-        const patientDoc = buildPatientDocument();
+        const patientDoc = await buildPatientDocument();
         await downloadPatientRecordPdf(patientDoc);
         return true;
       }
     } catch (err: any) {
       console.warn('[PDF Download Trigger Warning]:', err);
       try {
-        const patientDoc = buildPatientDocument();
+        const patientDoc = await buildPatientDocument();
         await downloadPatientRecordPdf(patientDoc);
         return true;
       } catch (fErr) {
@@ -315,7 +319,7 @@ export const StepClosureScreen: React.FC<StepClosureScreenProps> = ({
 
       // 4. Respaldo adicional en Google Drive (segundo plano, no bloqueante)
       if (pdfBlob && !driveFileLink) {
-        const patientDoc = buildPatientDocument();
+        const patientDoc = await buildPatientDocument();
         uploadPatientPdfToServerDrive(pdfBlob, patientFullName, patientDoc.patientId)
           .then((driveRes) => {
             if (driveRes.success && driveRes.webViewLink) {

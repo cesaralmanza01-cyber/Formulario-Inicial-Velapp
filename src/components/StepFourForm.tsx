@@ -1116,15 +1116,15 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
               </label>
             </div>
             <p className="text-xs text-[#5C6E68] leading-relaxed">
-              ¿Aplica a tu historia clínica antecedentes gineco-obstétricos (mujer / anatomía femenina)?
+              ¿Aplica en tu caso registrar antecedentes gineco-obstétricos (ciclos menstruales, embarazos, etc.)?
             </p>
           </div>
 
           <div className="grid grid-cols-2 gap-3 max-w-md">
             {(
               [
-                { value: 'Sí', label: 'Sí, aplica (mujer)' },
-                { value: 'No', label: 'No aplica (hombre)' },
+                { value: 'Sí', label: 'Sí, aplica en mi caso' },
+                { value: 'No', label: 'No aplica en mi caso' },
               ] as const
             ).map((opt) => {
               const isSelected = formData.appliesGynecoObstetric === opt.value;

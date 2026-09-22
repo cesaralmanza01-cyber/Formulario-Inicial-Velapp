@@ -46,7 +46,7 @@ export const StepZeroConsent: React.FC<StepZeroConsentProps> = ({ onAccept }) =>
             className="text-3xl sm:text-4xl text-[#2E3A36] font-normal leading-tight"
             style={{ fontFamily: "'Fraunces', Georgia, serif" }}
           >
-            Bienvenida a tu espacio de cuidado
+            Te damos la bienvenida a tu espacio de cuidado
           </h1>
           <p className="text-base sm:text-lg text-[#5C6E68] leading-relaxed">
             Consentimiento informado y preparación de tu primera consulta médica.
