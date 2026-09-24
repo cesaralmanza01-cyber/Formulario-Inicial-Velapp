@@ -141,6 +141,9 @@ export default function App() {
                   documentNumber: prev?.documentNumber || '',
                   birthDate: prev?.birthDate || '',
                   age: prev?.age || '',
+                  sex: prev?.sex || '',
+                  phone: prev?.phone || '',
+                  email: prev?.email || details.email || '',
                   occupation: prev?.occupation || '',
                   civilStatus: prev?.civilStatus || '',
                   referralSource: prev?.referralSource || '',
@@ -676,6 +679,7 @@ export default function App() {
             >
               <StepFourForm
                 initialData={step4Data || undefined}
+                patientSex={step1Data?.sex}
                 onBack={handleStepFourBack}
                 onContinue={handleStepFourContinue}
               />

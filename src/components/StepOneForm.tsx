@@ -13,12 +13,16 @@ import {
   Check,
   Sparkles,
   ShieldCheck,
+  Phone,
+  Mail,
+  Users,
 } from 'lucide-react';
 import {
   CivilStatus,
   ReferralSource,
   DocumentType,
   PatientBasicInfo,
+  PatientSex,
   FormErrors,
 } from '../types';
 import { VelaIcon } from './VelaIcon';
@@ -70,6 +74,9 @@ export const StepOneForm: React.FC<StepOneFormProps> = ({
         documentNumber: '',
         birthDate: '',
         age: '',
+        sex: '',
+        phone: '',
+        email: '',
         occupation: '',
         civilStatus: '',
         referralSource: '',
@@ -149,6 +156,19 @@ export const StepOneForm: React.FC<StepOneFormProps> = ({
         if (isNaN(numAge) || numAge < 10 || numAge > 120)
           return 'Ingresa una edad válida.';
         return '';
+      case 'sex':
+        if (!value) return 'Por favor selecciona tu sexo.';
+        return '';
+      case 'phone':
+        if (!value.trim()) return 'Por favor ingresa tu número de celular para contacto clínico.';
+        if (value.trim().replace(/\D/g, '').length < 7)
+          return 'Por favor ingresa un número de celular válido (mínimo 7 dígitos).';
+        return '';
+      case 'email':
+        if (!value.trim()) return 'Por favor ingresa tu correo electrónico.';
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim()))
+          return 'Por favor ingresa un correo electrónico válido.';
+        return '';
       case 'occupation':
         if (!value.trim()) return 'Por favor compártenos tu ocupación o actividad.';
         return '';
@@ -191,6 +211,9 @@ export const StepOneForm: React.FC<StepOneFormProps> = ({
     formData.documentNumber.trim().length > 0 &&
     formData.birthDate.length > 0 &&
     formData.age.trim().length > 0 &&
+    Boolean(formData.sex) &&
+    formData.phone.trim().replace(/\D/g, '').length >= 7 &&
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim()) &&
     formData.occupation.trim().length > 0 &&
     formData.civilStatus.length > 0 &&
     formData.referralSource.length > 0 &&
@@ -205,6 +228,9 @@ export const StepOneForm: React.FC<StepOneFormProps> = ({
       documentNumber: true,
       birthDate: true,
       age: true,
+      sex: true,
+      phone: true,
+      email: true,
       occupation: true,
       civilStatus: true,
       referralSource: true,
@@ -218,6 +244,9 @@ export const StepOneForm: React.FC<StepOneFormProps> = ({
       documentNumber: validateField('documentNumber', formData.documentNumber),
       birthDate: validateField('birthDate', formData.birthDate),
       age: validateField('age', formData.age),
+      sex: validateField('sex', formData.sex),
+      phone: validateField('phone', formData.phone),
+      email: validateField('email', formData.email),
       occupation: validateField('occupation', formData.occupation),
       civilStatus: validateField('civilStatus', formData.civilStatus),
       referralSource: validateField('referralSource', formData.referralSource),
@@ -475,6 +504,149 @@ export const StepOneForm: React.FC<StepOneFormProps> = ({
               >
                 <Info className="w-3.5 h-3.5 shrink-0" />
                 {errors.age}
+              </motion.p>
+            )}
+          </div>
+        </div>
+
+        {/* Sexo (Obligatorio) */}
+        <div id="field-sex" className="space-y-3 pt-1">
+          <label className="flex items-center justify-between text-sm font-semibold text-[#2E3A36]">
+            <span className="flex items-center gap-2">
+              <Users className="w-4 h-4 text-[#6E9E93]" />
+              Sexo <span className="text-[#F2A488] font-bold">*</span>
+            </span>
+            <span className="text-xs font-normal text-[#8E9E99]">Selección única</span>
+          </label>
+          <p className="text-xs text-[#5C6E68]">
+            Sexo asignado al nacer / biológico. Nos permite adaptar la anamnesis clínica, antecedentes hormonales y gineco-obstétricos.
+          </p>
+
+          <div
+            role="radiogroup"
+            aria-label="Sexo"
+            className="grid grid-cols-2 gap-3 max-w-md"
+          >
+            {(['Femenino', 'Masculino'] as const).map((option) => {
+              const isSelected = formData.sex === option;
+              return (
+                <button
+                  type="button"
+                  key={option}
+                  id={`sex-${option.toLowerCase()}`}
+                  onClick={() => {
+                    handleChange('sex', option);
+                    handleBlur('sex');
+                  }}
+                  className={`group relative flex items-center justify-between px-4 py-3.5 rounded-xl border text-sm font-medium transition-all duration-200 text-left cursor-pointer ${
+                    isSelected
+                      ? 'bg-[#EBF3F0] border-[#6E9E93] text-[#2E3A36] shadow-2xs font-semibold'
+                      : 'bg-[#FAF6F0]/60 border-[#D9D3C8] text-[#5C6E68] hover:border-[#AEC9C0] hover:bg-[#FAF6F0]'
+                  }`}
+                >
+                  <span className="text-base">{option}</span>
+                  <div
+                    className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 ml-2 transition-all ${
+                      isSelected
+                        ? 'bg-[#6E9E93] text-white'
+                        : 'border border-[#C8C2B7] group-hover:border-[#AEC9C0]'
+                    }`}
+                  >
+                    {isSelected && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          {touched.sex && errors.sex && (
+            <motion.p
+              initial={{ opacity: 0, y: -4 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="text-xs text-[#C66A4D] flex items-center gap-1.5 pl-1"
+            >
+              <Info className="w-3.5 h-3.5 shrink-0" />
+              {errors.sex}
+            </motion.p>
+          )}
+        </div>
+
+        {/* Datos de contacto: Celular & Correo electrónico */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 pt-1">
+          {/* Celular */}
+          <div id="field-phone" className="space-y-2">
+            <label
+              htmlFor="phone-input"
+              className="flex items-center justify-between text-sm font-semibold text-[#2E3A36]"
+            >
+              <span className="flex items-center gap-2">
+                <Phone className="w-4 h-4 text-[#6E9E93]" />
+                Celular / WhatsApp <span className="text-[#F2A488] font-bold">*</span>
+              </span>
+            </label>
+            <input
+              id="phone-input"
+              type="tel"
+              value={formData.phone}
+              onChange={(e) => handleChange('phone', e.target.value)}
+              onBlur={() => handleBlur('phone')}
+              placeholder="Ej. 300 123 4567"
+              className={`w-full px-4 py-3.5 rounded-xl bg-[#FAF6F0]/80 border text-[#2E3A36] placeholder-[#8E9E99] text-base transition-all duration-200 focus:outline-hidden focus:ring-2 focus:ring-[#6E9E93]/40 focus:bg-white ${
+                touched.phone && errors.phone
+                  ? 'border-[#F2A488] bg-[#FDEEE9]/40'
+                  : 'border-[#D9D3C8] hover:border-[#AEC9C0]'
+              }`}
+            />
+            <p className="text-xs text-[#5C6E68] pl-1">
+              Para coordinación de tu cita y contacto médico directo.
+            </p>
+            {touched.phone && errors.phone && (
+              <motion.p
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="text-xs text-[#C66A4D] flex items-center gap-1.5 pl-1"
+              >
+                <Info className="w-3.5 h-3.5 shrink-0" />
+                {errors.phone}
+              </motion.p>
+            )}
+          </div>
+
+          {/* Correo electrónico */}
+          <div id="field-email" className="space-y-2">
+            <label
+              htmlFor="email-input"
+              className="flex items-center justify-between text-sm font-semibold text-[#2E3A36]"
+            >
+              <span className="flex items-center gap-2">
+                <Mail className="w-4 h-4 text-[#6E9E93]" />
+                Correo electrónico <span className="text-[#F2A488] font-bold">*</span>
+              </span>
+            </label>
+            <input
+              id="email-input"
+              type="email"
+              value={formData.email}
+              onChange={(e) => handleChange('email', e.target.value)}
+              onBlur={() => handleBlur('email')}
+              placeholder="Ej. paciente@ejemplo.com"
+              className={`w-full px-4 py-3.5 rounded-xl bg-[#FAF6F0]/80 border text-[#2E3A36] placeholder-[#8E9E99] text-base transition-all duration-200 focus:outline-hidden focus:ring-2 focus:ring-[#6E9E93]/40 focus:bg-white ${
+                touched.email && errors.email
+                  ? 'border-[#F2A488] bg-[#FDEEE9]/40'
+                  : 'border-[#D9D3C8] hover:border-[#AEC9C0]'
+              }`}
+            />
+            <p className="text-xs text-[#5C6E68] pl-1">
+              Donde recibirás confirmaciones y la copia de tu expediente.
+            </p>
+            {touched.email && errors.email && (
+              <motion.p
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="text-xs text-[#C66A4D] flex items-center gap-1.5 pl-1"
+              >
+                <Info className="w-3.5 h-3.5 shrink-0" />
+                {errors.email}
               </motion.p>
             )}
           </div>

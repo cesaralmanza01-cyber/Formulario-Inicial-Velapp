@@ -443,33 +443,39 @@ export function generatePatientQuestionnairePdfDoc(
   // 2. Patient Identity Card (Vela Cream #FAF6F0)
   // ==========================================
   doc.setFillColor(250, 246, 240);
-  doc.roundedRect(margin, y, contentWidth, 62, 4, 4, 'F');
+  doc.roundedRect(margin, y, contentWidth, 70, 4, 4, 'F');
   doc.setDrawColor(217, 211, 200); // #D9D3C8
   doc.setLineWidth(0.75);
-  doc.roundedRect(margin, y, contentWidth, 62, 4, 4, 'S');
+  doc.roundedRect(margin, y, contentWidth, 70, 4, 4, 'S');
 
   doc.setTextColor(46, 58, 54); // #2E3A36 Verde carbón
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(13);
-  doc.text(patient.patientName || 'Paciente', margin + 14, y + 18);
+  doc.text(patient.patientName || 'Paciente', margin + 14, y + 17);
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8.5);
   doc.setTextColor(92, 110, 104); // #5C6E68
   doc.text(
-    `Documento: ${patient.identificacion?.documentType || 'CC'} ${patient.patientDocument || 'Sin documento'}  •  Edad: ${patient.identificacion?.age || '—'} años  •  Ocupación: ${patient.identificacion?.occupation || '—'}`,
+    `Documento: ${patient.identificacion?.documentType || 'CC'} ${patient.patientDocument || 'Sin documento'}  •  Sexo: ${patient.identificacion?.sex || 'No indicado'}  •  Edad: ${patient.identificacion?.age || '—'} años  •  Ocupación: ${patient.identificacion?.occupation || '—'}`,
     margin + 14,
-    y + 34
+    y + 32
+  );
+
+  doc.text(
+    `Celular: ${patient.identificacion?.phone || 'No registrado'}  •  Correo: ${patient.identificacion?.email || patient.userEmail || 'No registrado'}`,
+    margin + 14,
+    y + 46
   );
 
   const docDate = patient.completedAt || patient.savedAt || patient.updatedAt || patient.startedAt;
   doc.text(
     `Fecha de registro: ${formatDate(docDate)}  •  Estado civil: ${patient.identificacion?.civilStatus || 'No indicado'}  •  Referencia: ${patient.identificacion?.referralSource || 'Vela'}${patient.identificacion?.referralOtherDetails ? ` (${patient.identificacion.referralOtherDetails})` : ''}`,
     margin + 14,
-    y + 49
+    y + 60
   );
 
-  y += 72;
+  y += 80;
 
   // ==========================================
   // 1. IDENTIFICACIÓN Y DATOS PERSONALES
@@ -482,6 +488,9 @@ export function generatePatientQuestionnairePdfDoc(
       ? `${patient.identificacion?.documentType || 'CC'} ${patient.identificacion.documentNumber}`
       : patient.patientDocument
   );
+  printField('Sexo asignado / biológico', patient.identificacion?.sex);
+  printField('Teléfono celular / WhatsApp', patient.identificacion?.phone);
+  printField('Correo electrónico', patient.identificacion?.email || patient.userEmail);
   printField('Fecha de nacimiento', patient.identificacion?.birthDate);
   printField('Edad', patient.identificacion?.age ? `${patient.identificacion.age} años` : null);
   printField('Ocupación y Profesión', patient.identificacion?.occupation);
@@ -624,8 +633,9 @@ export function generatePatientQuestionnairePdfDoc(
   printField('Antecedentes hospitalarios', patient.mapa_salud?.hospitalHistory || 'Niega');
   printField('Antecedentes tóxico-alérgicos (alergias / hábitos)', patient.mapa_salud?.toxicAllergicHistory || 'Niega');
 
-  // Gineco-obstetric
-  if (patient.mapa_salud?.appliesGynecoObstetric === 'Sí') {
+  // Gineco-obstetric: solo si aplica y el paciente no es de sexo masculino
+  const isFemalePatient = patient.identificacion?.sex !== 'Masculino';
+  if (isFemalePatient && patient.mapa_salud?.appliesGynecoObstetric === 'Sí') {
     printSubSectionTitle('Antecedentes gineco-obstétricos');
     printField(
       'Fórmula obstétrica',

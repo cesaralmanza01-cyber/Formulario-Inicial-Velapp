@@ -363,7 +363,9 @@ export const StepClosureScreen: React.FC<StepClosureScreenProps> = ({
     {
       id: 4,
       title: '4. Mapa de Salud y Antecedentes',
-      desc: healthMapInfo?.pathologicalHistory ? 'Antecedentes patológicos y gineco-obstétricos' : 'Antecedentes médicos completos',
+      desc: basicInfo?.sex === 'Femenino'
+        ? (healthMapInfo?.pathologicalHistory ? 'Antecedentes patológicos, gineco-obstétricos y familiares' : 'Antecedentes médicos y gineco-obstétricos')
+        : (healthMapInfo?.pathologicalHistory ? 'Antecedentes patológicos, farmacológicos y familiares' : 'Antecedentes médicos completos'),
       icon: Stethoscope,
     },
     {

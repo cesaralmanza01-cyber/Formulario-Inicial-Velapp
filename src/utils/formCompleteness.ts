@@ -8,6 +8,7 @@ import {
   PatientPhysicalActivityInfo,
   PatientLabExamsInfo,
   PatientInBodyInfo,
+  PatientSex,
 } from '../types';
 
 export interface StepCompletenessResult {
@@ -40,6 +41,9 @@ function isStep1Complete(data: PatientBasicInfo | null): boolean {
     data.documentNumber.trim().length > 0 &&
     data.birthDate.length > 0 &&
     data.age.trim().length > 0 &&
+    Boolean(data.sex) &&
+    Boolean(data.phone && data.phone.trim().replace(/\D/g, '').length >= 7) &&
+    Boolean(data.email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email.trim())) &&
     data.occupation.trim().length > 0 &&
     data.civilStatus.length > 0 &&
     data.referralSource.length > 0 &&
@@ -109,7 +113,7 @@ function isStep3Complete(data: PatientWeightHistoryInfo | null): boolean {
   return true;
 }
 
-function isStep4Complete(data: PatientHealthMapInfo | null): boolean {
+function isStep4Complete(data: PatientHealthMapInfo | null, patientSex?: PatientSex): boolean {
   if (!data) return false;
   if (!data.pathologicalHistory.trim()) return false;
   // Pharmacological history is satisfied either by direct text or by answering the structured medications question
@@ -125,17 +129,21 @@ function isStep4Complete(data: PatientHealthMapInfo | null): boolean {
   if (!data.hospitalHistory.trim()) return false;
   if (!data.toxicAllergicHistory.trim()) return false;
 
-  if (!data.appliesGynecoObstetric) return false;
-  if (data.appliesGynecoObstetric === 'Sí') {
-    if (!data.menarcheAge?.trim()) return false;
-    if (!data.cycleRegularity) return false;
-    if (
-      (data.cycleRegularity === 'Regulares' || data.cycleRegularity === 'Irregulares') &&
-      !data.cycleDuration?.trim()
-    ) {
-      return false;
+  // Gineco-obstétrico: Solo es obligatorio si el paciente es de sexo femenino
+  const isFemale = patientSex === 'Femenino';
+  if (isFemale) {
+    if (!data.appliesGynecoObstetric) return false;
+    if (data.appliesGynecoObstetric === 'Sí') {
+      if (!data.menarcheAge?.trim()) return false;
+      if (!data.cycleRegularity) return false;
+      if (
+        (data.cycleRegularity === 'Regulares' || data.cycleRegularity === 'Irregulares') &&
+        !data.cycleDuration?.trim()
+      ) {
+        return false;
+      }
+      if (!data.menopauseStage) return false;
     }
-    if (!data.menopauseStage) return false;
   }
 
   if (!data.hasEatingDisorderHistory) return false;
@@ -243,7 +251,7 @@ export function evaluateAllSteps(data: AllStepsData): StepCompletenessResult[] {
     { step: 2, label: 'Datos personales', complete: isStep1Complete(data.step1) },
     { step: 3, label: 'Motivo y objetivos', complete: isStep2Complete(data.step2) },
     { step: 4, label: 'Tu relación con el peso', complete: isStep3Complete(data.step3) },
-    { step: 5, label: 'Tu mapa de salud', complete: isStep4Complete(data.step4) },
+    { step: 5, label: 'Tu mapa de salud', complete: isStep4Complete(data.step4, data.step1?.sex) },
     { step: 6, label: '¿Cómo se siente tu cuerpo?', complete: isStep5Complete(data.step5) },
     { step: 7, label: 'Hablemos de tu alimentación', complete: isStep6Complete(data.step6) },
     { step: 8, label: '¿Cómo te mueves en tu día a día?', complete: isStep7Complete(data.step7) },

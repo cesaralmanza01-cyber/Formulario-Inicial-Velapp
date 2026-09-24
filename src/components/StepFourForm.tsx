@@ -29,10 +29,12 @@ import {
   FAMILY_OBESITY_ONSET_AGES,
   FAMILY_COMORBIDITIES_LIST,
   ObesityFamilyMemberEntry,
+  PatientSex,
 } from '../types';
 
 interface StepFourFormProps {
   initialData?: PatientHealthMapInfo;
+  patientSex?: PatientSex;
   onBack: () => void;
   onContinue: (data: PatientHealthMapInfo) => void;
 }
@@ -126,9 +128,24 @@ const MENOPAUSE_SYMPTOMS_OPTIONS = [
 
 export const StepFourForm: React.FC<StepFourFormProps> = ({
   initialData,
+  patientSex,
   onBack,
   onContinue,
 }) => {
+  const effectiveSex: PatientSex =
+    patientSex ||
+    (() => {
+      try {
+        const s1 = localStorage.getItem('vela_step1_data');
+        if (s1) {
+          const parsed = JSON.parse(s1);
+          return (parsed.sex as PatientSex) || '';
+        }
+      } catch {}
+      return '';
+    })();
+  const isFemale = effectiveSex === 'Femenino';
+
   const [formData, setFormData] = useState<PatientHealthMapInfo>(() => {
     const saved = localStorage.getItem('vela_step4_data');
     if (saved) {
@@ -251,24 +268,28 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
         return '';
 
       case 'appliesGynecoObstetric':
+        if (!isFemale) return '';
         if (!currentForm.appliesGynecoObstetric) {
           return 'Por favor selecciona si aplica en tu caso registrar antecedentes gineco-obstétricos.';
         }
         return '';
 
       case 'menarcheAge':
+        if (!isFemale) return '';
         if (currentForm.appliesGynecoObstetric === 'Sí' && !currentForm.menarcheAge?.trim()) {
           return 'Por favor indica a qué edad tuviste tu primer período (desarrollo).';
         }
         return '';
 
       case 'cycleRegularity':
+        if (!isFemale) return '';
         if (currentForm.appliesGynecoObstetric === 'Sí' && !currentForm.cycleRegularity) {
           return 'Por favor selecciona cómo son tus ciclos menstruales.';
         }
         return '';
 
       case 'cycleDuration':
+        if (!isFemale) return '';
         if (
           currentForm.appliesGynecoObstetric === 'Sí' &&
           (currentForm.cycleRegularity === 'Regulares' || currentForm.cycleRegularity === 'Irregulares') &&
@@ -279,6 +300,7 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
         return '';
 
       case 'menopauseStage':
+        if (!isFemale) return '';
         if (currentForm.appliesGynecoObstetric === 'Sí' && !currentForm.menopauseStage) {
           return 'Por favor indica si te encuentras en perimenopausia o menopausia.';
         }
@@ -455,18 +477,20 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
     if (!formData.hospitalHistory.trim()) return false;
     if (!formData.toxicAllergicHistory.trim()) return false;
 
-    // Gineco-obstétrico validation
-    if (!formData.appliesGynecoObstetric) return false;
-    if (formData.appliesGynecoObstetric === 'Sí') {
-      if (!formData.menarcheAge?.trim()) return false;
-      if (!formData.cycleRegularity) return false;
-      if (
-        (formData.cycleRegularity === 'Regulares' || formData.cycleRegularity === 'Irregulares') &&
-        !formData.cycleDuration?.trim()
-      ) {
-        return false;
+    // Gineco-obstétrico validation (solo si sexo es femenino)
+    if (isFemale) {
+      if (!formData.appliesGynecoObstetric) return false;
+      if (formData.appliesGynecoObstetric === 'Sí') {
+        if (!formData.menarcheAge?.trim()) return false;
+        if (!formData.cycleRegularity) return false;
+        if (
+          (formData.cycleRegularity === 'Regulares' || formData.cycleRegularity === 'Irregulares') &&
+          !formData.cycleDuration?.trim()
+        ) {
+          return false;
+        }
+        if (!formData.menopauseStage) return false;
       }
-      if (!formData.menopauseStage) return false;
     }
 
     // TCA
@@ -612,15 +636,15 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
       surgicalHistory: true,
       hospitalHistory: true,
       toxicAllergicHistory: true,
-      appliesGynecoObstetric: true,
-      pregnanciesCount: true,
-      vaginalDeliveriesCount: true,
-      cesareanCount: true,
-      lossesCount: true,
-      cycleRegularity: true,
-      cycleDuration: true,
-      menarcheAge: true,
-      menopauseStage: true,
+      appliesGynecoObstetric: isFemale,
+      pregnanciesCount: isFemale,
+      vaginalDeliveriesCount: isFemale,
+      cesareanCount: isFemale,
+      lossesCount: isFemale,
+      cycleRegularity: isFemale,
+      cycleDuration: isFemale,
+      menarcheAge: isFemale,
+      menopauseStage: isFemale,
       hasEatingDisorderHistory: true,
       eatingDisorderDetails: true,
       familyHistory: true,
@@ -637,11 +661,11 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
       surgicalHistory: validateField('surgicalHistory', formData),
       hospitalHistory: validateField('hospitalHistory', formData),
       toxicAllergicHistory: validateField('toxicAllergicHistory', formData),
-      appliesGynecoObstetric: validateField('appliesGynecoObstetric', formData),
-      menarcheAge: validateField('menarcheAge', formData),
-      cycleRegularity: validateField('cycleRegularity', formData),
-      cycleDuration: validateField('cycleDuration', formData),
-      menopauseStage: validateField('menopauseStage', formData),
+      appliesGynecoObstetric: isFemale ? validateField('appliesGynecoObstetric', formData) : '',
+      menarcheAge: isFemale ? validateField('menarcheAge', formData) : '',
+      cycleRegularity: isFemale ? validateField('cycleRegularity', formData) : '',
+      cycleDuration: isFemale ? validateField('cycleDuration', formData) : '',
+      menopauseStage: isFemale ? validateField('menopauseStage', formData) : '',
       hasEatingDisorderHistory: validateField('hasEatingDisorderHistory', formData),
       hasFamilyObesityHistory: validateField('hasFamilyObesityHistory', formData),
       familyObesityMembers: validateField('familyObesityMembers', formData),
@@ -651,7 +675,23 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
 
     const hasAnyError = Object.values(newErrors).some((err) => !!err);
     if (!hasAnyError && isFormValid) {
-      onContinue(formData);
+      const dataToSave: PatientHealthMapInfo = isFemale
+        ? formData
+        : {
+            ...formData,
+            appliesGynecoObstetric: 'No',
+            pregnanciesCount: undefined,
+            vaginalDeliveriesCount: undefined,
+            cesareanCount: undefined,
+            lossesCount: undefined,
+            cycleRegularity: undefined,
+            cycleDuration: undefined,
+            menarcheAge: undefined,
+            menopauseStage: undefined,
+            menopauseSymptoms: [],
+            menopauseSymptomsOther: '',
+          };
+      onContinue(dataToSave);
     } else {
       // Scroll smoothly to first invalid field
       const firstInvalidId = Object.keys(newErrors).find(
@@ -1106,8 +1146,9 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
           )}
         </div>
 
-        {/* 6. Antecedentes gineco-obstétricos estructurados */}
-        <div id="field-appliesGynecoObstetric" className="space-y-5 pt-3 border-t border-[#E8E2D8]">
+        {/* 6. Antecedentes gineco-obstétricos estructurados (solo visible si sexo es Femenino) */}
+        {isFemale && (
+          <div id="field-appliesGynecoObstetric" className="space-y-5 pt-3 border-t border-[#E8E2D8]">
           <div className="flex flex-col space-y-1">
             <div className="flex items-center gap-2">
               <Baby className="w-4 h-4 text-[#6E9E93]" />
@@ -1512,13 +1553,14 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
             )}
           </AnimatePresence>
         </div>
+        )}
 
-        {/* 7. Trastorno de la conducta alimentaria (TCA) */}
+        {/* Trastorno de la conducta alimentaria (TCA) */}
         <div id="field-hasEatingDisorderHistory" className="space-y-3 pt-3 border-t border-[#E8E2D8]">
           <div className="flex flex-col space-y-1">
             <label className="text-sm font-semibold text-[#2E3A36] flex items-center justify-between">
               <span>
-                7. ¿Tienes o has tenido diagnóstico de algún trastorno de la conducta alimentaria?{' '}
+                {isFemale ? '7' : '6'}. ¿Tienes o has tenido diagnóstico de algún trastorno de la conducta alimentaria?{' '}
                 <span className="text-[#F2A488] font-bold">*</span>
               </span>
             </label>
@@ -1619,13 +1661,13 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
           </p>
         </div>
 
-        {/* 8. Pregunta ampliada y detallada: Antecedentes familiares de obesidad */}
+        {/* Pregunta ampliada y detallada: Antecedentes familiares de obesidad */}
         <div id="field-hasFamilyObesityHistory" className="space-y-4">
           <div className="space-y-1">
             <label className="text-sm font-semibold text-[#2E3A36] flex items-center justify-between">
               <span className="flex items-center gap-2">
                 <Activity className="w-4 h-4 text-[#6E9E93]" />
-                8. ¿Algún familiar cercano ha presentado antecedentes de obesidad o dificultad importante con el peso? <span className="text-[#F2A488] font-bold">*</span>
+                {isFemale ? '8' : '7'}. ¿Algún familiar cercano ha presentado antecedentes de obesidad o dificultad importante con el peso? <span className="text-[#F2A488] font-bold">*</span>
               </span>
             </label>
             <p className="text-xs text-[#5C6E68]">
@@ -1899,10 +1941,10 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
           </AnimatePresence>
         </div>
 
-        {/* 9. Otras condiciones familiares biológicas (Checklist general) */}
+        {/* Otras condiciones familiares biológicas (Checklist general) */}
         <div id="field-familyHistory" className="space-y-3 pt-4 border-t border-[#E8E2D8]">
           <label className="text-sm font-semibold text-[#2E3A36] block">
-            9. Además, ¿alguien en tu familia directa (padres, hermanos, abuelos) ha tenido alguna de estas condiciones?
+            {isFemale ? '9' : '8'}. Además, ¿alguien en tu familia directa (padres, hermanos, abuelos) ha tenido alguna de estas condiciones?
           </label>
           <p className="text-xs text-[#5C6E68]">
             Selecciona todas las condiciones adicionales que apliquen en tu linaje familiar. Si no aplica ninguna, déjalas sin marcar.

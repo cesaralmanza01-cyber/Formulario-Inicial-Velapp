@@ -670,7 +670,7 @@ export const StepCompletionModal: React.FC<StepCompletionModalProps> = ({
                       {step4Data.pharmacologicalHistory}
                     </span>
                   </div>
-                  {step4Data.appliesGynecoObstetric === 'Sí' && (
+                  {step1Data?.sex !== 'Masculino' && step4Data.appliesGynecoObstetric === 'Sí' && (
                     <div className="bg-[#FAF6F0]/80 p-2 rounded-xl space-y-1 text-[11px]">
                       <div className="flex justify-between text-[#5B887E] font-semibold">
                         <span>Gineco-obstétricos:</span>
@@ -948,14 +948,34 @@ export const StepCompletionModal: React.FC<StepCompletionModalProps> = ({
                   )}
                 </div>
 
-                <div className="flex items-center justify-between py-0.5">
-                  <span className="text-[#5C6E68] flex items-center gap-1.5">
-                    <User className="w-3.5 h-3.5 text-[#6E9E93]" />
-                    Nombre:
-                  </span>
-                  <span className="font-medium text-[#2E3A36] text-right">
-                    {step1Data.fullName}
-                  </span>
+                <div className="space-y-1.5 pt-1 text-xs">
+                  <div className="flex items-center justify-between py-0.5">
+                    <span className="text-[#5C6E68] flex items-center gap-1.5">
+                      <User className="w-3.5 h-3.5 text-[#6E9E93]" />
+                      Nombre:
+                    </span>
+                    <span className="font-medium text-[#2E3A36] text-right">
+                      {step1Data.fullName}
+                    </span>
+                  </div>
+                  {step1Data.sex && (
+                    <div className="flex items-center justify-between py-0.5">
+                      <span className="text-[#5C6E68]">Sexo:</span>
+                      <span className="font-medium text-[#2E3A36]">{step1Data.sex}</span>
+                    </div>
+                  )}
+                  {step1Data.phone && (
+                    <div className="flex items-center justify-between py-0.5">
+                      <span className="text-[#5C6E68]">Celular:</span>
+                      <span className="font-medium text-[#2E3A36]">{step1Data.phone}</span>
+                    </div>
+                  )}
+                  {step1Data.email && (
+                    <div className="flex items-center justify-between py-0.5">
+                      <span className="text-[#5C6E68]">Correo:</span>
+                      <span className="font-medium text-[#2E3A36] truncate max-w-[200px]">{step1Data.email}</span>
+                    </div>
+                  )}
                 </div>
               </div>
             )}

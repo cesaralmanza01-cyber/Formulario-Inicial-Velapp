@@ -20,6 +20,8 @@ export type ReferralSource =
 
 export type DocumentType = 'CC' | 'CE' | 'Pasaporte' | 'DNI' | 'Otro';
 
+export type PatientSex = 'Femenino' | 'Masculino' | '';
+
 export interface PatientBasicInfo {
   fullName: string;
   documentType: DocumentType;
@@ -30,6 +32,9 @@ export interface PatientBasicInfo {
   civilStatus: CivilStatus | '';
   referralSource: ReferralSource | '';
   referralOtherDetails: string;
+  sex: PatientSex;
+  phone: string;
+  email: string;
 }
 
 export interface PatientMotivationInfo {
@@ -482,6 +487,8 @@ export interface FirestoreQuestionnaireDocument {
   userEmail?: string | null;
   patientName: string;
   patientDocument: string;
+  patientSex?: PatientSex | null;
+  patientPhone?: string | null;
   status: 'en progreso' | 'completado';
   isSavedByPatient?: boolean;
   savedAt?: string | null;
@@ -593,6 +600,9 @@ export interface StepOneErrors {
   documentNumber?: string;
   birthDate?: string;
   age?: string;
+  sex?: string;
+  phone?: string;
+  email?: string;
   occupation?: string;
   civilStatus?: string;
   referralSource?: string;
