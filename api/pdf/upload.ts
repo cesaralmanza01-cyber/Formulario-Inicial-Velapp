@@ -1,5 +1,3 @@
-import { applyCors, parseRequestBody } from '../_lib/serverAuth';
-
 export const config = {
   api: {
     bodyParser: {
@@ -7,6 +5,30 @@ export const config = {
     },
   },
 };
+
+function applyCors(req: any, res: any, allowedMethods: string) {
+  const origin = req.headers.origin || '*';
+  res.setHeader('Access-Control-Allow-Origin', origin);
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Allow-Methods', allowedMethods);
+  res.setHeader(
+    'Access-Control-Allow-Headers',
+    'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization'
+  );
+}
+
+function parseRequestBody(req: any): any {
+  if (!req.body) return {};
+  if (typeof req.body === 'object') return req.body;
+  if (typeof req.body === 'string') {
+    try {
+      return JSON.parse(req.body);
+    } catch {
+      return {};
+    }
+  }
+  return {};
+}
 
 export default async function handler(req: any, res: any) {
   applyCors(req, res, 'POST, OPTIONS');
