@@ -292,7 +292,7 @@ export const StepNineForm: React.FC<StepNineFormProps> = ({
       <div className="space-y-3 text-center sm:text-left border-b border-[#E8E2D8] pb-6">
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#EBF3F0] text-[#5B887E] text-xs font-semibold self-start">
           <VelaIcon size={14} />
-          <span>Paso 9 de 10 • Paraclínicos y exámenes complementarios</span>
+          <span>Paso 9 de 11 • Paraclínicos y exámenes complementarios</span>
         </div>
 
         <div className="space-y-2">

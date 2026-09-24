@@ -240,13 +240,13 @@ function isStepInBodyComplete(data: PatientInBodyInfo | null): boolean {
 
 export function evaluateAllSteps(data: AllStepsData): StepCompletenessResult[] {
   return [
-    { step: 1, label: 'Datos personales', complete: isStep1Complete(data.step1) },
-    { step: 2, label: 'Motivo y objetivos', complete: isStep2Complete(data.step2) },
-    { step: 3, label: 'Tu relación con el peso', complete: isStep3Complete(data.step3) },
-    { step: 4, label: 'Tu mapa de salud', complete: isStep4Complete(data.step4) },
-    { step: 5, label: '¿Cómo se siente tu cuerpo?', complete: isStep5Complete(data.step5) },
-    { step: 6, label: 'Hablemos de tu alimentación', complete: isStep6Complete(data.step6) },
-    { step: 7, label: '¿Cómo te mueves en tu día a día?', complete: isStep7Complete(data.step7) },
+    { step: 2, label: 'Datos personales', complete: isStep1Complete(data.step1) },
+    { step: 3, label: 'Motivo y objetivos', complete: isStep2Complete(data.step2) },
+    { step: 4, label: 'Tu relación con el peso', complete: isStep3Complete(data.step3) },
+    { step: 5, label: 'Tu mapa de salud', complete: isStep4Complete(data.step4) },
+    { step: 6, label: '¿Cómo se siente tu cuerpo?', complete: isStep5Complete(data.step5) },
+    { step: 7, label: 'Hablemos de tu alimentación', complete: isStep6Complete(data.step6) },
+    { step: 8, label: '¿Cómo te mueves en tu día a día?', complete: isStep7Complete(data.step7) },
     { step: 9, label: 'Exámenes de laboratorio', complete: isStep9Complete(data.step9) },
     { step: 10, label: 'InBody / composición corporal', complete: isStepInBodyComplete(data.stepInBody) },
   ];

@@ -31,12 +31,12 @@ export function hasActiveDraft(): boolean {
   if (typeof window === 'undefined') return false;
   try {
     const hasConsent = localStorage.getItem('vela_consent_accepted') === 'true';
-    const step = parseInt(localStorage.getItem('vela_current_step') || '0', 10);
+    const step = parseInt(localStorage.getItem('vela_current_step') || '1', 10);
     const hasAnyStepData = DRAFT_STORAGE_KEYS.some((key) => {
       if (key === 'vela_patient_anon_id' || key === 'vela_current_step') return false;
       return Boolean(localStorage.getItem(key));
     });
-    return hasConsent || step > 0 || hasAnyStepData;
+    return hasConsent || step > 1 || hasAnyStepData;
   } catch {
     return false;
   }

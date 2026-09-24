@@ -12,58 +12,58 @@ interface WizardProgressProps {
 export const defaultSteps: StepItem[] = [
   {
     id: 1,
-    title: 'Datos personales',
-    shortTitle: 'Identidad',
-    description: 'Información básica para tu ficha clínica',
+    title: 'Consentimiento informado',
+    shortTitle: 'Consentimiento',
+    description: 'Términos y encuadre clínico',
     status: 'current',
   },
   {
     id: 2,
+    title: 'Datos personales',
+    shortTitle: 'Identidad',
+    description: 'Información básica para tu ficha clínica',
+    status: 'upcoming',
+  },
+  {
+    id: 3,
     title: 'Motivo y objetivos',
     shortTitle: 'Objetivos',
     description: 'Qué te trae hoy a consulta',
     status: 'upcoming',
   },
   {
-    id: 3,
+    id: 4,
     title: 'Tu relación con el peso',
     shortTitle: 'Peso',
     description: 'Trayectoria e historial con el peso',
     status: 'upcoming',
   },
   {
-    id: 4,
+    id: 5,
     title: 'Tu mapa de salud',
     shortTitle: 'Salud',
     description: 'Antecedentes generales y familiares',
     status: 'upcoming',
   },
   {
-    id: 5,
+    id: 6,
     title: '¿Cómo se siente tu cuerpo?',
     shortTitle: 'Tu cuerpo',
     description: 'Revisión por sistemas y sensaciones físicas',
     status: 'upcoming',
   },
   {
-    id: 6,
+    id: 7,
     title: 'Hablemos de tu alimentación',
     shortTitle: 'Alimentación',
     description: 'Preferencias, rutina de comidas y hábitos',
     status: 'upcoming',
   },
   {
-    id: 7,
+    id: 8,
     title: '¿Cómo te mueves en tu día a día?',
     shortTitle: 'Movimiento',
     description: 'Actividad física, ejercicio y motivación',
-    status: 'upcoming',
-  },
-  {
-    id: 8,
-    title: 'Sueño y bienestar',
-    shortTitle: 'Descanso',
-    description: 'Calidad de sueño, estrés y descanso',
     status: 'upcoming',
   },
   {
@@ -95,13 +95,12 @@ export const WizardProgress: React.FC<WizardProgressProps> = ({
   steps = defaultSteps,
   onStepClick,
 }) => {
-  const rawPercentage = totalSteps > 0 ? Math.round((currentStep / totalSteps) * 100) : 5;
+  const displayStep = currentStep <= 0 ? 1 : currentStep;
+  const rawPercentage = totalSteps > 0 ? Math.round((displayStep / totalSteps) * 100) : 5;
   const percentage = Math.max(5, Math.min(100, isNaN(rawPercentage) ? 5 : rawPercentage));
 
   const currentStepTitle =
-    currentStep === 0
-      ? 'Consentimiento informado'
-      : steps.find((s) => s.id === currentStep)?.title || 'Datos personales';
+    steps.find((s) => s.id === displayStep)?.title || 'Consentimiento informado';
 
   return (
     <div className="w-full bg-[#FAF6F0]/90 backdrop-blur-xs border-b border-[#AEC9C0]/30 py-4 px-4 sm:px-8 sticky top-0 z-30 transition-all">
@@ -109,7 +108,7 @@ export const WizardProgress: React.FC<WizardProgressProps> = ({
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2.5">
           <div className="flex items-center gap-2">
             <span className="text-xs font-semibold tracking-wider uppercase text-[#5B887E] bg-[#EBF3F0] px-2.5 py-1 rounded-full">
-              {currentStep === 0 ? 'Paso previo' : `Paso ${currentStep} de ${totalSteps}`}
+              Paso {displayStep} de {totalSteps}
             </span>
             <span className="text-sm font-medium text-[#2E3A36]">
               {currentStepTitle}

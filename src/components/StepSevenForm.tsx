@@ -273,7 +273,7 @@ export const StepSevenForm: React.FC<StepSevenFormProps> = ({
       <div className="space-y-3 text-center sm:text-left border-b border-[#E8E2D8] pb-6">
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#EBF3F0] text-[#5B887E] text-xs font-semibold self-start">
           <VelaIcon size={14} />
-          <span>Paso 7 de 7 • Movimiento, ejercicio y estilo de vida activo</span>
+          <span>Paso 8 de 11 • Movimiento, ejercicio y estilo de vida activo</span>
         </div>
 
         <div className="space-y-2">

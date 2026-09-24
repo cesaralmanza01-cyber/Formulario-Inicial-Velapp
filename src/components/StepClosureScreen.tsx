@@ -402,9 +402,9 @@ export const StepClosureScreen: React.FC<StepClosureScreenProps> = ({
     <div className="space-y-8 max-w-2xl mx-auto">
       {/* Header with Title and Subtitle */}
       <div className="space-y-3 text-center sm:text-left border-b border-[#E8E2D8] pb-6">
-        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#EBF3F0] text-[#6E9E93] text-xs font-semibold self-start border border-[#6E9E93]/20 shadow-2xs">
-          <VelaIcon size={14} />
-          <span>Paso final • Registro y Agendamiento</span>
+        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#EBF3F0] text-[#5B887E] text-xs font-semibold self-start border border-[#AEC9C0]/30 shadow-2xs">
+          <CheckCircle2 className="w-3.5 h-3.5 text-[#6E9E93]" />
+          <span>Paso 11 de 11 • Registro, envío y agendamiento</span>
         </div>
 
         <div className="space-y-1.5">

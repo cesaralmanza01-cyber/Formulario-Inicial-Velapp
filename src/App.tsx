@@ -165,10 +165,11 @@ export default function App() {
     const savedStep = localStorage.getItem('vela_current_step');
     if (savedStep !== null) {
       const parsed = parseInt(savedStep, 10);
-      return isNaN(parsed) ? 0 : parsed;
+      if (parsed === 0) return 1;
+      return isNaN(parsed) ? 1 : parsed;
     }
     const hasAcceptedConsent = localStorage.getItem('vela_consent_accepted') === 'true';
-    return hasAcceptedConsent ? 1 : 0;
+    return hasAcceptedConsent ? 2 : 1;
   });
 
   const [step1Data, setStep1Data] = useState<PatientBasicInfo | null>(() => {
@@ -298,75 +299,80 @@ export default function App() {
   }, [currentStep]);
 
   // Navigation Handlers with instant Firestore autosync
+  const handleStepOneBack = () => {
+    setCurrentStep(1);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   const handleStepOneContinue = (data: PatientBasicInfo) => {
     setStep1Data(data);
-    setCurrentStep(2);
-    syncProgressToFirestore({ step: 2, step1: data });
+    setCurrentStep(3);
+    syncProgressToFirestore({ step: 3, step1: data });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleStepTwoBack = () => {
-    setCurrentStep(1);
+    setCurrentStep(2);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleStepTwoContinue = (data: PatientMotivationInfo) => {
     setStep2Data(data);
-    setCurrentStep(3);
-    syncProgressToFirestore({ step: 3, step2: data });
+    setCurrentStep(4);
+    syncProgressToFirestore({ step: 4, step2: data });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleStepThreeBack = () => {
-    setCurrentStep(2);
+    setCurrentStep(3);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleStepThreeContinue = (data: PatientWeightHistoryInfo) => {
     setStep3Data(data);
-    setCurrentStep(4);
-    syncProgressToFirestore({ step: 4, step3: data });
+    setCurrentStep(5);
+    syncProgressToFirestore({ step: 5, step3: data });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleStepFourBack = () => {
-    setCurrentStep(3);
+    setCurrentStep(4);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleStepFourContinue = (data: PatientHealthMapInfo) => {
     setStep4Data(data);
-    setCurrentStep(5);
-    syncProgressToFirestore({ step: 5, step4: data });
+    setCurrentStep(6);
+    syncProgressToFirestore({ step: 6, step4: data });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleStepFiveBack = () => {
-    setCurrentStep(4);
+    setCurrentStep(5);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleStepFiveContinue = (data: PatientBodySymptomsInfo) => {
     setStep5Data(data);
-    setCurrentStep(6);
-    syncProgressToFirestore({ step: 6, step5: data });
+    setCurrentStep(7);
+    syncProgressToFirestore({ step: 7, step5: data });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleStepSixBack = () => {
-    setCurrentStep(5);
+    setCurrentStep(6);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleStepSixContinue = (data: PatientNutritionInfo) => {
     setStep6Data(data);
-    setCurrentStep(7);
-    syncProgressToFirestore({ step: 7, step6: data });
+    setCurrentStep(8);
+    syncProgressToFirestore({ step: 8, step6: data });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleStepSevenBack = () => {
-    setCurrentStep(6);
+    setCurrentStep(7);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -378,7 +384,7 @@ export default function App() {
   };
 
   const handleStepNineBack = () => {
-    setCurrentStep(7);
+    setCurrentStep(8);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -455,7 +461,7 @@ export default function App() {
 
   const handleResetDraft = () => {
     clearDraftStorage();
-    setCurrentStep(0);
+    setCurrentStep(1);
     setStep1Data(null);
     setStep2Data(null);
     setStep3Data(null);
@@ -594,9 +600,9 @@ export default function App() {
       {/* Main Content Area with smooth step transitions */}
       <main className="flex-1 max-w-3xl w-full mx-auto px-4 sm:px-8 py-8 sm:py-12">
         <AnimatePresence mode="wait">
-          {currentStep === 0 && (
+          {currentStep === 1 && (
             <motion.div
-              key="step-0"
+              key="step-1"
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -12 }}
@@ -604,25 +610,10 @@ export default function App() {
             >
               <StepZeroConsent
                 onAccept={() => {
-                  setCurrentStep(1);
-                  localStorage.setItem('vela_current_step', '1');
+                  setCurrentStep(2);
+                  localStorage.setItem('vela_current_step', '2');
                   window.scrollTo({ top: 0, behavior: 'smooth' });
                 }}
-              />
-            </motion.div>
-          )}
-
-          {currentStep === 1 && (
-            <motion.div
-              key="step-1"
-              initial={{ opacity: 0, x: -16 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -16 }}
-              transition={{ duration: 0.25, ease: 'easeOut' }}
-            >
-              <StepOneForm
-                initialData={step1Data || undefined}
-                onContinue={handleStepOneContinue}
               />
             </motion.div>
           )}
@@ -630,6 +621,22 @@ export default function App() {
           {currentStep === 2 && (
             <motion.div
               key="step-2"
+              initial={{ opacity: 0, x: -16 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -16 }}
+              transition={{ duration: 0.25, ease: 'easeOut' }}
+            >
+              <StepOneForm
+                initialData={step1Data || undefined}
+                onBack={handleStepOneBack}
+                onContinue={handleStepOneContinue}
+              />
+            </motion.div>
+          )}
+
+          {currentStep === 3 && (
+            <motion.div
+              key="step-3"
               initial={{ opacity: 0, x: 16 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -16 }}
@@ -643,9 +650,9 @@ export default function App() {
             </motion.div>
           )}
 
-          {currentStep === 3 && (
+          {currentStep === 4 && (
             <motion.div
-              key="step-3"
+              key="step-4"
               initial={{ opacity: 0, x: 16 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -16 }}
@@ -659,9 +666,9 @@ export default function App() {
             </motion.div>
           )}
 
-          {currentStep === 4 && (
+          {currentStep === 5 && (
             <motion.div
-              key="step-4"
+              key="step-5"
               initial={{ opacity: 0, x: 16 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -16 }}
@@ -675,9 +682,9 @@ export default function App() {
             </motion.div>
           )}
 
-          {currentStep === 5 && (
+          {currentStep === 6 && (
             <motion.div
-              key="step-5"
+              key="step-6"
               initial={{ opacity: 0, x: 16 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -16 }}
@@ -691,9 +698,9 @@ export default function App() {
             </motion.div>
           )}
 
-          {currentStep === 6 && (
+          {currentStep === 7 && (
             <motion.div
-              key="step-6"
+              key="step-7"
               initial={{ opacity: 0, x: 16 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -16 }}
@@ -707,9 +714,9 @@ export default function App() {
             </motion.div>
           )}
 
-          {currentStep === 7 && (
+          {currentStep === 8 && (
             <motion.div
-              key="step-7"
+              key="step-8"
               initial={{ opacity: 0, x: 16 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -16 }}

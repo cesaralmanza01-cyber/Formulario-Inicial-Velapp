@@ -8,6 +8,7 @@ import {
   HeartHandshake,
   Compass,
   ArrowRight,
+  ArrowLeft,
   Info,
   Check,
   Sparkles,
@@ -24,6 +25,7 @@ import { VelaIcon } from './VelaIcon';
 
 interface StepOneFormProps {
   initialData?: PatientBasicInfo;
+  onBack?: () => void;
   onContinue: (data: PatientBasicInfo) => void;
 }
 
@@ -49,6 +51,7 @@ const DOCUMENT_TYPES: DocumentType[] = ['CC', 'CE', 'Pasaporte', 'DNI', 'Otro'];
 
 export const StepOneForm: React.FC<StepOneFormProps> = ({
   initialData,
+  onBack,
   onContinue,
 }) => {
   const [formData, setFormData] = useState<PatientBasicInfo>(() => {
@@ -250,13 +253,9 @@ export const StepOneForm: React.FC<StepOneFormProps> = ({
     <form onSubmit={handleSubmit} noValidate className="space-y-8">
       {/* Title & Human warm subtitle */}
       <div className="space-y-3 pt-2">
-        <div className="flex items-center gap-2 text-[#5B887E]">
-          <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-[#EBF3F0] text-xs font-semibold">
-            1
-          </span>
-          <span className="text-xs uppercase tracking-widest font-semibold text-[#5B887E]">
-            Identidad & Contacto
-          </span>
+        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#EBF3F0] text-[#5B887E] text-xs font-semibold self-start">
+          <User className="w-3.5 h-3.5" />
+          <span>Paso 2 de 11 • Identidad y datos personales</span>
         </div>
 
         <h1
@@ -688,8 +687,21 @@ export const StepOneForm: React.FC<StepOneFormProps> = ({
 
       {/* Bottom Actions Bar */}
       <div className="pt-2 pb-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+        {/* Left: Optional Back Button */}
+        {onBack && (
+          <button
+            type="button"
+            id="back-button"
+            onClick={onBack}
+            className="w-full sm:w-auto px-6 py-3.5 rounded-2xl border border-[#AEC9C0] bg-white/80 hover:bg-[#FAF6F0] text-[#2E3A36] font-medium text-sm transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer shadow-2xs hover:shadow-xs order-2 sm:order-1"
+          >
+            <ArrowLeft className="w-4 h-4 text-[#6E9E93]" />
+            <span>Atrás</span>
+          </button>
+        )}
+
         {/* Autosave status indicator */}
-        <div className="text-xs text-[#5C6E68] flex items-center gap-2 order-2 sm:order-1">
+        <div className="text-xs text-[#5C6E68] flex items-center gap-2 order-3 sm:order-2">
           <div className="w-2 h-2 rounded-full bg-[#6E9E93] animate-pulse" />
           <span>Tus avances se guardan en este dispositivo</span>
           {autoSavedTime && (

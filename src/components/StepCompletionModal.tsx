@@ -114,12 +114,11 @@ export const StepCompletionModal: React.FC<StepCompletionModalProps> = ({
               className="text-2xl sm:text-3xl text-[#2E3A36] font-normal"
               style={{ fontFamily: "'Fraunces', Georgia, serif" }}
             >
-              ¡Pantalla 5 completada!
+              Resumen de tu cuestionario
             </h3>
 
             <p className="text-sm text-[#5C6E68] max-w-sm">
-              Gracias, <strong className="text-[#2E3A36]">{firstName}</strong>. Hemos registrado
-              la revisión de sensaciones y síntomas de tu cuerpo de manera confidencial.
+              Gracias, <strong className="text-[#2E3A36]">{firstName}</strong>. Aquí puedes revisar y editar las respuestas de cada sección antes de agendar.
             </p>
           </div>
 
@@ -130,13 +129,13 @@ export const StepCompletionModal: React.FC<StepCompletionModalProps> = ({
               <div className="bg-white/80 rounded-2xl p-4 border border-[#AEC9C0]/30 space-y-2 text-xs sm:text-sm">
                 <div className="flex items-center justify-between pb-1 border-b border-[#FAF6F0]">
                   <span className="font-semibold text-[#5B887E] flex items-center gap-1.5 text-xs uppercase tracking-wider">
-                    Paso 5: ¿Cómo se siente tu cuerpo?
+                    Paso 6: ¿Cómo se siente tu cuerpo?
                   </span>
                   {onEditStep && (
                     <button
                       onClick={() => {
                         onClose();
-                        onEditStep(5);
+                        onEditStep(6);
                       }}
                       className="text-[11px] text-[#6E9E93] hover:underline flex items-center gap-1 cursor-pointer"
                     >
@@ -246,7 +245,7 @@ export const StepCompletionModal: React.FC<StepCompletionModalProps> = ({
                 <div className="flex items-center justify-between border-b border-[#FAF6F0] pb-2">
                   <div className="flex items-center gap-2">
                     <div className="w-6 h-6 rounded-lg bg-[#EBF3F0] text-[#5B887E] flex items-center justify-center text-xs font-bold">
-                      6
+                      7
                     </div>
                     <span className="font-semibold text-xs text-[#2E3A36]">
                       Hablemos de tu alimentación
@@ -256,7 +255,7 @@ export const StepCompletionModal: React.FC<StepCompletionModalProps> = ({
                     <button
                       onClick={() => {
                         onClose();
-                        onEditStep(6);
+                        onEditStep(7);
                       }}
                       className="text-xs text-[#5B887E] hover:text-[#2E3A36] flex items-center gap-1 font-medium cursor-pointer"
                     >
@@ -359,7 +358,7 @@ export const StepCompletionModal: React.FC<StepCompletionModalProps> = ({
                 <div className="flex items-center justify-between border-b border-[#FAF6F0] pb-2">
                   <div className="flex items-center gap-2">
                     <div className="w-6 h-6 rounded-lg bg-[#EBF3F0] text-[#5B887E] flex items-center justify-center text-xs font-bold">
-                      7
+                      8
                     </div>
                     <span className="font-semibold text-xs text-[#2E3A36]">
                       ¿Cómo te mueves en tu día a día?
@@ -369,7 +368,7 @@ export const StepCompletionModal: React.FC<StepCompletionModalProps> = ({
                     <button
                       onClick={() => {
                         onClose();
-                        onEditStep(7);
+                        onEditStep(8);
                       }}
                       className="text-xs text-[#5B887E] hover:text-[#2E3A36] flex items-center gap-1 font-medium cursor-pointer"
                     >
@@ -642,13 +641,13 @@ export const StepCompletionModal: React.FC<StepCompletionModalProps> = ({
               <div className="bg-white/80 rounded-2xl p-4 border border-[#AEC9C0]/30 space-y-2 text-xs sm:text-sm">
                 <div className="flex items-center justify-between pb-1 border-b border-[#FAF6F0]">
                   <span className="font-semibold text-[#5B887E] flex items-center gap-1.5 text-xs uppercase tracking-wider">
-                    Paso 4: Tu mapa de salud
+                    Paso 5: Tu mapa de salud
                   </span>
                   {onEditStep && (
                     <button
                       onClick={() => {
                         onClose();
-                        onEditStep(4);
+                        onEditStep(5);
                       }}
                       className="text-[11px] text-[#6E9E93] hover:underline flex items-center gap-1 cursor-pointer"
                     >
@@ -715,13 +714,13 @@ export const StepCompletionModal: React.FC<StepCompletionModalProps> = ({
               <div className="bg-white/80 rounded-2xl p-4 border border-[#AEC9C0]/30 space-y-2.5 text-xs sm:text-sm">
                 <div className="flex items-center justify-between pb-1 border-b border-[#FAF6F0]">
                   <span className="font-semibold text-[#5B887E] flex items-center gap-1.5 text-xs uppercase tracking-wider">
-                    Paso 3: Tu relación con el peso
+                    Paso 4: Tu relación con el peso
                   </span>
                   {onEditStep && (
                     <button
                       onClick={() => {
                         onClose();
-                        onEditStep(3);
+                        onEditStep(4);
                       }}
                       className="text-[11px] text-[#6E9E93] hover:underline flex items-center gap-1 cursor-pointer"
                     >
@@ -876,13 +875,13 @@ export const StepCompletionModal: React.FC<StepCompletionModalProps> = ({
               <div className="bg-white/80 rounded-2xl p-4 border border-[#AEC9C0]/30 space-y-3 text-xs sm:text-sm">
                 <div className="flex items-center justify-between pb-1 border-b border-[#FAF6F0]">
                   <span className="font-semibold text-[#5B887E] flex items-center gap-1.5 text-xs uppercase tracking-wider">
-                    Paso 2: Motivo y Objetivos
+                    Paso 3: Motivo y Objetivos
                   </span>
                   {onEditStep && (
                     <button
                       onClick={() => {
                         onClose();
-                        onEditStep(2);
+                        onEditStep(3);
                       }}
                       className="text-[11px] text-[#6E9E93] hover:underline flex items-center gap-1 cursor-pointer"
                     >
@@ -933,13 +932,13 @@ export const StepCompletionModal: React.FC<StepCompletionModalProps> = ({
               <div className="bg-white/80 rounded-2xl p-4 border border-[#AEC9C0]/30 space-y-2 text-xs sm:text-sm">
                 <div className="flex items-center justify-between pb-1 border-b border-[#FAF6F0]">
                   <span className="font-semibold text-[#5B887E] flex items-center gap-1.5 text-xs uppercase tracking-wider">
-                    Paso 1: Identidad
+                    Paso 2: Identidad y datos personales
                   </span>
                   {onEditStep && (
                     <button
                       onClick={() => {
                         onClose();
-                        onEditStep(1);
+                        onEditStep(2);
                       }}
                       className="text-[11px] text-[#6E9E93] hover:underline flex items-center gap-1 cursor-pointer"
                     >

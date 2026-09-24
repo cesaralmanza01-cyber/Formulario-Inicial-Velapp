@@ -367,7 +367,7 @@ export const StepFiveForm: React.FC<StepFiveFormProps> = ({
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#EBF3F0] text-[#5B887E] text-xs font-semibold self-start">
             <VelaIcon size={14} />
-            <span>Paso 5 de 7 • Revisión por sistemas y estilo de vida</span>
+            <span>Paso 6 de 11 • ¿Cómo se siente tu cuerpo? • Revisión por sistemas</span>
           </div>
 
           {/* Progress pill: e.g. "3 de 7 revisadas" */}

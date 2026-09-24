@@ -36,9 +36,9 @@ export const StepZeroConsent: React.FC<StepZeroConsentProps> = ({ onAccept }) =>
     <div className="space-y-8 max-w-2xl mx-auto pt-2">
       {/* Header Banner */}
       <div className="space-y-3 text-center sm:text-left border-b border-[#E8E2D8] pb-6">
-        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#EBF3F0] text-[#6E9E93] text-xs font-semibold self-start border border-[#6E9E93]/20 shadow-2xs">
-          <VelaIcon size={14} />
-          <span>Vela • Dra. Lorena Castro</span>
+        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#EBF3F0] text-[#5B887E] text-xs font-semibold self-start border border-[#AEC9C0]/30 shadow-2xs">
+          <FileCheck className="w-3.5 h-3.5 text-[#6E9E93]" />
+          <span>Paso 1 de 11 • Consentimiento informado y encuadre clínico</span>
         </div>
 
         <div className="space-y-1.5">

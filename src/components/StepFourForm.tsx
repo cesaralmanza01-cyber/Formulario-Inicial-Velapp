@@ -672,7 +672,7 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
       <div className="space-y-3">
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#EBF3F0] text-[#5B887E] text-xs font-semibold tracking-wide">
           <Stethoscope className="w-3.5 h-3.5" />
-          <span>Pantalla 4 de 5</span>
+          <span>Paso 5 de 11 • Tu mapa de salud y antecedentes</span>
         </div>
 
         <h1

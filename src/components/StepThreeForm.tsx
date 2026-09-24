@@ -542,13 +542,9 @@ export const StepThreeForm: React.FC<StepThreeFormProps> = ({
     <form onSubmit={handleSubmit} noValidate className="space-y-8">
       {/* Title & Human warm subtitle */}
       <div className="space-y-3 pt-2">
-        <div className="flex items-center gap-2 text-[#5B887E]">
-          <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-[#EBF3F0] text-xs font-semibold">
-            3
-          </span>
-          <span className="text-xs uppercase tracking-widest font-semibold text-[#5B887E]">
-            Historial & Trayectoria
-          </span>
+        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#EBF3F0] text-[#5B887E] text-xs font-semibold self-start">
+          <Scale className="w-3.5 h-3.5" />
+          <span>Paso 4 de 11 • Tu relación con el peso</span>
         </div>
 
         <h1
