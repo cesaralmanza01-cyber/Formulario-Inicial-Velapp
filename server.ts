@@ -315,6 +315,7 @@ async function startServer() {
       return res.json({
         valid: true,
         invitation: {
+          id: user.id,
           token: user.invitationToken,
           email: user.email,
           nombre: user.nombre,
@@ -521,6 +522,22 @@ async function startServer() {
   // GOOGLE DRIVE OAUTH 2.0 API ENDPOINTS
   // ==========================================
 
+  const getGoogleRedirectUri = (req: express.Request): string => {
+    const host = req.get("host") || "";
+    const proto = req.protocol === "https" || req.headers["x-forwarded-proto"] === "https" ? "https" : "http";
+
+    if (host.includes("formulario-inicial-velapp.vercel.app") || host.includes("vercel.app")) {
+      return "https://formulario-inicial-velapp.vercel.app/api/auth/google/callback";
+    }
+
+    const envAppUrl = getCleanEnv("APP_URL");
+    if (envAppUrl && !host.includes("localhost") && !host.includes("127.0.0.1")) {
+      return `${envAppUrl.replace(/\/$/, "")}/api/auth/google/callback`;
+    }
+
+    return `${proto}://${host}/api/auth/google/callback`;
+  };
+
   // Initiate OAuth login flow
   app.get("/api/auth/google/login", (req, res) => {
     try {
@@ -531,17 +548,7 @@ async function startServer() {
         return res.status(400).send("Error: Faltan las variables GOOGLE_CLIENT_ID y/o GOOGLE_CLIENT_SECRET.");
       }
 
-      const host = req.get("host") || "";
-      const proto = req.protocol === "https" || req.headers["x-forwarded-proto"] === "https" ? "https" : "http";
-
-      let redirectUri = getCleanEnv("APP_URL")
-        ? `${getCleanEnv("APP_URL").replace(/\/$/, "")}/api/auth/google/callback`
-        : `${proto}://${host}/api/auth/google/callback`;
-
-      if (host.includes("formulario-inicial-velapp.vercel.app") || host.includes("vercel.app")) {
-        redirectUri = "https://formulario-inicial-velapp.vercel.app/api/auth/google/callback";
-      }
-
+      const redirectUri = getGoogleRedirectUri(req);
       const oauth2Client = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
       const authorizeUrl = oauth2Client.generateAuthUrl({
         access_type: "offline",
@@ -574,17 +581,7 @@ async function startServer() {
 
       const clientId = getCleanEnv("GOOGLE_CLIENT_ID");
       const clientSecret = getCleanEnv("GOOGLE_CLIENT_SECRET");
-
-      const host = req.get("host") || "";
-      const proto = req.protocol === "https" || req.headers["x-forwarded-proto"] === "https" ? "https" : "http";
-
-      let redirectUri = getCleanEnv("APP_URL")
-        ? `${getCleanEnv("APP_URL").replace(/\/$/, "")}/api/auth/google/callback`
-        : `${proto}://${host}/api/auth/google/callback`;
-
-      if (host.includes("formulario-inicial-velapp.vercel.app") || host.includes("vercel.app")) {
-        redirectUri = "https://formulario-inicial-velapp.vercel.app/api/auth/google/callback";
-      }
+      const redirectUri = getGoogleRedirectUri(req);
 
       const oauth2Client = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
       const { tokens } = await oauth2Client.getToken(String(code));
@@ -614,7 +611,7 @@ async function startServer() {
     }
   });
 
-  // Check Drive status
+  // Check Drive status (with live verification of token validity)
   app.get("/api/admin/drive/status", async (req, res) => {
     try {
       const hasClientId = Boolean(process.env.GOOGLE_CLIENT_ID);
@@ -625,6 +622,7 @@ async function startServer() {
         return res.json({
           success: true,
           connected: false,
+          authorized: false,
           folderId: destinationFolderId,
           folderName: GOOGLE_DRIVE_FOLDER_NAME,
           error: "Faltan las variables GOOGLE_CLIENT_ID y GOOGLE_CLIENT_SECRET",
@@ -634,19 +632,69 @@ async function startServer() {
       const tokenData = await getGoogleDriveStoredTokens();
 
       if (tokenData && tokenData.refreshToken) {
-        return res.json({
-          success: true,
-          connected: true,
-          authorizedEmail: tokenData.authorizedEmail || "comerconcalma@gmail.com",
-          folderId: destinationFolderId,
-          folderName: GOOGLE_DRIVE_FOLDER_NAME,
-          updatedAt: tokenData.updatedAt || new Date().toISOString(),
+        const clientId = process.env.GOOGLE_CLIENT_ID?.trim();
+        const clientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim();
+        const oauth2Client = new google.auth.OAuth2(clientId, clientSecret);
+        oauth2Client.setCredentials({ refresh_token: tokenData.refreshToken });
+
+        oauth2Client.on("tokens", (newTokens) => {
+          if (newTokens.refresh_token) {
+            saveGoogleDriveTokens({
+              refreshToken: newTokens.refresh_token,
+              accessToken: newTokens.access_token || "",
+              expiryDate: newTokens.expiry_date || 0,
+              authorizedEmail: tokenData.authorizedEmail || "comerconcalma@gmail.com",
+              updatedAt: new Date().toISOString(),
+            }).catch(console.error);
+          }
         });
+
+        try {
+          const liveToken = await oauth2Client.getAccessToken();
+          if (!liveToken || !liveToken.token) {
+            throw new Error("No se pudo obtener un token de acceso válido");
+          }
+
+          return res.json({
+            success: true,
+            connected: true,
+            authorized: true,
+            expired: false,
+            authorizedEmail: tokenData.authorizedEmail || "comerconcalma@gmail.com",
+            folderId: destinationFolderId,
+            folderName: GOOGLE_DRIVE_FOLDER_NAME,
+            updatedAt: tokenData.updatedAt || new Date().toISOString(),
+          });
+        } catch (authError: any) {
+          const errMsg = authError?.message || authError?.response?.data?.error || "Error de autorización";
+          const isTestingExpired =
+            errMsg.includes("unauthorized_client") ||
+            errMsg.includes("invalid_grant") ||
+            authError?.response?.status === 401;
+
+          console.warn("[Drive Status Check] Token verification notice:", errMsg);
+          return res.json({
+            success: true,
+            connected: false,
+            authorized: false,
+            expired: true,
+            isTestingExpired,
+            authorizedEmail: tokenData.authorizedEmail || "comerconcalma@gmail.com",
+            folderId: destinationFolderId,
+            folderName: GOOGLE_DRIVE_FOLDER_NAME,
+            updatedAt: tokenData.updatedAt,
+            error: isTestingExpired
+              ? "La autorización de Google Drive caducó (la app de Google está en modo 'Testing' de 7 días). Haz clic en 'Re-autorizar Google Drive' o pasa la app a 'Producción' en Google Cloud Console para evitar que expire."
+              : `Error al verificar autorización de Google Drive: ${errMsg}`,
+          });
+        }
       }
 
       return res.json({
         success: true,
         connected: false,
+        authorized: false,
+        expired: false,
         folderId: destinationFolderId,
         folderName: GOOGLE_DRIVE_FOLDER_NAME,
         error: "Google Drive no está conectado aún",
@@ -676,6 +724,18 @@ async function startServer() {
       const oauth2Client = new google.auth.OAuth2(clientId, clientSecret);
       oauth2Client.setCredentials({ refresh_token: refreshToken });
 
+      oauth2Client.on("tokens", (newTokens) => {
+        if (newTokens.refresh_token) {
+          saveGoogleDriveTokens({
+            refreshToken: newTokens.refresh_token,
+            accessToken: newTokens.access_token || "",
+            expiryDate: newTokens.expiry_date || 0,
+            authorizedEmail: tokenData.authorizedEmail || "comerconcalma@gmail.com",
+            updatedAt: new Date().toISOString(),
+          }).catch(console.error);
+        }
+      });
+
       const drive = google.drive({ version: "v3", auth: oauth2Client });
       const testPdfContent = `%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n3 0 obj<</Type/Page/MediaBox[0 0 595 842]/Parent 2 0 R/Contents 4 0 R/Resources<</Font<</F1 5 0 R>>>>>>endobj\n4 0 obj<</Length 80>>stream\nBT /F1 16 Tf 50 750 Td (Vela - Prueba de conexion con OAuth Google Drive exitosa) Tj ET\nendstream\nendobj\n5 0 obj<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>endobj\nxref\n0 6\n0000000000 65535 f\n0000000010 00000 n\n0000000060 00000 n\n0000000117 00000 n\n0000000228 00000 n\n0000000354 00000 n\ntrailer<</Size 6/Root 1 0 R>>\nstartxref\n428\n%%EOF`;
       const buffer = Buffer.from(testPdfContent, "utf-8");
@@ -694,24 +754,41 @@ async function startServer() {
       const stream = Readable.from(buffer);
       const media = { mimeType: "application/pdf", body: stream };
 
-      const driveRes = await drive.files.create({
-        requestBody: fileMetadata,
-        media: media,
-        fields: "id, name, webViewLink, webContentLink, parents",
-        supportsAllDrives: true,
-      });
+      try {
+        const driveRes = await drive.files.create({
+          requestBody: fileMetadata,
+          media: media,
+          fields: "id, name, webViewLink, webContentLink, parents",
+          supportsAllDrives: true,
+        });
 
-      const fileId = driveRes.data.id || "";
-      const webViewLink = driveRes.data.webViewLink || `https://drive.google.com/file/d/${fileId}/view`;
+        const fileId = driveRes.data.id || "";
+        const webViewLink = driveRes.data.webViewLink || `https://drive.google.com/file/d/${fileId}/view`;
 
-      return res.json({
-        success: true,
-        fileId,
-        fileName: testFileName,
-        webViewLink,
-        folderId: destinationFolderId,
-        message: "¡Archivo de prueba subido exitosamente a tu Google Drive!",
-      });
+        return res.json({
+          success: true,
+          fileId,
+          fileName: testFileName,
+          webViewLink,
+          folderId: destinationFolderId,
+          message: "¡Archivo de prueba subido exitosamente a tu Google Drive!",
+        });
+      } catch (uploadError: any) {
+        const errMsg = uploadError?.message || uploadError?.response?.data?.error || "Error al subir";
+        const isExpired =
+          errMsg.includes("unauthorized_client") ||
+          errMsg.includes("invalid_grant") ||
+          uploadError?.response?.status === 401;
+
+        console.error("[OAuth Test Upload Error]:", uploadError);
+        return res.status(400).json({
+          success: false,
+          isExpired,
+          error: isExpired
+            ? "La autorización de Google Drive caducó (la app está en modo 'Testing' en Google Cloud Console, que vence cada 7 días). Haz clic en 'Re-autorizar Google Drive' para renovar el acceso."
+            : `Error de subida a Google Drive: ${errMsg}`,
+        });
+      }
     } catch (error: any) {
       console.error("[OAuth Test Upload Error]:", error);
       return res.status(500).json({ success: false, error: error.message });
@@ -742,6 +819,18 @@ async function startServer() {
       const refreshToken = tokenData.refreshToken;
       const oauth2Client = new google.auth.OAuth2(clientId, clientSecret);
       oauth2Client.setCredentials({ refresh_token: refreshToken });
+
+      oauth2Client.on("tokens", (newTokens) => {
+        if (newTokens.refresh_token) {
+          saveGoogleDriveTokens({
+            refreshToken: newTokens.refresh_token,
+            accessToken: newTokens.access_token || "",
+            expiryDate: newTokens.expiry_date || 0,
+            authorizedEmail: tokenData.authorizedEmail || "comerconcalma@gmail.com",
+            updatedAt: new Date().toISOString(),
+          }).catch(console.error);
+        }
+      });
 
       const drive = google.drive({ version: "v3", auth: oauth2Client });
 
@@ -787,11 +876,13 @@ async function startServer() {
         folderId: destinationFolderId,
       });
     } catch (error: any) {
-      console.warn("[Upload Patient PDF Notice]:", error?.message);
+      const errMsg = error?.message || error?.response?.data?.error || "";
+      const isExpired = errMsg.includes("unauthorized_client") || errMsg.includes("invalid_grant") || error?.response?.status === 401;
+      console.warn("[Upload Patient PDF Notice]:", errMsg);
       return res.json({
         success: false,
-        error: error.message || "Error al subir PDF a Google Drive",
-        reason: "drive_upload_failed",
+        error: isExpired ? "Token de Google Drive caducado (modo Testing de 7 días). Requiere re-autorizar en el panel médico." : (error.message || "Error al subir PDF a Google Drive"),
+        reason: isExpired ? "token_expired" : "drive_upload_failed",
       });
     }
   });

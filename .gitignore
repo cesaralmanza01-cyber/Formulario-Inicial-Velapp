@@ -6,3 +6,11 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Credential protection (prevent accidental exposure)
+client_secret*.json
+*credentials*.json
+*service-account*.json
+*.pem
+*.key
+*.p12

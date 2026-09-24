@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { VelaLogo } from './VelaLogo';
 import { VelaIcon } from './VelaIcon';
-import { Heart, RotateCcw, Link2, Check, AlertTriangle, LogOut, User } from 'lucide-react';
+import { Heart, RotateCcw, Link2, Check, AlertTriangle, LogOut, User, Lock } from 'lucide-react';
 import { getCleanNewPatientUrl } from '../utils/draftStorage';
 import { AppUser } from '../types';
 
@@ -10,9 +10,15 @@ interface HeaderProps {
   onResetDraft?: () => void;
   currentUser?: AppUser | null;
   onLogout?: () => void;
+  onDoctorLoginClick?: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ onResetDraft, currentUser, onLogout }) => {
+export const Header: React.FC<HeaderProps> = ({
+  onResetDraft,
+  currentUser,
+  onLogout,
+  onDoctorLoginClick,
+}) => {
   const [showConfirmModal, setShowConfirmModal] = useState<boolean>(false);
   const [copied, setCopied] = useState<boolean>(false);
 
@@ -125,6 +131,21 @@ export const Header: React.FC<HeaderProps> = ({ onResetDraft, currentUser, onLog
                   <span className="hidden sm:inline">Cerrar sesión</span>
                 </button>
               </div>
+            )}
+
+            {/* Doctor Portal direct access button when in patient questionnaire */}
+            {!currentUser && onDoctorLoginClick && (
+              <button
+                type="button"
+                id="btn-header-doctor-login"
+                onClick={onDoctorLoginClick}
+                className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-medium text-[#588377] hover:text-[#2E3A36] bg-white/90 hover:bg-[#EBF3F0] border border-[#AEC9C0]/50 transition-all cursor-pointer shadow-2xs"
+                title="Acceso exclusivo al Portal Médico (Dra. Lorena Castro)"
+              >
+                <Lock className="w-3.5 h-3.5 text-[#588377]" />
+                <span className="hidden sm:inline">Portal Médico</span>
+                <span className="sm:hidden">Médica</span>
+              </button>
             )}
 
             <div

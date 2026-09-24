@@ -2,8 +2,7 @@ import { initializeApp, getApps, getApp } from 'firebase/app';
 import {
   getFirestore,
   initializeFirestore,
-  persistentLocalCache,
-  persistentMultipleTabManager,
+  memoryLocalCache,
 } from 'firebase/firestore';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 import { getStorage } from 'firebase/storage';
@@ -13,14 +12,14 @@ import firebaseConfig from './firebaseConfig';
 export const app =
   getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
-// Initialize Firestore with robust multi-tab offline caching and ignoreUndefinedProperties
+// Initialize Firestore with in-memory caching and ignoreUndefinedProperties.
+// Using memoryLocalCache prevents multi-tab / iframe IndexedDB lease conflicts
+// such as "Failed to obtain primary lease for action 'Backfill Indexes'".
 export const db = (() => {
   try {
     return initializeFirestore(app, {
       ignoreUndefinedProperties: true,
-      localCache: persistentLocalCache({
-        tabManager: persistentMultipleTabManager(),
-      }),
+      localCache: memoryLocalCache(),
     });
   } catch (e) {
     // Fallback if already initialized

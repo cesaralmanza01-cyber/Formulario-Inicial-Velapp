@@ -114,8 +114,8 @@ export const StepClosureScreen: React.FC<StepClosureScreenProps> = ({
 
   const patientFullName = basicInfo?.fullName?.trim() || 'Paciente';
   const patientFirstName = patientFullName !== 'Paciente' ? patientFullName.split(' ')[0] : '¡Hola!';
-  const whatsappNumber = '+57 301 141 7555';
-  const cleanPhone = '573011417555';
+  const whatsappNumber = '+57 311 550 7896';
+  const cleanPhone = '573115507896';
 
   // WhatsApp pre-written message requested by user
   const whatsAppMessage = `Hola, soy ${patientFullName}, ya completé mi Cuestionario Médico Inicial. Adjunto mi PDF a continuación. Me gustaría agendar mi primera consulta.`;

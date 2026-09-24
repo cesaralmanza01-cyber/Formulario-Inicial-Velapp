@@ -30,9 +30,10 @@ import {
 interface DoctorDashboardProps {
   currentUser: AppUser;
   onLogout: () => void;
+  onBackToApp?: () => void;
 }
 
-export function DoctorDashboard({ currentUser, onLogout }: DoctorDashboardProps) {
+export function DoctorDashboard({ currentUser, onLogout, onBackToApp }: DoctorDashboardProps) {
   const [patients, setPatients] = useState<PatientListItem[]>([]);
   const [isLoadingPatients, setIsLoadingPatients] = useState<boolean>(true);
   const [patientsError, setPatientsError] = useState<string | null>(null);
@@ -82,6 +83,26 @@ export function DoctorDashboard({ currentUser, onLogout }: DoctorDashboardProps)
 
   useEffect(() => {
     loadPatients();
+    handleCheckDrive();
+
+    // Check for return parameters from Google OAuth flow
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('drive_connected') === 'true') {
+      setShowDrivePanel(true);
+      setDriveActionMsg({
+        type: 'success',
+        text: '¡Google Drive conectado y verificado exitosamente!',
+      });
+      window.history.replaceState({}, document.title, window.location.pathname + window.location.hash);
+    } else if (urlParams.get('drive_error')) {
+      const err = urlParams.get('drive_error');
+      setShowDrivePanel(true);
+      setDriveActionMsg({
+        type: 'error',
+        text: `Error de autorización de Google Drive: ${err}`,
+      });
+      window.history.replaceState({}, document.title, window.location.pathname + window.location.hash);
+    }
   }, []);
 
   const handleCreateInvitation = async (e: React.FormEvent) => {
@@ -211,6 +232,15 @@ export function DoctorDashboard({ currentUser, onLogout }: DoctorDashboardProps)
             <span className="hidden md:inline-block text-xs text-[#6e857f]">
               {currentUser.email}
             </span>
+            {onBackToApp && (
+              <button
+                type="button"
+                onClick={onBackToApp}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#d2c7b8] text-xs font-semibold text-[#405650] hover:bg-[#f4eee6] hover:text-[#1b3d36] transition cursor-pointer"
+              >
+                <span>Ver Cuestionario</span>
+              </button>
+            )}
             <button
               id="doctor_logout_btn"
               type="button"
@@ -645,13 +675,27 @@ export function DoctorDashboard({ currentUser, onLogout }: DoctorDashboardProps)
               </div>
 
               {driveStatus && (
-                <div className="mt-3 p-3 bg-[#fdfbf7] rounded-xl border border-[#e8dfd2] text-xs text-[#526a63]">
-                  <p><span className="font-semibold text-[#1b3d36]">Conectado:</span> {driveStatus.authorized ? 'Sí (Token Activo)' : 'No configurado'}</p>
+                <div className="mt-3 p-3 bg-[#fdfbf7] rounded-xl border border-[#e8dfd2] text-xs text-[#526a63] space-y-1">
+                  <p>
+                    <span className="font-semibold text-[#1b3d36]">Conectado:</span>{' '}
+                    {driveStatus.connected && driveStatus.authorized ? (
+                      <span className="text-emerald-700 font-bold">Sí (Token Activo)</span>
+                    ) : driveStatus.expired ? (
+                      <span className="text-amber-700 font-bold">Token Expirado (Modo Testing 7 días)</span>
+                    ) : (
+                      <span className="text-red-700 font-semibold">No configurado / Desconectado</span>
+                    )}
+                  </p>
                   {driveStatus.authorizedEmail && (
                     <p><span className="font-semibold text-[#1b3d36]">Cuenta autorizada:</span> {driveStatus.authorizedEmail}</p>
                   )}
                   {driveStatus.folderId && (
                     <p><span className="font-semibold text-[#1b3d36]">Carpeta destino:</span> {driveStatus.folderId}</p>
+                  )}
+                  {driveStatus.error && (
+                    <p className="mt-2 p-2 bg-amber-50 text-amber-900 rounded-lg border border-amber-200 text-[11px] leading-relaxed">
+                      {driveStatus.error}
+                    </p>
                   )}
                 </div>
               )}

@@ -140,6 +140,7 @@ export const authService = {
       if (res.ok && data.valid && data.invitation) {
         return {
           valid: true,
+          id: data.invitation.id,
           token,
           email: data.invitation.email,
           nombre: data.invitation.nombre,

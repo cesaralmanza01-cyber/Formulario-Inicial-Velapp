@@ -460,6 +460,7 @@ export interface PatientListItem {
 }
 
 export interface InvitationDetails {
+  id?: string;
   token: string;
   email: string;
   nombre: string;

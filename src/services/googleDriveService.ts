@@ -24,6 +24,9 @@ export interface DriveUploadResult {
 export interface DriveServerStatus {
   success: boolean;
   connected: boolean;
+  authorized?: boolean;
+  expired?: boolean;
+  isTestingExpired?: boolean;
   authorizedEmail?: string | null;
   folderName?: string;
   folderId?: string | null;

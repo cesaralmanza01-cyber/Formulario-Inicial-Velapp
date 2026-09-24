@@ -14,7 +14,6 @@ import { StepNineForm } from './components/StepNineForm';
 import { StepInBodyForm } from './components/StepInBodyForm';
 import { StepClosureScreen } from './components/StepClosureScreen';
 import { StepCompletionModal } from './components/StepCompletionModal';
-import { AdminPortal } from './components/AdminPortal';
 import { LoginScreen } from './components/LoginScreen';
 import { InvitationActivationScreen } from './components/InvitationActivationScreen';
 import { DoctorDashboard } from './components/DoctorDashboard';
@@ -37,6 +36,27 @@ import {
 } from './types';
 import { ShieldCheck, Heart, Lock } from 'lucide-react';
 
+/**
+ * =========================================================================
+ * BANDERA DE CONTROL: AUTENTICACIÓN DEL PACIENTE EN EL CUESTIONARIO
+ * =========================================================================
+ * - false (ACTUAL / MODO PRUEBAS DIRECTAS): El paciente accede directamente
+ *   al cuestionario por link sin requerir registro, usuario ni contraseña.
+ * - true: Exige inicio de sesión o creación de cuenta previa para responder
+ *   el cuestionario del paciente.
+ *
+ * CÓMO REVERTIR:
+ * Cambia esta constante a `true` cuando desees volver a exigir login/registro
+ * al paciente en producción.
+ *
+ * SEGURIDAD MÉDICA:
+ * El Panel de Control / Portal Médico de la Doctora (Dra. Lorena Castro)
+ * SIEMPRE exige inicio de sesión seguro con sus credenciales médicas,
+ * independientemente del valor de esta bandera.
+ * =========================================================================
+ */
+export const REQUIRE_PATIENT_LOGIN = false;
+
 export default function App() {
   // Check if ?nuevo=1 or ?nuevo=true is in the URL to start with a pristine, blank questionnaire.
   // Runs synchronously before state initializers evaluate localStorage.
@@ -52,6 +72,13 @@ export default function App() {
     const params = new URLSearchParams(window.location.search);
     return params.get('invitacion') || params.get('token') || null;
   });
+
+  // Track invited patient metadata when accessing by invitation link without login
+  const [invitedPatientData, setInvitedPatientData] = useState<{
+    id?: string;
+    email?: string;
+    nombre?: string;
+  } | null>(null);
 
   const [isAdminView, setIsAdminView] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
@@ -92,6 +119,47 @@ export default function App() {
     window.addEventListener('hashchange', handleHashChange);
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
+
+  // When patient login is not required, automatically prefill patient name if arriving via invite link
+  useEffect(() => {
+    if (!REQUIRE_PATIENT_LOGIN && invitationToken) {
+      let isMounted = true;
+      authService
+        .getInvitationDetails(invitationToken)
+        .then((details) => {
+          if (isMounted && details.valid && details.nombre) {
+            setInvitedPatientData({
+              id: details.id,
+              email: details.email,
+              nombre: details.nombre,
+            });
+            setStep1Data((prev) => {
+              if (!prev || !prev.fullName) {
+                return {
+                  fullName: details.nombre,
+                  documentType: prev?.documentType || 'CC',
+                  documentNumber: prev?.documentNumber || '',
+                  birthDate: prev?.birthDate || '',
+                  age: prev?.age || '',
+                  occupation: prev?.occupation || '',
+                  civilStatus: prev?.civilStatus || '',
+                  referralSource: prev?.referralSource || '',
+                  referralOtherDetails: prev?.referralOtherDetails || '',
+                };
+              }
+              return prev;
+            });
+          }
+        })
+        .catch((err) => {
+          console.warn('Notice loading invitation details:', err);
+        });
+
+      return () => {
+        isMounted = false;
+      };
+    }
+  }, [invitationToken]);
 
   const [currentStep, setCurrentStep] = useState<number>(() => {
     const savedStep = localStorage.getItem('vela_current_step');
@@ -192,8 +260,8 @@ export default function App() {
       const isSaved = overrides?.isSavedByPatient ?? (localStorage.getItem('vela_patient_has_saved') === 'true');
       await saveQuestionnaireToFirestore({
         currentStep: targetStep,
-        userId: currentUser?.id,
-        userEmail: currentUser?.email,
+        userId: currentUser?.id || invitedPatientData?.id,
+        userEmail: currentUser?.email || invitedPatientData?.email,
         isComplete: overrides?.isComplete ?? isSaved,
         isSavedByPatient: isSaved,
         step1Data: overrides?.step1 !== undefined ? overrides.step1 : step1Data,
@@ -211,6 +279,7 @@ export default function App() {
     }
   }, [
     currentUser,
+    invitedPatientData,
     currentStep,
     step1Data,
     step2Data,
@@ -425,78 +494,91 @@ export default function App() {
     );
   }
 
-  // 2. Patient Invitation Activation Screen
-  if (invitationToken && !currentUser) {
+  // 2. Doctor Portal / Dashboard Access
+  // Medical Panel strictly requires doctor credentials and role
+  if (isAdminView || (currentUser && currentUser.rol === 'doctora')) {
+    if (!currentUser || currentUser.rol !== 'doctora') {
+      return (
+        <LoginScreen
+          onLoginSuccess={(user) => {
+            setCurrentUser(user);
+          }}
+          defaultRole="doctora"
+        />
+      );
+    }
+
     return (
-      <InvitationActivationScreen
-        token={invitationToken}
-        onActivationSuccess={(user) => {
-          setCurrentUser(user);
-          setInvitationToken(null);
-          try {
-            const url = new URL(window.location.href);
-            url.searchParams.delete('invitacion');
-            url.searchParams.delete('token');
-            window.history.replaceState({}, '', url.pathname);
-          } catch {
-            // non-blocking
-          }
-        }}
-        onGoToLogin={() => {
-          setInvitationToken(null);
-          try {
-            const url = new URL(window.location.href);
-            url.searchParams.delete('invitacion');
-            url.searchParams.delete('token');
-            window.history.replaceState({}, '', url.pathname);
-          } catch {
-            // non-blocking
-          }
+      <DoctorDashboard
+        currentUser={currentUser}
+        onLogout={handleLogout}
+        onBackToApp={() => {
+          setIsAdminView(false);
+          window.location.hash = '';
         }}
       />
     );
   }
 
-  // 3. Unauthenticated Screen (Protects questionnaire and doctor panel)
-  if (!currentUser) {
+  // 3. Patient Authentication (Controlled by REQUIRE_PATIENT_LOGIN flag)
+  // When false (temporary testing / direct-link mode), patients access the questionnaire
+  // directly without login, password creation, or registration.
+  if (REQUIRE_PATIENT_LOGIN && !currentUser) {
+    // If an invitation token is present, show invitation activation screen
+    if (invitationToken) {
+      return (
+        <InvitationActivationScreen
+          token={invitationToken}
+          onActivationSuccess={(user) => {
+            setCurrentUser(user);
+            setInvitationToken(null);
+            try {
+              const url = new URL(window.location.href);
+              url.searchParams.delete('invitacion');
+              url.searchParams.delete('token');
+              window.history.replaceState({}, '', url.pathname);
+            } catch {
+              // non-blocking
+            }
+          }}
+          onGoToLogin={() => {
+            setInvitationToken(null);
+            try {
+              const url = new URL(window.location.href);
+              url.searchParams.delete('invitacion');
+              url.searchParams.delete('token');
+              window.history.replaceState({}, '', url.pathname);
+            } catch {
+              // non-blocking
+            }
+          }}
+        />
+      );
+    }
+
+    // Otherwise show login screen for patient
     return (
       <LoginScreen
         onLoginSuccess={(user) => {
           setCurrentUser(user);
         }}
-        defaultRole={isAdminView ? 'doctora' : 'paciente'}
+        defaultRole="paciente"
       />
     );
   }
 
-  // 4. Doctor Role Screen
-  if (currentUser.rol === 'doctora') {
-    if (isAdminView) {
-      return (
-        <AdminPortal
-          onBackToApp={() => {
-            setIsAdminView(false);
-            window.location.hash = '';
-          }}
-        />
-      );
-    }
-    return (
-      <DoctorDashboard
-        currentUser={currentUser}
-        onLogout={handleLogout}
-      />
-    );
-  }
-
-  // 5. Patient Role Screen (Protected Questionnaire)
+  // 4. Patient Questionnaire (Directly accessible without login when REQUIRE_PATIENT_LOGIN is false)
   return (
     <div className="min-h-screen bg-[#FAF6F0] flex flex-col selection:bg-[#AEC9C0]/40 selection:text-[#2E3A36]">
-      {/* Brand Header with Patient Info & Logout */}
+      {/* Brand Header with Patient Info & Doctor Login Access */}
       <Header
         onResetDraft={handleResetDraft}
         currentUser={currentUser}
         onLogout={handleLogout}
+        onDoctorLoginClick={() => {
+          setIsAdminView(true);
+          window.location.hash = '#admin';
+        }}
       />
 
       {/* Multi-step Wizard Progress Bar */}
