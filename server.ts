@@ -552,13 +552,13 @@ async function startServer() {
       const oauth2Client = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
       const authorizeUrl = oauth2Client.generateAuthUrl({
         access_type: "offline",
-        prompt: "consent",
+        prompt: "consent select_account",
         scope: [
+          "https://www.googleapis.com/auth/drive",
           "https://www.googleapis.com/auth/drive.file",
           "https://www.googleapis.com/auth/userinfo.email",
           "openid",
         ],
-        include_granted_scopes: true,
       });
 
       return res.redirect(authorizeUrl);
