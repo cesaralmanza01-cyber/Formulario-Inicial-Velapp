@@ -347,18 +347,28 @@ async function getAllPatients(): Promise<any[]> {
 }
 
 function extractSubPath(req: any): string {
-  if (req.url) {
-    const raw = req.url.split('?')[0];
-    const prefix = '/api/admin';
-    if (raw.startsWith(prefix)) {
-      return raw.slice(prefix.length).replace(/^\/+|\/+$/g, '');
+  // 1. Direct query parameter passed from rewrite (?subpath=...)
+  if (req.query?.subpath) {
+    if (Array.isArray(req.query.subpath)) {
+      return req.query.subpath.join('/');
     }
+    return String(req.query.subpath).replace(/^\/+|\/+$/g, '');
   }
+  // 2. Direct query path if catch-all
   if (req.query?.path) {
     if (Array.isArray(req.query.path)) {
       return req.query.path.join('/');
     }
     return String(req.query.path).replace(/^\/+|\/+$/g, '');
+  }
+  // 3. Fallback to URL path inspection
+  const url = req.url || req.headers?.['x-matched-path'] || req.headers?.['x-forwarded-uri'] || '';
+  if (url) {
+    const raw = url.split('?')[0];
+    const prefix = '/api/admin';
+    if (raw.startsWith(prefix)) {
+      return raw.slice(prefix.length).replace(/^\/+|\/+$/g, '');
+    }
   }
   return '';
 }
