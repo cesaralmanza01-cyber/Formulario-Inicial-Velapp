@@ -109,6 +109,69 @@ export function getAdminFirestore(): any | null {
   }
 }
 
+export interface StoredDriveTokens {
+  refreshToken?: string;
+  accessToken?: string;
+  expiryDate?: number;
+  authorizedEmail?: string;
+  updatedAt?: string;
+}
+
+export async function getGoogleDriveStoredTokens(): Promise<StoredDriveTokens | null> {
+  const envRefreshToken = getCleanEnv('GOOGLE_DRIVE_REFRESH_TOKEN');
+  if (envRefreshToken) {
+    return {
+      refreshToken: envRefreshToken,
+      authorizedEmail: getCleanEnv('GOOGLE_DRIVE_AUTHORIZED_EMAIL') || 'comerconcalma@gmail.com',
+      updatedAt: new Date().toISOString(),
+    };
+  }
+
+  try {
+    const dbAdmin = getAdminFirestore();
+    if (dbAdmin) {
+      const snap = await dbAdmin.collection('_system_config').doc('google_drive_tokens').get();
+      if (snap.exists) {
+        const data = snap.data() as StoredDriveTokens;
+        if (data?.refreshToken) {
+          return data;
+        }
+      }
+    }
+  } catch (adminErr: any) {
+    console.error('[ServerAuth] Firebase Admin fetch error:', adminErr?.message || adminErr);
+  }
+
+  return null;
+}
+
+export async function saveGoogleDriveTokens(tokens: StoredDriveTokens): Promise<boolean> {
+  try {
+    const dbAdmin = getAdminFirestore();
+    if (dbAdmin) {
+      await dbAdmin.collection('_system_config').doc('google_drive_tokens').set(tokens, { merge: true });
+      return true;
+    }
+    return false;
+  } catch (adminErr: any) {
+    console.error('[ServerAuth] Error saving tokens:', adminErr?.message || adminErr);
+    return false;
+  }
+}
+
+export function getOAuthRedirectUri(req: any): string {
+  const customAppUrl = getCleanEnv('APP_URL');
+  if (customAppUrl) {
+    return `${customAppUrl.replace(/\/$/, '')}/api/auth/google/callback`;
+  }
+  const host = req.headers['x-forwarded-host'] || req.headers.host || '';
+  if (host.includes('formulario-inicial-velapp.vercel.app') || host.includes('vercel.app')) {
+    return 'https://formulario-inicial-velapp.vercel.app/api/auth/google/callback';
+  }
+  const proto = req.headers['x-forwarded-proto'] || 'https';
+  return `${proto}://${host}/api/auth/google/callback`;
+}
+
 // Memory cache for runtime persistence within serverless instance
 let localUsersCache: UserRecord[] = [];
 

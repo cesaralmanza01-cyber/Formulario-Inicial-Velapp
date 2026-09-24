@@ -2,10 +2,6 @@
   "framework": "vite",
   "rewrites": [
     {
-      "source": "/api/auth/invitation/:token",
-      "destination": "/api/auth/invitation/[token]?token=:token"
-    },
-    {
       "source": "/((?!api/).*)",
       "destination": "/index.html"
     }
