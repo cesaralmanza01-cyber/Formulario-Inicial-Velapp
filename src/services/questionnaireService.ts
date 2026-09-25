@@ -182,8 +182,8 @@ export async function saveQuestionnaireToFirestore(params: {
   const step9 = params.step9Data ?? getCachedStepData<PatientLabExamsInfo>('vela_step9_data');
   const stepInBody = params.stepInBodyData ?? getCachedStepData<PatientInBodyInfo>('vela_step10_inbody_data');
 
-  // Evaluate clinical red flags from symptoms review
-  const redFlagsEvaluation = evaluateClinicalRedFlags(step5);
+  // Evaluate clinical red flags from symptoms review and weight history
+  const redFlagsEvaluation = evaluateClinicalRedFlags(step5, step3);
 
   const cleanLabFiles = sanitizeLabFiles(step9?.files);
   const cleanInBodyFiles = sanitizeLabFiles(stepInBody?.files);

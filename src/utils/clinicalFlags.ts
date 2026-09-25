@@ -1,4 +1,4 @@
-import { PatientBodySymptomsInfo } from '../types';
+import { PatientBodySymptomsInfo, PatientWeightHistoryInfo } from '../types';
 
 export interface ClinicalRedFlagItem {
   id: string;
@@ -18,13 +18,31 @@ export interface ClinicalRedFlagReport {
  * as an alarm to the patient during form filling.
  */
 export function evaluateClinicalRedFlags(
-  symptoms?: PatientBodySymptomsInfo | null
+  symptoms?: PatientBodySymptomsInfo | null,
+  weightHistory?: PatientWeightHistoryInfo | null
 ): ClinicalRedFlagReport {
-  if (!symptoms) {
-    return { hasRedFlags: false, flags: [] };
+  const flags: ClinicalRedFlagItem[] = [];
+
+  // Flag: Inicio de sobrepeso en primera infancia (< 5 años) - Sospecha de causa genética monogénica
+  if (
+    weightHistory?.overweightOnsetStage === 'infancia' &&
+    weightHistory.childhoodOnsetAge
+  ) {
+    const ageNum = parseInt(weightHistory.childhoodOnsetAge, 10);
+    if (!isNaN(ageNum) && ageNum < 5) {
+      flags.push({
+        id: 'early_childhood_obesity_genetic',
+        category: 'Historia ponderal y genética',
+        symptom: `Sobrepeso iniciado antes de los 5 años (edad reportada: ${ageNum} años)`,
+        clinicalNote:
+          'ALERTA CLÍNICA PRIORITARIA: Inicio de sobrepeso en la primera infancia (< 5 años). Considerar estudio de obesidad monogénica / vía de la leptina-melanocortina (MC4R, LEP, LEPR, POMC, PCSK1) y evaluar derivación a genética médica.',
+      });
+    }
   }
 
-  const flags: ClinicalRedFlagItem[] = [];
+  if (!symptoms) {
+    return { hasRedFlags: flags.length > 0, flags };
+  }
 
   const cat5Chips = symptoms.skinHairHormones?.selectedChips || [];
   const cat1Chips = symptoms.general?.selectedChips || [];

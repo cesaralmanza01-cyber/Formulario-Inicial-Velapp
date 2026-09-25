@@ -80,7 +80,7 @@ export const StepCompletionModal: React.FC<StepCompletionModalProps> = ({
     return null;
 
   const firstName = step1Data?.fullName ? step1Data.fullName.split(' ')[0] : 'Paciente';
-  const redFlagsReport = evaluateClinicalRedFlags(step5Data);
+  const redFlagsReport = evaluateClinicalRedFlags(step5Data, step3Data);
 
   return (
     <AnimatePresence>
@@ -788,6 +788,19 @@ export const StepCompletionModal: React.FC<StepCompletionModalProps> = ({
                         </div>
                       ))}
                     </div>
+                  </div>
+                )}
+
+                {/* Inicio del sobrepeso summary */}
+                {step3Data.overweightOnsetStage && (
+                  <div className="py-1 flex items-center justify-between text-xs border-t border-[#FAF6F0] pt-1.5">
+                    <span className="text-[#5C6E68]">Inicio del sobrepeso:</span>
+                    <span className="font-medium text-[#2E3A36] capitalize">
+                      {step3Data.overweightOnsetStage}
+                      {step3Data.overweightOnsetStage === 'infancia' && step3Data.childhoodOnsetAge
+                        ? ` (aprox. ${step3Data.childhoodOnsetAge} años)`
+                        : ''}
+                    </span>
                   </div>
                 )}
 

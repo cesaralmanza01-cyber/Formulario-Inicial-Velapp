@@ -529,6 +529,25 @@ export function generatePatientQuestionnairePdfDoc(
   printField('Menor peso alcanzado (+18)', patient.relacion_peso?.lowestWeightSince18Kg ? `${patient.relacion_peso.lowestWeightSince18Kg} kg` : null);
   printField('Mayor peso alcanzado (+18)', patient.relacion_peso?.highestWeightSince18Kg ? `${patient.relacion_peso.highestWeightSince18Kg} kg` : null);
 
+  // Etapa de establecimiento del sobrepeso
+  if (patient.relacion_peso?.overweightOnsetStage) {
+    const stageLabels: Record<string, string> = {
+      infancia: 'Infancia (0-12 años)',
+      adolescencia: 'Adolescencia (13-18 años)',
+      juventud: 'Juventud (19-29 años)',
+      adultez: 'Adultez (30-49 años)',
+    };
+    const stageDisplay = stageLabels[patient.relacion_peso.overweightOnsetStage] || patient.relacion_peso.overweightOnsetStage;
+    const childhoodDetail = patient.relacion_peso.overweightOnsetStage === 'infancia' && patient.relacion_peso.childhoodOnsetAge
+      ? ` — Edad aprox: ${patient.relacion_peso.childhoodOnsetAge} años${
+          parseInt(patient.relacion_peso.childhoodOnsetAge, 10) < 5
+            ? ' [Alerta: Inicio < 5 años, valorar sospecha genética/monogénica]'
+            : ''
+        }`
+      : '';
+    printField('Etapa de origen del sobrepeso', `${stageDisplay}${childhoodDetail}`);
+  }
+
   // Curva de trayectoria de peso en las etapas de vida (Interactive Journey Chart drawn into PDF)
   if (
     patient.relacion_peso?.weightJourneyPoints &&

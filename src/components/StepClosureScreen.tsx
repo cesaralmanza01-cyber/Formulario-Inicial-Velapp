@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { VelaIcon } from './VelaIcon';
 import { evaluateAllSteps } from '../utils/formCompleteness';
+import { evaluateClinicalRedFlags } from '../utils/clinicalFlags';
 import {
   PatientBasicInfo,
   PatientMotivationInfo,
@@ -135,7 +136,7 @@ export const StepClosureScreen: React.FC<StepClosureScreenProps> = ({
       startedAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       completedAt: new Date().toISOString(),
-      banderas_revisar: [],
+      banderas_revisar: evaluateClinicalRedFlags(symptomsInfo, weightInfo).flags,
       identificacion: basicInfo || null,
       motivo_objetivos: motivationInfo || null,
       relacion_peso: weightInfo || null,

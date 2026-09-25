@@ -131,6 +131,8 @@ export interface PatientWeightHistoryInfo {
   weightJourneyPoints?: WeightStagePoint[];
   // ¿En qué etapa de vida se estableció por primera vez el sobrepeso/obesidad?
   overweightOnsetStage?: LifeStageKey | '';
+  // Si inició en la infancia: edad aproximada en años (alerta clínica si < 5 años para posible estudio genético)
+  childhoodOnsetAge?: string;
 
   // Sub-sección 1.6: Las 4 preguntas guía ADA 2026 (tabla 3.4) — se usan
   // "tal cual" según la guía, distintas de simplemente preguntar el peso actual.
@@ -621,6 +623,7 @@ export interface StepThreeErrors {
   heightCm?: string;
   lowestWeightSince18Kg?: string;
   highestWeightSince18Kg?: string;
+  childhoodOnsetAge?: string;
   hasPreviousAttempts?: string;
   fluctuationCount?: string;
   regainSpeed?: string;

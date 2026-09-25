@@ -141,6 +141,7 @@ export const StepThreeForm: React.FC<StepThreeFormProps> = ({
         weightTrajectoryMilestones: [],
         weightJourneyPoints: [],
         overweightOnsetStage: '',
+        childhoodOnsetAge: '',
         feltBestWeightKg: '',
         currentWeightDifficulty: '',
         weightTrajectoryPattern: '',
@@ -227,6 +228,16 @@ export const StepThreeForm: React.FC<StepThreeFormProps> = ({
         const num = parseFloat(val);
         if (isNaN(num) || num < 25 || num > 350) {
           return 'Ingresa un peso válido en kilogramos.';
+        }
+        return '';
+      }
+
+      case 'childhoodOnsetAge': {
+        if (currentForm.overweightOnsetStage === 'infancia' && currentForm.childhoodOnsetAge) {
+          const num = parseInt(currentForm.childhoodOnsetAge, 10);
+          if (isNaN(num) || num < 0 || num > 12) {
+            return 'Por favor ingresa una edad aproximada válida en años (entre 0 y 12).';
+          }
         }
         return '';
       }
@@ -361,7 +372,10 @@ export const StepThreeForm: React.FC<StepThreeFormProps> = ({
     field: keyof PatientWeightHistoryInfo,
     value: unknown
   ) => {
-    const updated = { ...formData, [field]: value };
+    let updated = { ...formData, [field]: value };
+    if (field === 'overweightOnsetStage' && value !== 'infancia') {
+      updated = { ...updated, childhoodOnsetAge: '' };
+    }
     setFormData(updated);
     if (touched[field]) {
       const errorMsg = validateField(field, updated);
@@ -488,6 +502,10 @@ export const StepThreeForm: React.FC<StepThreeFormProps> = ({
       touchedFields.aestheticSurgeryTimeAgo = true;
     }
 
+    if (formData.overweightOnsetStage === 'infancia') {
+      touchedFields.childhoodOnsetAge = true;
+    }
+
     setTouched(touchedFields);
 
     const newErrors: StepThreeErrors = {
@@ -495,6 +513,7 @@ export const StepThreeForm: React.FC<StepThreeFormProps> = ({
       heightCm: validateField('heightCm', formData),
       lowestWeightSince18Kg: validateField('lowestWeightSince18Kg', formData),
       highestWeightSince18Kg: validateField('highestWeightSince18Kg', formData),
+      childhoodOnsetAge: validateField('childhoodOnsetAge', formData),
       hasPreviousAttempts: validateField('hasPreviousAttempts', formData),
       fluctuationCount: validateField('fluctuationCount', formData),
       regainSpeed: validateField('regainSpeed', formData),
@@ -935,6 +954,85 @@ export const StepThreeForm: React.FC<StepThreeFormProps> = ({
             );
           })}
         </div>
+
+        {/* Pregunta de seguimiento condicional si la etapa es Infancia */}
+        <AnimatePresence>
+          {formData.overweightOnsetStage === 'infancia' && (
+            <motion.div
+              initial={{ opacity: 0, height: 0, y: -6 }}
+              animate={{ opacity: 1, height: 'auto', y: 0 }}
+              exit={{ opacity: 0, height: 0, y: -6 }}
+              transition={{ duration: 0.25, ease: 'easeOut' }}
+              className="overflow-hidden pt-1"
+            >
+              <div
+                id="field-childhoodOnsetAge"
+                className="p-4 sm:p-5 rounded-2xl bg-[#F4F9F7] border border-[#AEC9C0]/70 space-y-3 shadow-2xs"
+              >
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                  <label
+                    htmlFor="childhoodOnsetAge-input"
+                    className="text-sm font-semibold text-[#2E3A36] flex items-center gap-2"
+                  >
+                    <Baby className="w-4 h-4 text-[#6E9E93]" />
+                    ¿A qué edad aproximadamente?
+                  </label>
+                  <span className="text-xs text-[#8E9E99]">En años cumplidos</span>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <input
+                    id="childhoodOnsetAge-input"
+                    type="number"
+                    min="0"
+                    max="12"
+                    step="1"
+                    value={formData.childhoodOnsetAge || ''}
+                    onChange={(e) => handleChange('childhoodOnsetAge', e.target.value)}
+                    onBlur={() => handleBlur('childhoodOnsetAge')}
+                    placeholder="Ej. 4"
+                    className={`w-28 sm:w-32 px-4 py-3 rounded-xl bg-white border text-[#2E3A36] placeholder-[#8E9E99] text-base font-semibold text-center transition-all duration-200 focus:outline-hidden focus:ring-2 focus:ring-[#6E9E93]/40 ${
+                      touched.childhoodOnsetAge && errors.childhoodOnsetAge
+                        ? 'border-[#F2A488] bg-[#FDEEE9]/40'
+                        : 'border-[#D9D3C8] hover:border-[#AEC9C0]'
+                    }`}
+                  />
+                  <span className="text-sm text-[#5C6E68] font-medium">años</span>
+                </div>
+
+                <p className="text-xs text-[#5C6E68] leading-relaxed">
+                  Conocer si el sobrepeso inició en la primera infancia (especialmente antes de los 5 años) es un dato clave para que la Dra. Lorena oriente el enfoque metabólico y valore si se benefician de estudios genéticos especializados.
+                </p>
+
+                {touched.childhoodOnsetAge && errors.childhoodOnsetAge && (
+                  <motion.p
+                    initial={{ opacity: 0, y: -4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="text-xs text-[#C66A4D] flex items-center gap-1.5 pl-1"
+                  >
+                    <Info className="w-3.5 h-3.5 shrink-0" />
+                    {errors.childhoodOnsetAge}
+                  </motion.p>
+                )}
+
+                {formData.childhoodOnsetAge &&
+                  !isNaN(parseInt(formData.childhoodOnsetAge, 10)) &&
+                  parseInt(formData.childhoodOnsetAge, 10) < 5 && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -2 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="p-3 rounded-xl bg-white border border-[#AEC9C0]/60 flex items-start gap-2.5 text-xs text-[#3D5A52]"
+                    >
+                      <Sparkles className="w-4 h-4 text-[#5B887E] shrink-0 mt-0.5" />
+                      <span>
+                        <strong>Dato clínico relevante (&lt; 5 años):</strong> La Dra. Lorena revisará especialmente este inicio temprano en tu consulta para definir si conviene evaluar factores genéticos o del desarrollo.
+                      </span>
+                    </motion.div>
+                  )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* =========================================================================
