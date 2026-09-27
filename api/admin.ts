@@ -260,11 +260,11 @@ function updateCache(user: UserRecord) {
 
 async function getAllPatients(): Promise<any[]> {
   const db = getAdminFirestore();
-  const patientsMap = new Map<string, UserRecord>();
+  const usersMap = new Map<string, UserRecord>();
 
   for (const u of localUsersCache) {
     if (u.rol === 'paciente') {
-      patientsMap.set(u.id, { ...u });
+      usersMap.set(u.id, { ...u });
     }
   }
 
@@ -273,76 +273,156 @@ async function getAllPatients(): Promise<any[]> {
       const snap = await db.collection('usuarios').where('rol', '==', 'paciente').get();
       snap.forEach((doc: any) => {
         const data = doc.data() as UserRecord;
-        patientsMap.set(doc.id, { ...data, id: doc.id });
+        usersMap.set(doc.id, { ...data, id: doc.id });
       });
     } catch (err) {
-      console.warn('[Admin Serverless] Firestore get patients notice:', err);
+      console.warn('[Admin Serverless] Firestore get usuarios notice:', err);
     }
   }
 
-  const questionnaireStatusMap = new Map<string, { completed: boolean; updatedAt?: string; driveLink?: string; currentStep?: number }>();
+  const questionnairesMap = new Map<string, any>();
   if (db) {
     try {
       const qSnap = await db.collection('cuestionarios_iniciales').get();
       qSnap.forEach((doc: any) => {
         const qData = doc.data();
-        const patientId = doc.id;
-        const userId = qData.userId;
-        const userEmail = qData.userEmail?.toLowerCase()?.trim();
-        const isCompleted = qData.status === 'completado' || qData.isSavedByPatient || (qData.currentStep >= 10);
-
-        const info = {
-          completed: Boolean(isCompleted),
-          updatedAt: qData.updatedAt || qData.completedAt || qData.startedAt,
-          driveLink: qData.driveWebViewLink || qData.pdfUrl,
-          currentStep: qData.currentStep,
-        };
-
-        if (patientId) questionnaireStatusMap.set(patientId, info);
-        if (userId) questionnaireStatusMap.set(userId, info);
-        if (userEmail) questionnaireStatusMap.set(userEmail, info);
+        const qId = doc.id;
+        questionnairesMap.set(qId, { ...qData, id: qId });
       });
     } catch (err) {
-      console.warn('[Admin Serverless] Firestore questionnaires query notice:', err);
+      console.warn('[Admin Serverless] Firestore cuestionarios_iniciales query notice:', err);
     }
   }
 
-  const patientList = Array.from(patientsMap.values()).map((p) => {
-    const qInfo =
-      questionnaireStatusMap.get(p.id) ||
-      (p.email ? questionnaireStatusMap.get(p.email.toLowerCase().trim()) : undefined) ||
-      (p.cuestionarioId ? questionnaireStatusMap.get(p.cuestionarioId) : undefined);
+  const patientMap = new Map<string, any>();
+  const emailIndex = new Map<string, string>();
+  const docIndex = new Map<string, string>();
 
-    const isDone = Boolean(p.cuestionarioCompletado || qInfo?.completed);
+  // Step A: Seed with invited/registered users
+  for (const u of usersMap.values()) {
+    const cleanEmail = (u.email || '').toLowerCase().trim();
+    const item = {
+      id: u.id,
+      nombre: u.nombre,
+      email: u.email,
+      documento: '',
+      celular: '',
+      rol: 'paciente' as const,
+      estado: u.estado,
+      clinicalStatus: (u.estado === 'invitado' ? 'invitado' : (u.cuestionarioCompletado ? 'Formulario recibido' : 'cuenta creada')) as any,
+      fechaCreacion: u.fechaCreacion,
+      fechaRegistro: u.fechaRegistro,
+      fechaEnvio: null as string | null,
+      invitationToken: u.invitationToken,
+      cuestionarioCompletado: Boolean(u.cuestionarioCompletado),
+      cuestionarioId: u.cuestionarioId || null,
+      cuestionarioUpdatedAt: u.cuestionarioUpdatedAt || null,
+      cuestionarioDriveLink: u.cuestionarioDriveLink || null,
+      cuestionarioStep: undefined as number | undefined,
+      isDirectSubmission: false,
+    };
+    patientMap.set(u.id, item);
+    if (cleanEmail) {
+      emailIndex.set(cleanEmail, u.id);
+    }
+  }
 
-    let clinicalStatus: 'invitado' | 'cuenta creada' | 'cuestionario completado' = 'invitado';
-    if (p.estado === 'invitado') {
-      clinicalStatus = 'invitado';
-    } else if (isDone) {
-      clinicalStatus = 'cuestionario completado';
-    } else {
-      clinicalStatus = 'cuenta creada';
+  // Step B: Merge questionnaires received
+  for (const qData of questionnairesMap.values()) {
+    const qId = qData.id || qData.patientId;
+    const qUserId = qData.userId;
+    const qEmail = (qData.patientEmail || qData.userEmail || qData.identificacion?.email || '')?.toLowerCase()?.trim();
+    const qName = (qData.patientName || qData.identificacion?.fullName || '')?.trim();
+    const qDoc = (qData.patientDocument || qData.identificacion?.documentNumber || '')?.trim();
+    const qPhone = (qData.patientPhone || qData.identificacion?.phone || '')?.trim();
+    const qDriveLink = qData.driveWebViewLink || qData.pdfUrl || null;
+    const qFechaEnvio = qData.completedAt || qData.savedAt || qData.updatedAt || qData.startedAt || null;
+    const qFechaCreacion = qData.startedAt || qData.updatedAt || qData.completedAt || null;
+    const isCompleted = Boolean(
+      qData.status === 'completado' ||
+      qData.isSavedByPatient ||
+      qData.completedAt ||
+      qData.driveWebViewLink ||
+      qData.pdfUrl ||
+      (qData.currentStep && qData.currentStep >= 10)
+    );
+    const qStep = qData.currentStep;
+
+    let matchedId: string | undefined;
+    if (qUserId && patientMap.has(qUserId)) {
+      matchedId = qUserId;
+    } else if (patientMap.has(qId)) {
+      matchedId = qId;
+    } else if (qEmail && emailIndex.has(qEmail)) {
+      matchedId = emailIndex.get(qEmail);
+    } else if (qDoc && docIndex.has(qDoc)) {
+      matchedId = docIndex.get(qDoc);
     }
 
-    return {
-      id: p.id,
-      nombre: p.nombre,
-      email: p.email,
-      rol: p.rol,
-      estado: p.estado,
-      clinicalStatus,
-      fechaCreacion: p.fechaCreacion,
-      fechaRegistro: p.fechaRegistro,
-      invitationToken: p.invitationToken,
-      cuestionarioCompletado: isDone,
-      cuestionarioId: p.cuestionarioId || null,
-      cuestionarioUpdatedAt: qInfo?.updatedAt || p.cuestionarioUpdatedAt || null,
-      cuestionarioDriveLink: qInfo?.driveLink || p.cuestionarioDriveLink || null,
-      cuestionarioStep: qInfo?.currentStep,
-    };
+    if (matchedId) {
+      const existing = patientMap.get(matchedId)!;
+      if (qName && qName !== 'Paciente en registro' && qName !== 'Paciente sin nombre') {
+        existing.nombre = qName;
+      }
+      if (qDoc) existing.documento = qDoc;
+      if (qPhone) existing.celular = qPhone;
+      if (qEmail && (!existing.email || existing.email.includes('sin correo'))) {
+        existing.email = qEmail;
+      }
+      if (qFechaEnvio) existing.fechaEnvio = qFechaEnvio;
+      if (qDriveLink) existing.cuestionarioDriveLink = qDriveLink;
+      if (qData.updatedAt) existing.cuestionarioUpdatedAt = qData.updatedAt;
+      if (qStep) existing.cuestionarioStep = qStep;
+      existing.cuestionarioId = qId;
+
+      if (isCompleted || existing.cuestionarioCompletado) {
+        existing.cuestionarioCompletado = true;
+        existing.clinicalStatus = 'Formulario recibido';
+      } else if (existing.estado === 'invitado') {
+        existing.clinicalStatus = 'invitado';
+      } else {
+        existing.clinicalStatus = 'cuenta creada';
+      }
+
+      if (qDoc) docIndex.set(qDoc, matchedId);
+      if (qEmail) emailIndex.set(qEmail, matchedId);
+    } else {
+      const validName = (qName && qName !== 'Paciente en registro' && qName !== 'Paciente sin nombre')
+        ? qName
+        : (qEmail ? `Paciente (${qEmail})` : 'Paciente Formulario');
+
+      const newPatient = {
+        id: qId,
+        nombre: validName,
+        email: qEmail || 'Sin correo',
+        documento: qDoc || '',
+        celular: qPhone || '',
+        rol: 'paciente' as const,
+        estado: 'registrado' as const,
+        clinicalStatus: (isCompleted ? 'Formulario recibido' : 'cuenta creada') as any,
+        fechaCreacion: qFechaCreacion || new Date().toISOString(),
+        fechaEnvio: qFechaEnvio || null,
+        cuestionarioCompletado: isCompleted,
+        cuestionarioId: qId,
+        cuestionarioDriveLink: qDriveLink,
+        cuestionarioUpdatedAt: qData.updatedAt || null,
+        cuestionarioStep: qStep || null,
+        isDirectSubmission: true,
+      };
+
+      patientMap.set(qId, newPatient);
+      if (qEmail) emailIndex.set(qEmail, qId);
+      if (qDoc) docIndex.set(qDoc, qId);
+    }
+  }
+
+  const patientList = Array.from(patientMap.values());
+  patientList.sort((a, b) => {
+    const timeA = new Date(a.fechaEnvio || a.cuestionarioUpdatedAt || a.fechaCreacion || 0).getTime();
+    const timeB = new Date(b.fechaEnvio || b.cuestionarioUpdatedAt || b.fechaCreacion || 0).getTime();
+    return timeB - timeA;
   });
 
-  patientList.sort((a, b) => new Date(b.fechaCreacion || 0).getTime() - new Date(a.fechaCreacion || 0).getTime());
   return patientList;
 }
 

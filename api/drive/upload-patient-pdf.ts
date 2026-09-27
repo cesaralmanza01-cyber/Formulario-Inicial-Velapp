@@ -237,6 +237,26 @@ export default async function handler(req: any, res: any) {
 
     console.log(`[Upload PDF OAuth] ¡Subida exitosa! File ID: ${fileId} — Link: ${webViewLink}`);
 
+    if (patientId) {
+      try {
+        const dbAdmin = getAdminFirestore();
+        if (dbAdmin) {
+          await dbAdmin.collection('cuestionarios_iniciales').doc(patientId).set({
+            driveFileId: fileId,
+            driveFileName: finalFileName,
+            driveWebViewLink: webViewLink,
+            pdfUrl: webViewLink,
+            status: 'completado',
+            isSavedByPatient: true,
+            completedAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          }, { merge: true });
+        }
+      } catch (fErr) {
+        console.warn('[Upload PDF] Firestore update notice:', fErr);
+      }
+    }
+
     return res.status(200).json({
       success: true,
       fileId,
