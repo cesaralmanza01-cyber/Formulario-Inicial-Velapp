@@ -61,8 +61,8 @@ function parseServiceAccount(raw: string | undefined): any | null {
   if (!str.startsWith('{') && str.length > 20) {
     try {
       const decoded = Buffer.from(str, 'base64').toString('utf-8');
-      if (decoded.startsWith('{')) {
-        str = decoded;
+      if (decoded.trim().startsWith('{')) {
+        str = decoded.trim();
       }
     } catch {}
   }
@@ -75,7 +75,6 @@ function parseServiceAccount(raw: string | undefined): any | null {
     if (parsed.client_email && parsed.private_key) {
       return parsed;
     }
-    return null;
   } catch (err: any) {
     try {
       const fixedStr = str.replace(/[\r\n]+/g, ' ');
@@ -87,8 +86,56 @@ function parseServiceAccount(raw: string | undefined): any | null {
         return parsed;
       }
     } catch {}
-    return null;
+    try {
+      const unescaped = str.replace(/\\\\/g, '\\');
+      const parsed = JSON.parse(unescaped);
+      if (parsed.private_key && typeof parsed.private_key === 'string') {
+        parsed.private_key = parsed.private_key.replace(/\\n/g, '\n');
+      }
+      if (parsed.client_email && parsed.private_key) {
+        return parsed;
+      }
+    } catch {}
   }
+
+  return null;
+}
+
+function resolveServiceAccount(): { sa: any; sourceVar: string } | null {
+  const envVarNames = [
+    'FIREBASE_SERVICE_ACCOUNT',
+    'GOOGLE_SERVICE_ACCOUNT_KEY',
+    'FIREBASE_SERVICE_ACCOUNT_KEY',
+    'GOOGLE_APPLICATION_CREDENTIALS',
+    'SERVICE_ACCOUNT_KEY',
+    'FIREBASE_CREDENTIALS',
+    'GCP_SERVICE_ACCOUNT',
+  ];
+
+  for (const varName of envVarNames) {
+    const val = process.env[varName];
+    if (val && val.trim().length > 10) {
+      const parsed = parseServiceAccount(val);
+      if (parsed) {
+        return { sa: parsed, sourceVar: varName };
+      }
+    }
+  }
+
+  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL || process.env.GOOGLE_CLIENT_EMAIL;
+  const privateKey = process.env.FIREBASE_PRIVATE_KEY || process.env.GOOGLE_PRIVATE_KEY;
+  if (clientEmail && privateKey) {
+    return {
+      sa: {
+        client_email: clientEmail.trim(),
+        private_key: privateKey.trim().replace(/\\n/g, '\n'),
+        project_id: process.env.FIREBASE_PROJECT_ID || process.env.GOOGLE_PROJECT_ID || FIREBASE_PROJECT_ID,
+      },
+      sourceVar: 'FIREBASE_CLIENT_EMAIL + FIREBASE_PRIVATE_KEY',
+    };
+  }
+
+  return null;
 }
 
 function getAdminFirestore() {
@@ -97,14 +144,19 @@ function getAdminFirestore() {
       return getAdminFirestoreInstance(getAdminApp());
     }
 
-    const serviceAccount = parseServiceAccount(process.env.FIREBASE_SERVICE_ACCOUNT);
-    if (!serviceAccount) {
+    const resolved = resolveServiceAccount();
+    if (!resolved) {
+      console.warn('[Server] ⚠️ Firebase Admin service account no encontrada en variables de entorno.');
       return null;
     }
 
+    const { sa, sourceVar } = resolved;
+    const targetProjectId = sa.project_id || FIREBASE_PROJECT_ID;
+    console.log(`[Server] ✅ Inicializando Firebase Admin con credencial de "${sourceVar}" (Project: ${targetProjectId})`);
+
     initAdminApp({
-      credential: cert(serviceAccount),
-      projectId: serviceAccount.project_id || FIREBASE_PROJECT_ID,
+      credential: cert(sa),
+      projectId: targetProjectId,
     });
 
     return getAdminFirestoreInstance(getAdminApp());

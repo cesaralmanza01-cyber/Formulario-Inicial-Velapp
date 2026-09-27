@@ -59,19 +59,22 @@ function parseServiceAccount(raw: string | undefined): any | null {
   let str = raw.trim();
   if (!str) return null;
 
+  // Strip wrapping outer quotes if present
   if ((str.startsWith('"') && str.endsWith('"')) || (str.startsWith("'") && str.endsWith("'"))) {
     str = str.slice(1, -1).trim();
   }
 
+  // Check if string is base64 encoded JSON
   if (!str.startsWith('{') && str.length > 20) {
     try {
       const decoded = Buffer.from(str, 'base64').toString('utf-8');
-      if (decoded.startsWith('{')) {
-        str = decoded;
+      if (decoded.trim().startsWith('{')) {
+        str = decoded.trim();
       }
     } catch {}
   }
 
+  // Attempt 1: Standard JSON parse
   try {
     const parsed = JSON.parse(str);
     if (parsed.private_key && typeof parsed.private_key === 'string') {
@@ -80,8 +83,8 @@ function parseServiceAccount(raw: string | undefined): any | null {
     if (parsed.client_email && parsed.private_key) {
       return parsed;
     }
-    return null;
   } catch (err: any) {
+    // Attempt 2: Handle raw unescaped newlines in JSON strings
     try {
       const fixedStr = str.replace(/[\r\n]+/g, ' ');
       const parsed = JSON.parse(fixedStr);
@@ -92,8 +95,59 @@ function parseServiceAccount(raw: string | undefined): any | null {
         return parsed;
       }
     } catch {}
-    return null;
+
+    // Attempt 3: Fix double-escaped slashes
+    try {
+      const unescaped = str.replace(/\\\\/g, '\\');
+      const parsed = JSON.parse(unescaped);
+      if (parsed.private_key && typeof parsed.private_key === 'string') {
+        parsed.private_key = parsed.private_key.replace(/\\n/g, '\n');
+      }
+      if (parsed.client_email && parsed.private_key) {
+        return parsed;
+      }
+    } catch {}
   }
+
+  return null;
+}
+
+function resolveServiceAccount(): { sa: any; sourceVar: string } | null {
+  const envVarNames = [
+    'FIREBASE_SERVICE_ACCOUNT',
+    'GOOGLE_SERVICE_ACCOUNT_KEY',
+    'FIREBASE_SERVICE_ACCOUNT_KEY',
+    'GOOGLE_APPLICATION_CREDENTIALS',
+    'SERVICE_ACCOUNT_KEY',
+    'FIREBASE_CREDENTIALS',
+    'GCP_SERVICE_ACCOUNT',
+  ];
+
+  for (const varName of envVarNames) {
+    const val = process.env[varName];
+    if (val && val.trim().length > 10) {
+      const parsed = parseServiceAccount(val);
+      if (parsed) {
+        return { sa: parsed, sourceVar: varName };
+      }
+    }
+  }
+
+  // Check individual env vars
+  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL || process.env.GOOGLE_CLIENT_EMAIL;
+  const privateKey = process.env.FIREBASE_PRIVATE_KEY || process.env.GOOGLE_PRIVATE_KEY;
+  if (clientEmail && privateKey) {
+    return {
+      sa: {
+        client_email: clientEmail.trim(),
+        private_key: privateKey.trim().replace(/\\n/g, '\n'),
+        project_id: process.env.FIREBASE_PROJECT_ID || process.env.GOOGLE_PROJECT_ID || FIREBASE_PROJECT_ID,
+      },
+      sourceVar: 'FIREBASE_CLIENT_EMAIL + FIREBASE_PRIVATE_KEY',
+    };
+  }
+
+  return null;
 }
 
 function getAdminFirestore(): any | null {
@@ -102,19 +156,32 @@ function getAdminFirestore(): any | null {
       return getAdminFirestoreInstance(getAdminApp());
     }
 
-    const serviceAccount = parseServiceAccount(process.env.FIREBASE_SERVICE_ACCOUNT);
-    if (!serviceAccount) {
+    const resolved = resolveServiceAccount();
+    if (!resolved) {
+      console.warn(
+        '[Firebase Admin] ⚠️ No se encontró ninguna credencial válida de Firebase Admin en las variables de entorno.\n' +
+        'Variables verificadas: FIREBASE_SERVICE_ACCOUNT, GOOGLE_SERVICE_ACCOUNT_KEY, FIREBASE_SERVICE_ACCOUNT_KEY, GOOGLE_APPLICATION_CREDENTIALS, SERVICE_ACCOUNT_KEY.\n' +
+        'Configura en Vercel (Settings -> Environment Variables) la variable FIREBASE_SERVICE_ACCOUNT con el JSON de la clave de Firebase.'
+      );
       return null;
     }
 
+    const { sa, sourceVar } = resolved;
+    const targetProjectId = sa.project_id || FIREBASE_PROJECT_ID;
+    console.log(
+      `[Firebase Admin] ✅ Inicializando Firebase Admin con credencial de variable "${sourceVar}".\n` +
+      `  -> Proyecto destino: "${targetProjectId}"\n` +
+      `  -> Client Email: "${sa.client_email}"`
+    );
+
     initAdminApp({
-      credential: cert(serviceAccount),
-      projectId: serviceAccount.project_id || FIREBASE_PROJECT_ID,
+      credential: cert(sa),
+      projectId: targetProjectId,
     });
 
     return getAdminFirestoreInstance(getAdminApp());
   } catch (err: any) {
-    console.warn('[Admin Serverless] Firebase Admin init notice:', err?.message || err);
+    console.error('[Firebase Admin] ❌ Error inicializando Firebase Admin SDK:', err?.message || err);
     return null;
   }
 }
@@ -259,8 +326,10 @@ function updateCache(user: UserRecord) {
 }
 
 async function getAllPatients(): Promise<any[]> {
+  console.log('[Admin Serverless] 🚀 Obteniendo listado de pacientes...');
   const db = getAdminFirestore();
   const usersMap = new Map<string, UserRecord>();
+  const questionnairesMap = new Map<string, any>();
 
   for (const u of localUsersCache) {
     if (u.rol === 'paciente') {
@@ -270,28 +339,32 @@ async function getAllPatients(): Promise<any[]> {
 
   if (db) {
     try {
+      console.log('[Admin Serverless] 📡 Consultando colección "usuarios" en Firestore...');
       const snap = await db.collection('usuarios').where('rol', '==', 'paciente').get();
+      console.log(`[Admin Serverless] 📋 Colección "usuarios": ${snap.size} registros encontrados.`);
       snap.forEach((doc: any) => {
         const data = doc.data() as UserRecord;
         usersMap.set(doc.id, { ...data, id: doc.id });
       });
-    } catch (err) {
-      console.warn('[Admin Serverless] Firestore get usuarios notice:', err);
+    } catch (err: any) {
+      console.error('[Admin Serverless] ❌ Error consultando colección "usuarios":', err?.message || err);
     }
-  }
 
-  const questionnairesMap = new Map<string, any>();
-  if (db) {
     try {
+      console.log('[Admin Serverless] 📡 Consultando colección "cuestionarios_iniciales" en Firestore...');
       const qSnap = await db.collection('cuestionarios_iniciales').get();
+      console.log(`[Admin Serverless] 📝 Colección "cuestionarios_iniciales": ${qSnap.size} documentos encontrados.`);
       qSnap.forEach((doc: any) => {
         const qData = doc.data();
         const qId = doc.id;
         questionnairesMap.set(qId, { ...qData, id: qId });
+        console.log(`  -> [Doc: ${qId}] Paciente: "${qData.patientName || qData.identificacion?.fullName || 'N/A'}" | Email: "${qData.patientEmail || qData.userEmail || 'N/A'}" | Status: "${qData.status}" | Step: ${qData.currentStep}`);
       });
-    } catch (err) {
-      console.warn('[Admin Serverless] Firestore cuestionarios_iniciales query notice:', err);
+    } catch (err: any) {
+      console.error('[Admin Serverless] ❌ Error consultando colección "cuestionarios_iniciales":', err?.message || err);
     }
+  } else {
+    console.warn('[Admin Serverless] ⚠️ Firestore no disponible (getAdminFirestore retornó null). Usando caché local.');
   }
 
   const patientMap = new Map<string, any>();
@@ -422,6 +495,10 @@ async function getAllPatients(): Promise<any[]> {
     const timeB = new Date(b.fechaEnvio || b.cuestionarioUpdatedAt || b.fechaCreacion || 0).getTime();
     return timeB - timeA;
   });
+
+  const countReceived = patientList.filter((p) => p.cuestionarioCompletado || p.clinicalStatus === 'Formulario recibido').length;
+  const countInvited = patientList.filter((p) => p.clinicalStatus === 'invitado').length;
+  console.log(`[Admin Serverless] 🏁 Consolidación finalizada: ${patientList.length} pacientes en total (${countReceived} con formulario recibido, ${countInvited} invitaciones pendientes).`);
 
   return patientList;
 }
