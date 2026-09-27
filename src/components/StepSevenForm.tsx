@@ -31,13 +31,15 @@ interface StepSevenFormProps {
 
 const DAILY_ACTIVITY_OPTIONS = [
   {
-    val: 'Sentada la mayor parte del día',
-    label: 'Sentada la mayor parte del día',
+    val: 'Sentado(a) la mayor parte del día',
+    legacyVal: 'Sentada la mayor parte del día',
+    label: 'Sentado(a) la mayor parte del día',
     desc: 'Trabajo de oficina, computadora, conducción o estudio prolongado',
   },
   {
-    val: 'Sentada, pero me paro con frecuencia',
-    label: 'Sentada, pero me paro con frecuencia',
+    val: 'Sentado(a), pero me paro con frecuencia',
+    legacyVal: 'Sentada, pero me paro con frecuencia',
+    label: 'Sentado(a), pero me paro con frecuencia',
     desc: 'Pausas activas, diligencias intermitentes en la casa o trabajo',
   },
   {
@@ -324,7 +326,9 @@ export const StepSevenForm: React.FC<StepSevenFormProps> = ({
 
           <div className="space-y-2">
             {DAILY_ACTIVITY_OPTIONS.map((opt) => {
-              const isSelected = formData.dailyActivityType === opt.val;
+              const isSelected =
+                formData.dailyActivityType === opt.val ||
+                formData.dailyActivityType === (opt as any).legacyVal;
               return (
                 <button
                   key={opt.val}
@@ -482,7 +486,7 @@ export const StepSevenForm: React.FC<StepSevenFormProps> = ({
             className="space-y-2"
           >
             <label className="text-xs sm:text-sm font-semibold text-[#2E3A36]">
-              5. ¿Cuánto tiempo pasas sentada en un día típico? <strong className="text-[#C66A4D]">*</strong>
+              5. ¿Cuánto tiempo pasas sentado(a) en un día típico? <strong className="text-[#C66A4D]">*</strong>
             </label>
             <div className="grid grid-cols-2 gap-2 pt-1">
               {SITTING_HOURS_OPTIONS.map((opt) => {

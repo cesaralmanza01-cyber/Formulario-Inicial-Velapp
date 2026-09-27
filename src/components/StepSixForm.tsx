@@ -159,7 +159,7 @@ export const StepSixForm: React.FC<StepSixFormProps> = ({
         formData.dietaryRestrictions.includes('Alergia alimentaria') &&
         (!formData.dietaryAllergiesDetails || !formData.dietaryAllergiesDetails.trim())
       ) {
-        errs.dietaryAllergiesDetails = 'Por favor indícanos a qué alimentos eres alérgica.';
+        errs.dietaryAllergiesDetails = 'Por favor indícanos a qué alimentos eres alérgico(a).';
       }
     }
 
@@ -316,7 +316,7 @@ export const StepSixForm: React.FC<StepSixFormProps> = ({
             Hablemos de tu alimentación
           </h1>
           <p className="text-sm sm:text-base text-[#5C6E68] max-w-2xl leading-relaxed">
-            No hay juicios aquí. Mientras más honesta seas, mejor podemos ayudarte a construir un plan que realmente disfrutes y se adapte a tu vida.
+            No hay juicios aquí. Mientras más honesto(a) seas, mejor podemos ayudarte a construir un plan que realmente disfrutes y se adapte a tu vida.
           </p>
         </div>
       </div>

@@ -205,9 +205,14 @@ export const StepThreeForm: React.FC<StepThreeFormProps> = ({
     setAutoSavedTime(timeStr);
   }, [formData]);
 
+  const isInitializedRef = React.useRef(false);
   useEffect(() => {
-    if (initialData) {
-      setFormData(initialData);
+    if (initialData && !isInitializedRef.current) {
+      isInitializedRef.current = true;
+      const saved = localStorage.getItem('vela_step3_data');
+      if (!saved) {
+        setFormData(initialData);
+      }
     }
   }, [initialData]);
 
@@ -536,34 +541,37 @@ export const StepThreeForm: React.FC<StepThreeFormProps> = ({
     field: keyof PatientWeightHistoryInfo,
     value: unknown
   ) => {
-    let updated = { ...formData, [field]: value };
-    if (field === 'overweightOnsetStage' && value !== 'infancia') {
-      updated = { ...updated, childhoodOnsetAge: '' };
-    }
-    if (field === 'hadBariatricSurgery' && value !== 'Sí') {
-      updated = {
-        ...updated,
-        bariatricSurgeryTimeAgo: '',
-        bariatricPreOpWeightKg: '',
-        bariatricLowestWeightPostOpKg: '',
-        bariatricWeightRegain: '',
-        bariatricWeightRegainedKg: '',
-      };
-    }
-    if (field === 'bariatricWeightRegain' && value !== 'Sí') {
-      updated = {
-        ...updated,
-        bariatricWeightRegainedKg: '',
-      };
-    }
-    setFormData(updated);
+    setFormData((prev) => {
+      let updated = { ...prev, [field]: value };
+      if (field === 'overweightOnsetStage' && value !== 'infancia') {
+        updated = { ...updated, childhoodOnsetAge: '' };
+      }
+      if (field === 'hadBariatricSurgery' && value !== 'Sí') {
+        updated = {
+          ...updated,
+          bariatricSurgeryTimeAgo: '',
+          bariatricPreOpWeightKg: '',
+          bariatricLowestWeightPostOpKg: '',
+          bariatricWeightRegain: '',
+          bariatricWeightRegainedKg: '',
+        };
+      }
+      if (field === 'bariatricWeightRegain' && value !== 'Sí') {
+        updated = {
+          ...updated,
+          bariatricWeightRegainedKg: '',
+        };
+      }
 
-    if (value && (!Array.isArray(value) || value.length > 0)) {
-      setErrors((prev) => ({ ...prev, [field]: '' }));
-    } else if (attemptedSubmit || touched[field]) {
-      const errorMsg = validateField(field, updated);
-      setErrors((prev) => ({ ...prev, [field]: errorMsg }));
-    }
+      if (value && (!Array.isArray(value) || value.length > 0)) {
+        setErrors((errs) => ({ ...errs, [field]: '' }));
+      } else if (attemptedSubmit || touched[field]) {
+        const errorMsg = validateField(field, updated);
+        setErrors((errs) => ({ ...errs, [field]: errorMsg }));
+      }
+
+      return updated;
+    });
   };
 
   const handleMedicationItemChange = (
@@ -715,25 +723,26 @@ export const StepThreeForm: React.FC<StepThreeFormProps> = ({
   };
 
   const togglePreviousMethod = (method: PreviousMethodOption) => {
-    const currentList = formData.previousMethods || [];
-    const exists = currentList.includes(method);
-    const updatedList = exists
-      ? currentList.filter((m) => m !== method)
-      : [...currentList, method];
-
-    handleChange('previousMethods', updatedList);
-    if (updatedList.length > 0) {
-      setErrors((prev) => ({ ...prev, previousMethods: '' }));
-    }
+    setFormData((prev) => {
+      const currentList = prev.previousMethods || [];
+      const exists = currentList.includes(method);
+      const updatedList = exists
+        ? currentList.filter((m) => m !== method)
+        : [...currentList, method];
+      return { ...prev, previousMethods: updatedList };
+    });
+    setErrors((prev) => ({ ...prev, previousMethods: '' }));
   };
 
   const toggleStigmaContext = (context: WeightStigmaContext) => {
-    const currentList = formData.weightStigmaContexts || [];
-    const exists = currentList.includes(context);
-    const updatedList = exists
-      ? currentList.filter((c) => c !== context)
-      : [...currentList, context];
-    handleChange('weightStigmaContexts', updatedList);
+    setFormData((prev) => {
+      const currentList = prev.weightStigmaContexts || [];
+      const exists = currentList.includes(context);
+      const updatedList = exists
+        ? currentList.filter((c) => c !== context)
+        : [...currentList, context];
+      return { ...prev, weightStigmaContexts: updatedList };
+    });
   };
 
   // Evaluate form completeness

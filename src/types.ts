@@ -758,6 +758,8 @@ export interface PatientPhysicalActivityInfo {
   dailyActivityType:
     | 'Sentada la mayor parte del día'
     | 'Sentada, pero me paro con frecuencia'
+    | 'Sentado(a) la mayor parte del día'
+    | 'Sentado(a), pero me paro con frecuencia'
     | 'De pie la mayor parte del día'
     | 'Con desplazamientos y movimiento constante'
     | 'Trabajo físico intenso'

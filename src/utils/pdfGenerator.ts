@@ -1291,7 +1291,7 @@ export function generatePatientQuestionnairePdfDoc(
       ? `${patient.actividad_fisica.hasStepTrackerDevice}${patient.actividad_fisica.dailyStepsApprox ? ` (${patient.actividad_fisica.dailyStepsApprox} pasos aprox.)` : ''}`
       : null
   );
-  printField('Horas al día sentada', patient.actividad_fisica?.dailySittingHours);
+  printField('Horas al día sentado(a)', patient.actividad_fisica?.dailySittingHours);
 
   printSubSectionTitle('Ejercicio físico estructurado');
   printField(
