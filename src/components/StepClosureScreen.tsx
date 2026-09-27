@@ -193,7 +193,7 @@ export const StepClosureScreen: React.FC<StepClosureScreenProps> = ({
           console.log('[Triple Respaldo] Paso 3: Sincronizando respaldo automático de Google Drive en servidor...');
 
           if (blob) {
-            const driveResult = await uploadPatientPdfToServerDrive(blob, patientFullName, patientDoc.patientId);
+            const driveResult = await uploadPatientPdfToServerDrive(blob, patientFullName, patientDoc.patientId, patientDoc);
 
             if (driveResult.success && driveResult.webViewLink) {
               console.log('[Triple Respaldo] Copia en Google Drive guardada exitosamente:', driveResult.webViewLink);

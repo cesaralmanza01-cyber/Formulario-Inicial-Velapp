@@ -76,9 +76,10 @@ export function blobToDataUrl(blob: Blob): Promise<string> {
 export async function uploadPatientPdfToServerDrive(
   pdfBlob: Blob,
   patientName: string,
-  patientId: string
+  patientId: string,
+  questionnaireData?: any
 ): Promise<DriveUploadResult> {
-  console.log('[Google Drive Service] Iniciando subida de PDF a Google Drive...');
+  console.log('[Google Drive Service] Iniciando subida de PDF a Google Drive y respaldo en servidor...');
   try {
     const fileDataUrl = await blobToDataUrl(pdfBlob);
     const fileName = generateDrivePdfFileName(patientName);
@@ -91,6 +92,7 @@ export async function uploadPatientPdfToServerDrive(
         patientId,
         fileName,
         fileDataUrl,
+        questionnaireData: questionnaireData || null,
       }),
     });
 

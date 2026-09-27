@@ -878,7 +878,7 @@ async function startServer() {
   // Patient upload endpoint (server-side via stored refresh token)
   app.post("/api/drive/upload-patient-pdf", async (req, res) => {
     try {
-      const { patientName, patientId, fileDataUrl, fileName } = req.body;
+      const { patientName, patientId, fileDataUrl, fileName, questionnaireData } = req.body;
       if (!fileDataUrl) {
         return res.json({ success: false, error: "No se proporcionaron datos de archivo PDF" });
       }
@@ -920,7 +920,7 @@ async function startServer() {
       }
       const buffer = Buffer.from(base64Data, "base64");
 
-      const safePatientName = patientName || "Paciente";
+      const safePatientName = patientName || questionnaireData?.patientName || "Paciente";
       const cleanName = safePatientName.trim().replace(/[\\/:*?"<>|]/g, "_").replace(/\s+/g, " ");
       const todayStr = new Date().toISOString().split("T")[0];
       const finalFileName = fileName || `Cuestionario_${cleanName}_${todayStr}.pdf`;
@@ -948,20 +948,59 @@ async function startServer() {
       const fileId = driveRes.data.id || "";
       const webViewLink = driveRes.data.webViewLink || `https://drive.google.com/file/d/${fileId}/view`;
 
-      if (patientId) {
-        saveBackupQuestionnaire({
-          id: patientId,
-          patientId,
-          patientName: safePatientName,
-          driveFileId: fileId,
-          driveFileName: finalFileName,
-          driveWebViewLink: webViewLink,
-          pdfUrl: webViewLink,
-          status: "completado",
-          isSavedByPatient: true,
-          completedAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        });
+      const effectivePatientId = String(patientId || questionnaireData?.patientId || `paciente_${Date.now()}`).trim();
+      const qData = questionnaireData || {};
+      const safeDocNumber = qData.patientDocument || qData.identificacion?.documentNumber || '';
+      const safeEmail = qData.patientEmail || qData.userEmail || qData.identificacion?.email || '';
+      const safePhone = qData.patientPhone || qData.identificacion?.phone || '';
+
+      const consolidatedDoc = {
+        ...qData,
+        id: effectivePatientId,
+        patientId: effectivePatientId,
+        patientName: safePatientName,
+        patientDocument: safeDocNumber,
+        patientEmail: safeEmail,
+        patientPhone: safePhone,
+        driveFileId: fileId,
+        driveFileName: finalFileName,
+        driveWebViewLink: webViewLink,
+        pdfUrl: webViewLink,
+        status: "completado",
+        isSavedByPatient: true,
+        currentStep: qData.currentStep || 11,
+        startedAt: qData.startedAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        completedAt: qData.completedAt || new Date().toISOString(),
+      };
+
+      saveBackupQuestionnaire(consolidatedDoc);
+
+      const dbAdmin = getAdminFirestore();
+      if (dbAdmin) {
+        try {
+          await dbAdmin.collection('cuestionarios_iniciales').doc(effectivePatientId).set(consolidatedDoc, { merge: true });
+          console.log(`[Drive Upload Server] ✅ Documento guardado en Firestore ('cuestionarios_iniciales/${effectivePatientId}').`);
+
+          if (safeEmail) {
+            const userSnap = await dbAdmin.collection('usuarios').where('email', '==', safeEmail.toLowerCase().trim()).get();
+            if (!userSnap.empty) {
+              for (const userDoc of userSnap.docs) {
+                await userDoc.ref.set({
+                  cuestionarioCompletado: true,
+                  cuestionarioId: effectivePatientId,
+                  cuestionarioDriveLink: webViewLink,
+                  cuestionarioUpdatedAt: new Date().toISOString(),
+                  ...(safeDocNumber ? { documento: safeDocNumber } : {}),
+                  ...(safePhone ? { celular: safePhone } : {}),
+                  ...(safePatientName && safePatientName !== 'Paciente' ? { nombre: safePatientName } : {}),
+                }, { merge: true });
+              }
+            }
+          }
+        } catch (fErr: any) {
+          console.warn("[Drive Upload Server] Firestore save notice:", fErr?.message || fErr);
+        }
       }
 
       return res.json({

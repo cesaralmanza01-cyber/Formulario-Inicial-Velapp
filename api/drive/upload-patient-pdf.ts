@@ -111,10 +111,30 @@ function resolveServiceAccount(): { sa: any; sourceVar: string } | null {
   return null;
 }
 
+function cleanFirestoreObject(obj: any): any {
+  if (obj === null || obj === undefined) return null;
+  if (typeof obj !== 'object') return obj;
+  if (Array.isArray(obj)) {
+    return obj.map(cleanFirestoreObject);
+  }
+  const result: Record<string, any> = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (value !== undefined) {
+      result[key] = cleanFirestoreObject(value);
+    }
+  }
+  return result;
+}
+
 function getAdminFirestore() {
   try {
     if (getAdminApps().length > 0) {
-      return getAdminFirestoreInstance(getAdminApp());
+      const app = getAdminApp();
+      const db = getAdminFirestoreInstance(app);
+      try {
+        db.settings({ ignoreUndefinedProperties: true });
+      } catch {}
+      return db;
     }
 
     const resolved = resolveServiceAccount();
@@ -127,12 +147,16 @@ function getAdminFirestore() {
     const targetProjectId = sa.project_id || FIREBASE_PROJECT_ID;
     console.log(`[Upload PDF] ✅ Inicializando Firebase Admin con "${sourceVar}" (Project: ${targetProjectId})`);
 
-    initAdminApp({
+    const app = initAdminApp({
       credential: cert(sa),
       projectId: targetProjectId,
     });
 
-    return getAdminFirestoreInstance(getAdminApp());
+    const db = getAdminFirestoreInstance(app);
+    try {
+      db.settings({ ignoreUndefinedProperties: true });
+    } catch {}
+    return db;
   } catch (err: any) {
     console.warn('[Upload PDF] Firebase Admin Init Notice:', err?.message || err);
     return null;
@@ -205,7 +229,7 @@ export default async function handler(req: any, res: any) {
       }
     }
 
-    const { patientName, patientId, fileDataUrl, fileName } = body || {};
+    const { patientName, patientId, fileDataUrl, fileName, questionnaireData } = body || {};
 
     if (!fileDataUrl) {
       return res.status(400).json({ success: false, error: 'No se proporcionaron datos de archivo PDF' });
@@ -253,7 +277,7 @@ export default async function handler(req: any, res: any) {
     }
     const buffer = Buffer.from(base64Data, 'base64');
 
-    const safePatientName = patientName || 'Paciente';
+    const safePatientName = patientName || questionnaireData?.patientName || 'Paciente';
     const cleanName = safePatientName.trim().replace(/[\\/:*?"<>|]/g, '_').replace(/\s+/g, ' ');
     const todayStr = new Date().toISOString().split('T')[0];
     const finalFileName = fileName || `Cuestionario_${cleanName}_${todayStr}.pdf`;
@@ -286,26 +310,75 @@ export default async function handler(req: any, res: any) {
     const fileId = driveRes.data.id || '';
     const webViewLink = driveRes.data.webViewLink || `https://drive.google.com/file/d/${fileId}/view`;
 
-    console.log(`[Upload PDF OAuth] ¡Subida exitosa! File ID: ${fileId} — Link: ${webViewLink}`);
+    console.log(`[Upload PDF OAuth] ✅ ¡Subida a Google Drive exitosa! File ID: ${fileId} — Link: ${webViewLink}`);
 
-    if (patientId) {
-      try {
-        const dbAdmin = getAdminFirestore();
-        if (dbAdmin) {
-          await dbAdmin.collection('cuestionarios_iniciales').doc(patientId).set({
-            driveFileId: fileId,
-            driveFileName: finalFileName,
-            driveWebViewLink: webViewLink,
-            pdfUrl: webViewLink,
-            status: 'completado',
-            isSavedByPatient: true,
-            completedAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          }, { merge: true });
+    // Persist complete questionnaire document directly in Firestore via Firebase Admin SDK
+    const effectivePatientId = String(patientId || questionnaireData?.patientId || `paciente_${Date.now()}`).trim();
+    const qData = questionnaireData || {};
+    const safeDocNumber = qData.patientDocument || qData.identificacion?.documentNumber || '';
+    const safeEmail = qData.patientEmail || qData.userEmail || qData.identificacion?.email || '';
+    const safePhone = qData.patientPhone || qData.identificacion?.phone || '';
+
+    const rawDocToSave = {
+      ...qData,
+      patientId: effectivePatientId,
+      patientName: safePatientName,
+      patientDocument: safeDocNumber,
+      patientEmail: safeEmail,
+      patientPhone: safePhone,
+      status: 'completado',
+      isSavedByPatient: true,
+      currentStep: qData.currentStep || 11,
+      startedAt: qData.startedAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      completedAt: qData.completedAt || new Date().toISOString(),
+      driveFileId: fileId,
+      driveFileName: finalFileName,
+      driveWebViewLink: webViewLink,
+      pdfUrl: webViewLink,
+    };
+    const completeDocToSave = cleanFirestoreObject(rawDocToSave);
+
+    console.log(`[Upload PDF Serverless] 💾 Guardando cuestionario consolidado en Firestore...`);
+    console.log(`  -> Colección: "cuestionarios_iniciales"`);
+    console.log(`  -> ID Documento: "${effectivePatientId}"`);
+    console.log(`  -> Paciente: "${safePatientName}"`);
+    console.log(`  -> Documento: "${safeDocNumber}" | Email: "${safeEmail}" | Celular: "${safePhone}"`);
+    console.log(`  -> Enlace Drive: "${webViewLink}"`);
+
+    try {
+      const dbAdmin = getAdminFirestore();
+      if (dbAdmin) {
+        // 1. Save document to 'cuestionarios_iniciales'
+        await dbAdmin.collection('cuestionarios_iniciales').doc(effectivePatientId).set(completeDocToSave, { merge: true });
+        console.log(`[Upload PDF Serverless] ✅ Documento guardado exitosamente en Firestore ('cuestionarios_iniciales/${effectivePatientId}').`);
+
+        // 2. If user exists in 'usuarios', update questionnaire status
+        if (safeEmail) {
+          const userSnap = await dbAdmin.collection('usuarios').where('email', '==', safeEmail.toLowerCase().trim()).get();
+          if (!userSnap.empty) {
+            for (const userDoc of userSnap.docs) {
+              await userDoc.ref.set(
+                cleanFirestoreObject({
+                  cuestionarioCompletado: true,
+                  cuestionarioId: effectivePatientId,
+                  cuestionarioDriveLink: webViewLink,
+                  cuestionarioUpdatedAt: new Date().toISOString(),
+                  ...(safeDocNumber ? { documento: safeDocNumber } : {}),
+                  ...(safePhone ? { celular: safePhone } : {}),
+                  ...(safePatientName && safePatientName !== 'Paciente' ? { nombre: safePatientName } : {}),
+                }),
+                { merge: true }
+              );
+              console.log(`[Upload PDF Serverless] 🔗 Usuario vinculado en 'usuarios' (${safeEmail}, doc: ${userDoc.id}).`);
+            }
+          }
         }
-      } catch (fErr) {
-        console.warn('[Upload PDF] Firestore update notice:', fErr);
+      } else {
+        console.warn(`[Upload PDF Serverless] ⚠️ No se pudo obtener dbAdmin para guardar en Firestore.`);
       }
+    } catch (fErr: any) {
+      console.error(`[Upload PDF Serverless] ❌ Error guardando en Firestore:`, fErr?.message || fErr);
     }
 
     return res.status(200).json({

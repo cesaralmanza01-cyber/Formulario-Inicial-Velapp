@@ -153,7 +153,12 @@ function resolveServiceAccount(): { sa: any; sourceVar: string } | null {
 function getAdminFirestore(): any | null {
   try {
     if (getAdminApps().length > 0) {
-      return getAdminFirestoreInstance(getAdminApp());
+      const app = getAdminApp();
+      const db = getAdminFirestoreInstance(app);
+      try {
+        db.settings({ ignoreUndefinedProperties: true });
+      } catch {}
+      return db;
     }
 
     const resolved = resolveServiceAccount();
@@ -174,12 +179,16 @@ function getAdminFirestore(): any | null {
       `  -> Client Email: "${sa.client_email}"`
     );
 
-    initAdminApp({
+    const app = initAdminApp({
       credential: cert(sa),
       projectId: targetProjectId,
     });
 
-    return getAdminFirestoreInstance(getAdminApp());
+    const db = getAdminFirestoreInstance(app);
+    try {
+      db.settings({ ignoreUndefinedProperties: true });
+    } catch {}
+    return db;
   } catch (err: any) {
     console.error('[Firebase Admin] ❌ Error inicializando Firebase Admin SDK:', err?.message || err);
     return null;
