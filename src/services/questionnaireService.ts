@@ -271,7 +271,20 @@ export async function saveQuestionnaireToFirestore(params: {
   // 1. Save to Firestore
   await setDoc(docRef, docData, { merge: true });
 
-  // 2. Also keep a local backup in localStorage for resiliency
+  // 2. Sync to server backup endpoint
+  try {
+    fetch('/api/questionnaires/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: patientId, ...docData }),
+    }).catch(() => {
+      // non-blocking
+    });
+  } catch (syncErr) {
+    // non-blocking
+  }
+
+  // 3. Also keep a local backup in localStorage for resiliency
   try {
     const existingBackups: any[] = JSON.parse(
       localStorage.getItem('vela_submitted_questionnaires') || '[]'
@@ -283,7 +296,7 @@ export async function saveQuestionnaireToFirestore(params: {
     console.warn('Local backup write notice:', err);
   }
 
-  // 3. Link progress with authenticated user record
+  // 4. Link progress with authenticated user record
   if (params.userId) {
     authService.linkQuestionnaire(patientId, isDone, driveLink || undefined).catch(() => {
       // non-blocking

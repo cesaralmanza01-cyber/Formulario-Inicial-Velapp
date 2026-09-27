@@ -203,11 +203,117 @@ export const authService = {
         credentials: 'include',
       });
 
-      const data = await res.json();
-      if (res.ok && data.success) {
-        return { success: true, patients: data.patients || [] };
+      let serverPatients: PatientListItem[] = [];
+      let hadServerError = false;
+      let serverErrorMsg = '';
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && Array.isArray(data.patients)) {
+          serverPatients = data.patients;
+        } else {
+          hadServerError = true;
+          serverErrorMsg = data.error || 'Error al consultar pacientes.';
+        }
+      } else {
+        hadServerError = true;
+        serverErrorMsg = `Error ${res.status} al consultar el servidor.`;
       }
-      return { success: false, patients: [], error: data.error || 'Error al consultar pacientes.' };
+
+      // Check local storage backups as additional safeguard
+      let localBackups: any[] = [];
+      try {
+        const raw = localStorage.getItem('vela_submitted_questionnaires');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) localBackups = parsed;
+        }
+      } catch {}
+
+      const patientMap = new Map<string, PatientListItem>();
+      const emailIndex = new Map<string, string>();
+      const docIndex = new Map<string, string>();
+
+      for (const p of serverPatients) {
+        patientMap.set(p.id, { ...p });
+        if (p.email) emailIndex.set(p.email.toLowerCase().trim(), p.id);
+        if (p.documento) docIndex.set(p.documento.trim(), p.id);
+      }
+
+      for (const b of localBackups) {
+        const bId = b.id || b.patientId;
+        const qName = (b.patientName || b.identificacion?.fullName || '')?.trim();
+        const qEmail = (b.patientEmail || b.userEmail || b.identificacion?.email || '')?.toLowerCase()?.trim();
+        const qDoc = (b.patientDocument || b.identificacion?.documentNumber || '')?.trim();
+        const qPhone = (b.patientPhone || b.identificacion?.phone || '')?.trim();
+        const qDriveLink = b.driveWebViewLink || b.pdfUrl || null;
+        const qFechaEnvio = b.completedAt || b.savedAt || b.updatedAt || b.startedAt || null;
+        const isCompleted = Boolean(
+          b.status === 'completado' ||
+          b.isSavedByPatient ||
+          b.completedAt ||
+          b.driveWebViewLink ||
+          b.pdfUrl ||
+          (b.currentStep && b.currentStep >= 10)
+        );
+
+        let matchedId: string | undefined;
+        if (bId && patientMap.has(bId)) {
+          matchedId = bId;
+        } else if (qEmail && emailIndex.has(qEmail)) {
+          matchedId = emailIndex.get(qEmail);
+        } else if (qDoc && docIndex.has(qDoc)) {
+          matchedId = docIndex.get(qDoc);
+        }
+
+        if (matchedId) {
+          const existing = patientMap.get(matchedId)!;
+          if (qName && qName !== 'Paciente en registro') existing.nombre = qName;
+          if (qDoc) existing.documento = qDoc;
+          if (qPhone) existing.celular = qPhone;
+          if (qFechaEnvio) existing.fechaEnvio = qFechaEnvio;
+          if (qDriveLink) existing.cuestionarioDriveLink = qDriveLink;
+          if (isCompleted || existing.cuestionarioCompletado) {
+            existing.cuestionarioCompletado = true;
+            existing.clinicalStatus = 'Formulario recibido';
+          }
+        } else if (bId) {
+          const newEntry: PatientListItem = {
+            id: bId,
+            nombre: (qName && qName !== 'Paciente en registro') ? qName : 'Paciente Formulario',
+            email: qEmail || 'Sin correo',
+            documento: qDoc || '',
+            celular: qPhone || '',
+            rol: 'paciente',
+            estado: 'registrado',
+            clinicalStatus: isCompleted ? 'Formulario recibido' : 'cuenta creada',
+            fechaCreacion: b.startedAt || new Date().toISOString(),
+            fechaEnvio: qFechaEnvio,
+            cuestionarioCompletado: isCompleted,
+            cuestionarioId: bId,
+            cuestionarioDriveLink: qDriveLink,
+            cuestionarioUpdatedAt: b.updatedAt,
+            cuestionarioStep: b.currentStep,
+            isDirectSubmission: true,
+          };
+          patientMap.set(bId, newEntry);
+          if (qEmail) emailIndex.set(qEmail, bId);
+          if (qDoc) docIndex.set(qDoc, bId);
+        }
+      }
+
+      if (patientMap.size === 0 && hadServerError) {
+        return { success: false, patients: [], error: serverErrorMsg };
+      }
+
+      const mergedList = Array.from(patientMap.values());
+      mergedList.sort((a, b) => {
+        const timeA = new Date(a.fechaEnvio || a.cuestionarioUpdatedAt || a.fechaCreacion || 0).getTime();
+        const timeB = new Date(b.fechaEnvio || b.cuestionarioUpdatedAt || b.fechaCreacion || 0).getTime();
+        return timeB - timeA;
+      });
+
+      return { success: true, patients: mergedList };
     } catch (err: any) {
       return { success: false, patients: [], error: err?.message || 'Error de conexión' };
     }

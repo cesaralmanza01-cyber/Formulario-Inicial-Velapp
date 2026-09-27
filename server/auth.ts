@@ -34,6 +34,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'vela_jwt_secret_signature_key_2026
 const DOCTOR_EMAIL = (process.env.DOCTOR_EMAIL || 'comerconcalma@gmail.com').toLowerCase().trim();
 const DOCTOR_INITIAL_PASSWORD = process.env.DOCTOR_INITIAL_PASSWORD || 'Lorenal1728*';
 const BACKUP_USERS_FILE = path.join(process.cwd(), 'uploads', 'users_store.json');
+const BACKUP_QUESTIONNAIRES_FILE = path.join(process.cwd(), 'uploads', 'questionnaires_store.json');
 
 // Memory cache of users for lightning-fast lookups and resilient offline/local fallback
 let localUsersCache: UserRecord[] = [];
@@ -62,6 +63,41 @@ function saveBackupUsers(users: UserRecord[]) {
     fs.writeFileSync(BACKUP_USERS_FILE, JSON.stringify(users, null, 2), 'utf-8');
   } catch (err) {
     console.warn('[Server Auth] Notice saving backup users file:', err);
+  }
+}
+
+export function loadBackupQuestionnaires(): any[] {
+  try {
+    if (fs.existsSync(BACKUP_QUESTIONNAIRES_FILE)) {
+      const data = fs.readFileSync(BACKUP_QUESTIONNAIRES_FILE, 'utf-8');
+      const parsed = JSON.parse(data);
+      if (Array.isArray(parsed)) {
+        return parsed;
+      }
+    }
+  } catch (err) {
+    console.warn('[Server Auth] Notice loading backup questionnaires file:', err);
+  }
+  return [];
+}
+
+export function saveBackupQuestionnaire(questionnaireData: any): void {
+  try {
+    const list = loadBackupQuestionnaires();
+    const qId = questionnaireData.id || questionnaireData.patientId;
+    const index = list.findIndex((item) => (item.id || item.patientId) === qId);
+    if (index >= 0) {
+      list[index] = { ...list[index], ...questionnaireData };
+    } else {
+      list.unshift(questionnaireData);
+    }
+    const dir = path.dirname(BACKUP_QUESTIONNAIRES_FILE);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    fs.writeFileSync(BACKUP_QUESTIONNAIRES_FILE, JSON.stringify(list, null, 2), 'utf-8');
+  } catch (err) {
+    console.warn('[Server Auth] Notice saving backup questionnaire:', err);
   }
 }
 
@@ -264,98 +300,190 @@ export async function saveUserRecord(user: UserRecord, getDb: () => any): Promis
 }
 
 /**
- * Gets all patients with clinical questionnaire status
+ * Gets all patients with clinical questionnaire status, merging both invited/registered accounts
+ * and direct questionnaire submissions from collection cuestionarios_iniciales and backups.
  */
 export async function getAllPatientsWithStatus(getDb: () => any): Promise<any[]> {
   const db = getDb();
-  const patientsMap = new Map<string, UserRecord>();
-
-  // 1. From local cache
+  
+  // 1. Collect all registered/invited accounts
+  const usersMap = new Map<string, UserRecord>();
   for (const u of localUsersCache) {
     if (u.rol === 'paciente') {
-      patientsMap.set(u.id, { ...u });
+      usersMap.set(u.id, { ...u });
     }
   }
 
-  // 2. From Firestore usuarios
   if (db) {
     try {
       const snap = await db.collection('usuarios').where('rol', '==', 'paciente').get();
       snap.forEach((doc: any) => {
         const data = doc.data() as UserRecord;
-        patientsMap.set(doc.id, { ...data, id: doc.id });
+        usersMap.set(doc.id, { ...data, id: doc.id });
       });
     } catch (err) {
-      console.warn('[Server Auth] Firestore get patients notice:', err);
+      console.warn('[Server Auth] Firestore get usuarios notice:', err);
     }
   }
 
-  // 3. Cross-reference questionnaire status from collection cuestionarios_iniciales
-  const questionnaireStatusMap = new Map<string, { completed: boolean; updatedAt?: string; driveLink?: string; currentStep?: number }>();
+  // 2. Collect all questionnaires from backup store + Firestore collection cuestionarios_iniciales
+  const questionnairesMap = new Map<string, any>();
+  
+  const backupList = loadBackupQuestionnaires();
+  for (const q of backupList) {
+    const qId = q.id || q.patientId;
+    if (qId) {
+      questionnairesMap.set(qId, q);
+    }
+  }
+
   if (db) {
     try {
       const qSnap = await db.collection('cuestionarios_iniciales').get();
       qSnap.forEach((doc: any) => {
         const qData = doc.data();
-        const patientId = doc.id;
-        const userId = qData.userId;
-        const userEmail = qData.userEmail?.toLowerCase()?.trim();
-        const isCompleted = qData.status === 'completado' || qData.isSavedByPatient || (qData.currentStep >= 10);
-
-        const info = {
-          completed: Boolean(isCompleted),
-          updatedAt: qData.updatedAt || qData.completedAt || qData.startedAt,
-          driveLink: qData.driveWebViewLink || qData.pdfUrl,
-          currentStep: qData.currentStep,
-        };
-
-        if (patientId) questionnaireStatusMap.set(patientId, info);
-        if (userId) questionnaireStatusMap.set(userId, info);
-        if (userEmail) questionnaireStatusMap.set(userEmail, info);
+        const qId = doc.id;
+        questionnairesMap.set(qId, { ...qData, id: qId });
       });
     } catch (err) {
-      console.warn('[Server Auth] Firestore questionnaires query notice:', err);
+      console.warn('[Server Auth] Firestore cuestionarios_iniciales query notice:', err);
     }
   }
 
-  const patientList = Array.from(patientsMap.values()).map((p) => {
-    // Check if questionnaire completed
-    const qInfo =
-      questionnaireStatusMap.get(p.id) ||
-      (p.email ? questionnaireStatusMap.get(p.email.toLowerCase().trim()) : undefined) ||
-      (p.cuestionarioId ? questionnaireStatusMap.get(p.cuestionarioId) : undefined);
+  // 3. Build unified patient items
+  const patientMap = new Map<string, any>();
+  const emailIndex = new Map<string, string>(); // clean email -> patient key
+  const docIndex = new Map<string, string>(); // clean doc number -> patient key
 
-    const isDone = Boolean(p.cuestionarioCompletado || qInfo?.completed);
+  // Step A: Seed with invited/registered users
+  for (const u of usersMap.values()) {
+    const cleanEmail = (u.email || '').toLowerCase().trim();
+    const item = {
+      id: u.id,
+      nombre: u.nombre,
+      email: u.email,
+      documento: '',
+      celular: '',
+      rol: 'paciente' as const,
+      estado: u.estado,
+      clinicalStatus: (u.estado === 'invitado' ? 'invitado' : (u.cuestionarioCompletado ? 'Formulario recibido' : 'cuenta creada')) as any,
+      fechaCreacion: u.fechaCreacion,
+      fechaRegistro: u.fechaRegistro,
+      fechaEnvio: null as string | null,
+      invitationToken: u.invitationToken,
+      cuestionarioCompletado: Boolean(u.cuestionarioCompletado),
+      cuestionarioId: u.cuestionarioId || null,
+      cuestionarioUpdatedAt: u.cuestionarioUpdatedAt || null,
+      cuestionarioDriveLink: u.cuestionarioDriveLink || null,
+      cuestionarioStep: undefined as number | undefined,
+      isDirectSubmission: false,
+    };
+    patientMap.set(u.id, item);
+    if (cleanEmail) {
+      emailIndex.set(cleanEmail, u.id);
+    }
+  }
 
-    let clinicalStatus: 'invitado' | 'cuenta creada' | 'cuestionario completado' = 'invitado';
-    if (p.estado === 'invitado') {
-      clinicalStatus = 'invitado';
-    } else if (isDone) {
-      clinicalStatus = 'cuestionario completado';
-    } else {
-      clinicalStatus = 'cuenta creada';
+  // Step B: Merge questionnaires received (linking with invited accounts or adding direct responses)
+  for (const qData of questionnairesMap.values()) {
+    const qId = qData.id || qData.patientId;
+    const qUserId = qData.userId;
+    const qEmail = (qData.patientEmail || qData.userEmail || qData.identificacion?.email || '')?.toLowerCase()?.trim();
+    const qName = (qData.patientName || qData.identificacion?.fullName || '')?.trim();
+    const qDoc = (qData.patientDocument || qData.identificacion?.documentNumber || '')?.trim();
+    const qPhone = (qData.patientPhone || qData.identificacion?.phone || '')?.trim();
+    const qDriveLink = qData.driveWebViewLink || qData.pdfUrl || null;
+    const qFechaEnvio = qData.completedAt || qData.savedAt || qData.updatedAt || qData.startedAt || null;
+    const qFechaCreacion = qData.startedAt || qData.updatedAt || qData.completedAt || null;
+    const isCompleted = Boolean(
+      qData.status === 'completado' ||
+      qData.isSavedByPatient ||
+      qData.completedAt ||
+      qData.driveWebViewLink ||
+      qData.pdfUrl ||
+      (qData.currentStep && qData.currentStep >= 10)
+    );
+    const qStep = qData.currentStep;
+
+    // Check if this matches an existing patient
+    let matchedId: string | undefined;
+    if (qUserId && patientMap.has(qUserId)) {
+      matchedId = qUserId;
+    } else if (patientMap.has(qId)) {
+      matchedId = qId;
+    } else if (qEmail && emailIndex.has(qEmail)) {
+      matchedId = emailIndex.get(qEmail);
+    } else if (qDoc && docIndex.has(qDoc)) {
+      matchedId = docIndex.get(qDoc);
     }
 
-    return {
-      id: p.id,
-      nombre: p.nombre,
-      email: p.email,
-      rol: p.rol,
-      estado: p.estado,
-      clinicalStatus,
-      fechaCreacion: p.fechaCreacion,
-      fechaRegistro: p.fechaRegistro,
-      invitationToken: p.invitationToken,
-      cuestionarioCompletado: isDone,
-      cuestionarioId: p.cuestionarioId || null,
-      cuestionarioUpdatedAt: qInfo?.updatedAt || p.cuestionarioUpdatedAt || null,
-      cuestionarioDriveLink: qInfo?.driveLink || p.cuestionarioDriveLink || null,
-      cuestionarioStep: qInfo?.currentStep,
-    };
-  });
+    if (matchedId) {
+      // Link with existing user without duplicating
+      const existing = patientMap.get(matchedId)!;
+      if (qName && qName !== 'Paciente en registro' && qName !== 'Paciente sin nombre') {
+        existing.nombre = qName;
+      }
+      if (qDoc) existing.documento = qDoc;
+      if (qPhone) existing.celular = qPhone;
+      if (qEmail && (!existing.email || existing.email.includes('sin correo'))) {
+        existing.email = qEmail;
+      }
+      if (qFechaEnvio) existing.fechaEnvio = qFechaEnvio;
+      if (qDriveLink) existing.cuestionarioDriveLink = qDriveLink;
+      if (qData.updatedAt) existing.cuestionarioUpdatedAt = qData.updatedAt;
+      if (qStep) existing.cuestionarioStep = qStep;
+      existing.cuestionarioId = qId;
 
-  // Sort descending by creation date
-  patientList.sort((a, b) => new Date(b.fechaCreacion || 0).getTime() - new Date(a.fechaCreacion || 0).getTime());
+      if (isCompleted || existing.cuestionarioCompletado) {
+        existing.cuestionarioCompletado = true;
+        existing.clinicalStatus = 'Formulario recibido';
+      } else if (existing.estado === 'invitado') {
+        existing.clinicalStatus = 'invitado';
+      } else {
+        existing.clinicalStatus = 'cuenta creada';
+      }
+
+      if (qDoc) docIndex.set(qDoc, matchedId);
+      if (qEmail) emailIndex.set(qEmail, matchedId);
+    } else {
+      // Direct submission (create patient row)
+      const validName = (qName && qName !== 'Paciente en registro' && qName !== 'Paciente sin nombre')
+        ? qName
+        : (qEmail ? `Paciente (${qEmail})` : 'Paciente Formulario');
+
+      const newPatient = {
+        id: qId,
+        nombre: validName,
+        email: qEmail || 'Sin correo',
+        documento: qDoc || '',
+        celular: qPhone || '',
+        rol: 'paciente' as const,
+        estado: 'registrado' as const,
+        clinicalStatus: (isCompleted ? 'Formulario recibido' : 'cuenta creada') as any,
+        fechaCreacion: qFechaCreacion || new Date().toISOString(),
+        fechaEnvio: qFechaEnvio || null,
+        cuestionarioCompletado: isCompleted,
+        cuestionarioId: qId,
+        cuestionarioDriveLink: qDriveLink,
+        cuestionarioUpdatedAt: qData.updatedAt || null,
+        cuestionarioStep: qStep || null,
+        isDirectSubmission: true,
+      };
+
+      patientMap.set(qId, newPatient);
+      if (qEmail) emailIndex.set(qEmail, qId);
+      if (qDoc) docIndex.set(qDoc, qId);
+    }
+  }
+
+  const patientList = Array.from(patientMap.values());
+
+  // Sort descending: patients with newest fechaEnvio or fechaCreacion on top
+  patientList.sort((a, b) => {
+    const timeA = new Date(a.fechaEnvio || a.cuestionarioUpdatedAt || a.fechaCreacion || 0).getTime();
+    const timeB = new Date(b.fechaEnvio || b.cuestionarioUpdatedAt || b.fechaCreacion || 0).getTime();
+    return timeB - timeA;
+  });
 
   return patientList;
 }

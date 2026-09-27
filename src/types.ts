@@ -562,7 +562,7 @@ export interface UploadedLabFile {
 
 export type UserRole = 'doctora' | 'paciente';
 export type UserStatus = 'invitado' | 'registrado';
-export type PatientClinicalStatus = 'invitado' | 'cuenta creada' | 'cuestionario completado';
+export type PatientClinicalStatus = 'invitado' | 'cuenta creada' | 'cuestionario completado' | 'Formulario recibido';
 
 export interface AppUser {
   id: string;
@@ -580,11 +580,14 @@ export interface PatientListItem {
   id: string;
   nombre: string;
   email: string;
+  documento?: string;
+  celular?: string;
   rol: 'paciente';
   estado: UserStatus;
   clinicalStatus: PatientClinicalStatus;
   fechaCreacion: string;
   fechaRegistro?: string;
+  fechaEnvio?: string | null;
   invitationToken?: string;
   inviteLink?: string;
   cuestionarioCompletado: boolean;
@@ -592,6 +595,7 @@ export interface PatientListItem {
   cuestionarioUpdatedAt?: string;
   cuestionarioDriveLink?: string;
   cuestionarioStep?: number;
+  isDirectSubmission?: boolean;
 }
 
 export interface InvitationDetails {

@@ -17,6 +17,7 @@ import {
   getUserById,
   getUserByInvitationToken,
   saveUserRecord,
+  saveBackupQuestionnaire,
   getAllPatientsWithStatus,
   signUserToken,
   extractAuthPayload,
@@ -518,6 +519,33 @@ async function startServer() {
     }
   });
 
+  // 9. Sync/Save Questionnaire endpoint (stores backup on server and syncs to Firestore if available)
+  app.post("/api/questionnaires/sync", async (req, res) => {
+    try {
+      const qData = req.body;
+      if (!qData || (!qData.patientId && !qData.id)) {
+        return res.status(400).json({ success: false, error: "Datos de cuestionario inválidos" });
+      }
+
+      const qId = qData.id || qData.patientId;
+      saveBackupQuestionnaire({ ...qData, id: qId, updatedAt: qData.updatedAt || new Date().toISOString() });
+
+      const dbAdmin = getAdminFirestore();
+      if (dbAdmin) {
+        try {
+          await dbAdmin.collection("cuestionarios_iniciales").doc(qId).set(qData, { merge: true });
+        } catch (fErr: any) {
+          console.warn("[Server] Firestore sync notice:", fErr?.message || fErr);
+        }
+      }
+
+      return res.json({ success: true, id: qId });
+    } catch (err: any) {
+      console.error("[Questionnaire Sync Error]:", err);
+      return res.status(500).json({ success: false, error: err?.message || "Error al sincronizar cuestionario" });
+    }
+  });
+
   // ==========================================
   // GOOGLE DRIVE OAUTH 2.0 API ENDPOINTS
   // ==========================================
@@ -867,6 +895,22 @@ async function startServer() {
 
       const fileId = driveRes.data.id || "";
       const webViewLink = driveRes.data.webViewLink || `https://drive.google.com/file/d/${fileId}/view`;
+
+      if (patientId) {
+        saveBackupQuestionnaire({
+          id: patientId,
+          patientId,
+          patientName: safePatientName,
+          driveFileId: fileId,
+          driveFileName: finalFileName,
+          driveWebViewLink: webViewLink,
+          pdfUrl: webViewLink,
+          status: "completado",
+          isSavedByPatient: true,
+          completedAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        });
+      }
 
       return res.json({
         success: true,

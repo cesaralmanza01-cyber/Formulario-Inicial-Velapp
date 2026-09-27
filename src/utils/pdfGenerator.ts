@@ -1389,25 +1389,425 @@ export function generatePatientQuestionnairePdfDoc(
 }
 
 /**
- * Generates the PDF as a Blob for uploading or sharing
+ * Converts a dataURL (base64) into Uint8Array
+ */
+function dataUrlToUint8Array(dataUrl: string): Uint8Array {
+  const base64 = dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl;
+  const binaryString = atob(base64);
+  const len = binaryString.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes;
+}
+
+/**
+ * Ensures image dataURL is compatible with pdf-lib (PNG or JPG)
+ */
+async function ensurePngOrJpgDataUrl(
+  dataUrl: string,
+  fileType?: string
+): Promise<{ dataUrl: string; format: 'png' | 'jpg' }> {
+  if (
+    dataUrl.startsWith('data:image/jpeg') ||
+    dataUrl.startsWith('data:image/jpg') ||
+    fileType === 'image/jpeg' ||
+    fileType === 'image/jpg'
+  ) {
+    return { dataUrl, format: 'jpg' };
+  }
+  if (dataUrl.startsWith('data:image/png') || fileType === 'image/png') {
+    return { dataUrl, format: 'png' };
+  }
+
+  // If in browser, convert other image formats (e.g. webp, bmp) to PNG via canvas
+  if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.naturalWidth || img.width || 800;
+          canvas.height = img.naturalHeight || img.height || 600;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0);
+            const pngData = canvas.toDataURL('image/png');
+            resolve({ dataUrl: pngData, format: 'png' });
+            return;
+          }
+        } catch (e) {
+          console.warn('[PDF Generator] Canvas conversion to PNG failed:', e);
+        }
+        resolve({ dataUrl, format: 'png' });
+      };
+      img.onerror = () => {
+        resolve({ dataUrl, format: 'png' });
+      };
+      img.src = dataUrl;
+    });
+  }
+
+  return { dataUrl, format: 'png' };
+}
+
+/**
+ * Collects and rehydrates all attached files across all sections
+ */
+async function collectAllAttachedFiles(
+  patient: FirestoreQuestionnaireDocument
+): Promise<UploadedLabFile[]> {
+  const allFiles: UploadedLabFile[] = [];
+  const seenIds = new Set<string>();
+
+  const addFiles = (files?: UploadedLabFile[] | null) => {
+    if (!files || !Array.isArray(files)) return;
+    for (const f of files) {
+      if (!f) continue;
+      const key = f.id || `${f.name}_${f.size}`;
+      if (!seenIds.has(key)) {
+        seenIds.add(key);
+        allFiles.push(f);
+      }
+    }
+  };
+
+  addFiles(patient.inbody?.files);
+  addFiles(patient.paraclinicos?.files);
+
+  // Ensure each file has its dataUrl loaded if possible
+  for (const f of allFiles) {
+    if (!f.dataUrl) {
+      try {
+        const storedUrl = await getFileDataUrlAsync(f.id, f.name);
+        if (storedUrl) {
+          f.dataUrl = storedUrl;
+        }
+      } catch {
+        // ignore
+      }
+    }
+  }
+
+  return allFiles;
+}
+
+/**
+ * Generates the complete clinical PDF including the full-page Annex of all attached documents (PDFs and Images)
+ */
+export async function generateCompletePatientPdfBytes(
+  patient: FirestoreQuestionnaireDocument
+): Promise<Uint8Array> {
+  console.log('[PDF Generator] Generando PDF clínico completo con anexos para:', patient.patientName);
+
+  // 1. Generar PDF base con el reporte completo del cuestionario en jsPDF
+  const baseDoc = generatePatientQuestionnairePdfDoc(patient);
+  const baseArrayBuffer = baseDoc.output('arraybuffer');
+
+  // 2. Cargar en PDFDocument de pdf-lib
+  const mergedPdf = await PDFDocument.load(baseArrayBuffer);
+
+  // 3. Obtener todos los archivos adjuntos (InBody + Paraclínicos)
+  const attachedFiles = await collectAllAttachedFiles(patient);
+
+  if (attachedFiles.length === 0) {
+    console.log('[PDF Generator] No hay archivos adjuntos para anexar.');
+    return await mergedPdf.save();
+  }
+
+  console.log(`[PDF Generator] Anexando ${attachedFiles.length} documento(s) al final del PDF...`);
+
+  // Fonts for headers and notes
+  const helveticaBold = await mergedPdf.embedFont(StandardFonts.HelveticaBold);
+  const helvetica = await mergedPdf.embedFont(StandardFonts.Helvetica);
+  const helveticaOblique = await mergedPdf.embedFont(StandardFonts.HelveticaOblique);
+
+  // Colores Vela
+  const sageColor = rgb(91 / 255, 136 / 255, 126 / 255); // #5B887E
+  const deepSageColor = rgb(52 / 255, 106 / 255, 96 / 255); // #346A60
+  const paleSageBg = rgb(235 / 255, 243 / 255, 240 / 255); // #EBF3F0
+  const sageBorder = rgb(174 / 255, 201 / 255, 192 / 255); // #AEC9C0
+  const mutedText = rgb(92 / 255, 110 / 255, 104 / 255); // #5C6E68
+  const cardBg = rgb(250 / 255, 246 / 255, 240 / 255); // #FAF6F0
+  const cardBorder = rgb(217 / 255, 211 / 255, 200 / 255); // #D9D3C8
+
+  // Helper para añadir página de error / nota de archivo no procesable
+  const addFallbackNotePage = (file: UploadedLabFile, reason: string) => {
+    const page = mergedPdf.addPage([595.28, 841.89]);
+    const { width, height } = page.getSize();
+    const margin = 36;
+    const contentW = width - margin * 2;
+
+    // Banner de cabecera
+    page.drawRectangle({
+      x: margin,
+      y: height - 56,
+      width: contentW,
+      height: 22,
+      color: paleSageBg,
+      borderColor: sageBorder,
+      borderWidth: 0.5,
+    });
+    const headerTitle = `ANEXO — DOCUMENTOS ADJUNTOS: ${file.name || 'Archivo adjunto'}`;
+    page.drawText(headerTitle.slice(0, 80), {
+      x: margin + 10,
+      y: height - 42,
+      size: 9,
+      font: helveticaBold,
+      color: sageColor,
+    });
+
+    // Tarjeta de información
+    page.drawRectangle({
+      x: margin,
+      y: height - 130,
+      width: contentW,
+      height: 60,
+      color: cardBg,
+      borderColor: cardBorder,
+      borderWidth: 0.5,
+    });
+
+    const sizeStr = file.size
+      ? file.size > 1024 * 1024
+        ? `${(file.size / (1024 * 1024)).toFixed(1)} MB`
+        : `${Math.round(file.size / 1024)} KB`
+      : 'Tamaño no registrado';
+
+    page.drawText(`Documento adjunto: ${file.name || 'Sin nombre'} (${sizeStr})`, {
+      x: margin + 12,
+      y: height - 90,
+      size: 8.5,
+      font: helveticaBold,
+      color: deepSageColor,
+    });
+
+    page.drawText(`Nota: ${reason}`, {
+      x: margin + 12,
+      y: height - 110,
+      size: 8,
+      font: helveticaOblique,
+      color: mutedText,
+    });
+  };
+
+  for (let fileIdx = 0; fileIdx < attachedFiles.length; fileIdx++) {
+    const file = attachedFiles[fileIdx];
+    let dataUrl = file.dataUrl;
+
+    if (!dataUrl && file.downloadUrl && file.downloadUrl.startsWith('http')) {
+      try {
+        const resp = await fetch(file.downloadUrl);
+        if (resp.ok) {
+          const blob = await resp.blob();
+          dataUrl = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          });
+        }
+      } catch (fetchErr) {
+        console.warn(`[PDF Generator] No se pudo descargar archivo remoto ${file.name}:`, fetchErr);
+      }
+    }
+
+    if (!dataUrl) {
+      addFallbackNotePage(
+        file,
+        'No fue posible cargar el contenido binario del archivo para su renderizado directo. El documento se encuentra registrado y respaldado en el expediente clínico.'
+      );
+      continue;
+    }
+
+    const isPdf =
+      file.type === 'application/pdf' ||
+      dataUrl.startsWith('data:application/pdf') ||
+      /\.pdf$/i.test(file.name || '');
+
+    const isImg =
+      !isPdf &&
+      (file.type?.startsWith('image/') ||
+        dataUrl.startsWith('data:image/') ||
+        /\.(jpe?g|png|webp|gif|bmp)$/i.test(file.name || ''));
+
+    if (isPdf) {
+      try {
+        const pdfBytes = dataUrlToUint8Array(dataUrl);
+        const srcDoc = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
+        const pageCount = srcDoc.getPageCount();
+
+        if (pageCount === 0) {
+          addFallbackNotePage(file, 'El archivo PDF adjunto no contiene páginas legibles.');
+          continue;
+        }
+
+        const copiedPages = await mergedPdf.copyPages(srcDoc, srcDoc.getPageIndices());
+
+        for (let pIdx = 0; pIdx < copiedPages.length; pIdx++) {
+          const page = copiedPages[pIdx];
+          const { width, height } = page.getSize();
+
+          // Barra de encabezado superior con el nombre del documento como título
+          page.drawRectangle({
+            x: 0,
+            y: height - 26,
+            width: width,
+            height: 26,
+            color: paleSageBg,
+          });
+          page.drawLine({
+            start: { x: 0, y: height - 26 },
+            end: { x: width, y: height - 26 },
+            thickness: 0.5,
+            color: sageBorder,
+          });
+
+          const titleStr = `Anexo — Documento adjunto: ${file.name || 'Documento PDF'}${
+            pageCount > 1 ? ` (Pág. ${pIdx + 1} de ${pageCount})` : ''
+          }`;
+
+          page.drawText(titleStr.slice(0, 95), {
+            x: 18,
+            y: height - 17,
+            size: 8.5,
+            font: helveticaBold,
+            color: sageColor,
+          });
+
+          mergedPdf.addPage(page);
+        }
+      } catch (pdfErr: any) {
+        console.warn(`[PDF Generator] Error al procesar PDF adjunto ${file.name}:`, pdfErr);
+        addFallbackNotePage(
+          file,
+          `No se pudo anexar el PDF directamente (${pdfErr?.message || 'Formato o cifrado no soportado'}). El archivo original se conserva en el expediente.`
+        );
+      }
+    } else if (isImg) {
+      try {
+        const { dataUrl: cleanDataUrl, format } = await ensurePngOrJpgDataUrl(dataUrl, file.type);
+        const imgBytes = dataUrlToUint8Array(cleanDataUrl);
+
+        let embeddedImage;
+        if (format === 'jpg') {
+          try {
+            embeddedImage = await mergedPdf.embedJpg(imgBytes);
+          } catch {
+            embeddedImage = await mergedPdf.embedPng(imgBytes);
+          }
+        } else {
+          try {
+            embeddedImage = await mergedPdf.embedPng(imgBytes);
+          } catch {
+            embeddedImage = await mergedPdf.embedJpg(imgBytes);
+          }
+        }
+
+        // Crear página A4 estándar para la imagen a tamaño legible
+        const page = mergedPdf.addPage([595.28, 841.89]);
+        const { width: pageWidth, height: pageHeight } = page.getSize();
+        const margin = 36;
+        const availableW = pageWidth - margin * 2; // 523.28
+        const availableH = pageHeight - margin * 2 - 34; // Espacio vertical bajo la cabecera
+
+        // Banner de cabecera con el nombre del documento como título
+        page.drawRectangle({
+          x: margin,
+          y: pageHeight - margin - 22,
+          width: availableW,
+          height: 22,
+          color: paleSageBg,
+          borderColor: sageBorder,
+          borderWidth: 0.5,
+        });
+
+        const imgTitle = `Anexo — Documento adjunto: ${file.name || 'Imagen adjunta'}`;
+        page.drawText(imgTitle.slice(0, 85), {
+          x: margin + 10,
+          y: pageHeight - margin - 14.5,
+          size: 9,
+          font: helveticaBold,
+          color: sageColor,
+        });
+
+        // Calcular escalado proporcional manteniendo aspecto original
+        const imgAspect = embeddedImage.width / embeddedImage.height;
+        let renderW = availableW;
+        let renderH = availableW / imgAspect;
+
+        if (renderH > availableH) {
+          renderH = availableH;
+          renderW = availableH * imgAspect;
+        }
+
+        const renderX = margin + (availableW - renderW) / 2;
+        const renderY = pageHeight - margin - 28 - renderH;
+
+        // Dibujar marco sutil alrededor de la imagen
+        page.drawRectangle({
+          x: renderX - 1,
+          y: renderY - 1,
+          width: renderW + 2,
+          height: renderH + 2,
+          color: cardBg,
+          borderColor: cardBorder,
+          borderWidth: 0.5,
+        });
+
+        // Dibujar imagen
+        page.drawImage(embeddedImage, {
+          x: renderX,
+          y: renderY,
+          width: renderW,
+          height: renderH,
+        });
+      } catch (imgErr: any) {
+        console.warn(`[PDF Generator] Error al embeber imagen ${file.name}:`, imgErr);
+        addFallbackNotePage(
+          file,
+          `No fue posible procesar la imagen para anexarla al PDF (${imgErr?.message || 'Error de imagen'}).`
+        );
+      }
+    } else {
+      addFallbackNotePage(
+        file,
+        `Tipo de archivo (${file.type || 'desconocido'}) registrado en el expediente clínico.`
+      );
+    }
+  }
+
+  return await mergedPdf.save();
+}
+
+/**
+ * Generates the PDF as a Blob for uploading or sharing, including all attached documents
  */
 export async function generatePatientQuestionnairePdfBlob(
   patient: FirestoreQuestionnaireDocument
 ): Promise<Blob> {
-  console.log('[PDF Generator] Generando Blob de PDF para paciente:', patient.patientName);
+  console.log('[PDF Generator] Generando Blob de PDF completo con anexos para paciente:', patient.patientName);
   try {
-    const doc = generatePatientQuestionnairePdfDoc(patient);
-    const blob = doc.output('blob');
-    console.log('[PDF Generator] Blob de PDF generado exitosamente. Tamaño:', blob.size, 'bytes');
+    const pdfBytes = await generateCompletePatientPdfBytes(patient);
+    const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+    console.log('[PDF Generator] Blob de PDF completo generado exitosamente. Tamaño:', blob.size, 'bytes');
     return blob;
   } catch (error) {
-    console.error('[PDF Generator Error] Falló la generación del PDF Blob:', error);
-    throw error;
+    console.error('[PDF Generator Error] Falló la generación del PDF con anexos, usando fallback base:', error);
+    try {
+      const baseDoc = generatePatientQuestionnairePdfDoc(patient);
+      return baseDoc.output('blob');
+    } catch (fallbackError) {
+      console.error('[PDF Generator Error] Falló también el fallback de PDF Blob:', fallbackError);
+      throw error;
+    }
   }
 }
 
 /**
- * Downloads the complete medical record PDF directly in the browser
+ * Downloads the complete medical record PDF directly in the browser (including all attached documents)
  */
 export async function downloadPatientRecordPdf(
   patient: FirestoreQuestionnaireDocument,
@@ -1419,25 +1819,25 @@ export async function downloadPatientRecordPdf(
       ? customFileNameOrRef
       : `Cuestionario_Inicial_Vela_${patientName.replace(/[^a-zA-Z0-9_-]/g, '_')}_${patient.patientDocument || 'doc'}.pdf`;
 
-  console.log('[PDF Generator] Disparando descarga directa de PDF:', customFileName);
-  const doc = generatePatientQuestionnairePdfDoc(patient);
+  console.log('[PDF Generator] Disparando descarga directa de PDF completo con anexos:', customFileName);
   try {
-    doc.save(customFileName);
+    const blob = await generatePatientQuestionnairePdfBlob(patient);
+    const blobUrl = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = blobUrl;
+    link.download = customFileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 2000);
     console.log('[PDF Generator] Descarga iniciada con éxito en el navegador.');
   } catch (error) {
-    console.error('[PDF Generator Error] Error al ejecutar doc.save():', error);
-    // Fallback: create blob url and click <a> element
+    console.error('[PDF Generator Error] Error al descargar PDF con anexos:', error);
+    // Fallback: create base doc and save
     try {
-      const blob = doc.output('blob');
-      const blobUrl = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = blobUrl;
-      link.download = customFileName;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(blobUrl);
-      console.log('[PDF Generator] Descarga fallback completada vía ObjectURL.');
+      const doc = generatePatientQuestionnairePdfDoc(patient);
+      doc.save(customFileName);
+      console.log('[PDF Generator] Descarga completada vía fallback.');
     } catch (fallbackError) {
       console.error('[PDF Generator Error] Falló también el fallback de descarga:', fallbackError);
       throw fallbackError;

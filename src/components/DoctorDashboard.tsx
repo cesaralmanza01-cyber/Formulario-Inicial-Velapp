@@ -192,19 +192,29 @@ export function DoctorDashboard({ currentUser, onLogout, onBackToApp }: DoctorDa
 
   // Filtering patients
   const filteredPatients = patients.filter((p) => {
+    const q = searchTerm.toLowerCase().trim();
     const matchesSearch =
-      searchTerm.trim() === '' ||
-      p.nombre.toLowerCase().includes(searchTerm.toLowerCase().trim()) ||
-      p.email.toLowerCase().includes(searchTerm.toLowerCase().trim());
+      q === '' ||
+      (p.nombre && p.nombre.toLowerCase().includes(q)) ||
+      (p.email && p.email.toLowerCase().includes(q)) ||
+      (p.documento && p.documento.toLowerCase().includes(q)) ||
+      (p.celular && p.celular.toLowerCase().includes(q));
 
-    const matchesStatus = statusFilter === 'todos' || p.clinicalStatus === statusFilter;
+    const matchesStatus =
+      statusFilter === 'todos' ||
+      p.clinicalStatus === statusFilter ||
+      (statusFilter === 'Formulario recibido' && (p.clinicalStatus === 'Formulario recibido' || p.clinicalStatus === 'cuestionario completado' || p.cuestionarioCompletado)) ||
+      (statusFilter === 'cuestionario completado' && (p.clinicalStatus === 'Formulario recibido' || p.clinicalStatus === 'cuestionario completado' || p.cuestionarioCompletado));
+
     return matchesSearch && matchesStatus;
   });
 
   const countTotal = patients.length;
   const countInvitados = patients.filter((p) => p.clinicalStatus === 'invitado').length;
   const countCuentaCreada = patients.filter((p) => p.clinicalStatus === 'cuenta creada').length;
-  const countCompletados = patients.filter((p) => p.clinicalStatus === 'cuestionario completado').length;
+  const countCompletados = patients.filter(
+    (p) => p.cuestionarioCompletado || p.clinicalStatus === 'Formulario recibido' || p.clinicalStatus === 'cuestionario completado'
+  ).length;
 
   return (
     <div id="doctor_dashboard" className="min-h-screen bg-[#faf6f0] text-[#2d3748] font-sans pb-16">
@@ -473,18 +483,25 @@ export function DoctorDashboard({ currentUser, onLogout, onBackToApp }: DoctorDa
               </div>
 
               <div className="flex items-center gap-1 overflow-x-auto pb-1 sm:pb-0 text-xs">
-                {(['todos', 'invitado', 'cuenta creada', 'cuestionario completado'] as const).map((st) => (
+                {(
+                  [
+                    { id: 'todos', label: 'Todos' },
+                    { id: 'Formulario recibido', label: 'Formularios Recibidos' },
+                    { id: 'invitado', label: 'Invitaciones Pendientes' },
+                    { id: 'cuenta creada', label: 'Cuenta Creada' },
+                  ] as const
+                ).map((st) => (
                   <button
-                    key={st}
+                    key={st.id}
                     type="button"
-                    onClick={() => setStatusFilter(st)}
-                    className={`px-2.5 py-1 rounded-lg font-medium whitespace-nowrap transition cursor-pointer capitalize ${
-                      statusFilter === st
+                    onClick={() => setStatusFilter(st.id as any)}
+                    className={`px-2.5 py-1 rounded-lg font-medium whitespace-nowrap transition cursor-pointer ${
+                      statusFilter === st.id
                         ? 'bg-[#346a60] text-white font-semibold'
                         : 'bg-[#f4ede2] text-[#61746f] hover:bg-[#ebe3d6]'
                     }`}
                   >
-                    {st === 'todos' ? 'Todos' : st}
+                    {st.label}
                   </button>
                 ))}
               </div>
@@ -514,7 +531,7 @@ export function DoctorDashboard({ currentUser, onLogout, onBackToApp }: DoctorDa
               <Users className="w-8 h-8 mx-auto mb-2 text-[#b0bfba]" />
               <p className="text-sm font-serif text-[#1b3d36]">No se encontraron pacientes</p>
               <p className="text-xs mt-1 text-[#6e857f]">
-                {searchTerm ? 'No hay resultados que coincidan con la búsqueda.' : 'Aún no has creado invitaciones para pacientes.'}
+                {searchTerm ? 'No hay resultados que coincidan con la búsqueda.' : 'Aún no hay formularios recibidos ni invitaciones creadas.'}
               </p>
             </div>
           ) : (
@@ -523,48 +540,72 @@ export function DoctorDashboard({ currentUser, onLogout, onBackToApp }: DoctorDa
                 <thead className="bg-[#f9f5ee] border-b border-[#e2d9cd] text-[#526a63] font-semibold uppercase tracking-wider text-[11px]">
                   <tr>
                     <th className="py-3 px-4">Paciente</th>
+                    <th className="py-3 px-4">Documento</th>
+                    <th className="py-3 px-4">Celular</th>
                     <th className="py-3 px-4">Correo</th>
                     <th className="py-3 px-4">Estado</th>
-                    <th className="py-3 px-4">Fecha Invitación</th>
+                    <th className="py-3 px-4">Fecha</th>
                     <th className="py-3 px-4 text-right">Acciones</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#f0e7db]">
                   {filteredPatients.map((p) => {
                     const isCopied = copiedRowId === p.id;
+                    const isReceived = p.clinicalStatus === 'Formulario recibido' || p.clinicalStatus === 'cuestionario completado' || p.cuestionarioCompletado;
                     return (
                       <tr key={p.id} className="hover:bg-[#fcfaf7] transition">
                         <td className="py-3.5 px-4 font-semibold text-[#1b3d36] whitespace-nowrap">
-                          {p.nombre}
+                          <div>{p.nombre}</div>
+                          {p.isDirectSubmission && (
+                            <span className="text-[10px] text-[#6e857f] font-normal">Respuesta directa</span>
+                          )}
+                        </td>
+                        <td className="py-3.5 px-4 text-[#526a63] whitespace-nowrap font-mono text-[11px]">
+                          {p.documento || '—'}
+                        </td>
+                        <td className="py-3.5 px-4 text-[#526a63] whitespace-nowrap">
+                          {p.celular || '—'}
                         </td>
                         <td className="py-3.5 px-4 text-[#526a63] whitespace-nowrap">
                           {p.email}
                         </td>
                         <td className="py-3.5 px-4 whitespace-nowrap">
-                          {p.clinicalStatus === 'invitado' && (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-800 border border-amber-200">
-                              <Clock className="w-3 h-3 text-amber-600" />
-                              Invitación pendiente (Sin activar)
+                          {isReceived && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                              <FileCheck2 className="w-3 h-3 text-emerald-600" />
+                              Formulario recibido
                             </span>
                           )}
-                          {p.clinicalStatus === 'cuenta creada' && (
+                          {!isReceived && p.clinicalStatus === 'invitado' && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-800 border border-amber-200">
+                              <Clock className="w-3 h-3 text-amber-600" />
+                              Invitación pendiente
+                            </span>
+                          )}
+                          {!isReceived && p.clinicalStatus === 'cuenta creada' && (
                             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-blue-50 text-blue-800 border border-blue-200">
                               <ShieldCheck className="w-3 h-3 text-blue-600" />
                               Cuenta creada (Cuestionario pendiente)
                             </span>
                           )}
-                          {p.clinicalStatus === 'cuestionario completado' && (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
-                              <FileCheck2 className="w-3 h-3 text-emerald-600" />
-                              Cuestionario completado
+                        </td>
+                        <td className="py-3.5 px-4 text-[#6e857f] whitespace-nowrap text-[11px]">
+                          {p.fechaEnvio ? (
+                            <span>
+                              <span className="font-semibold text-[#346a60]">Envío: </span>
+                              {new Date(p.fechaEnvio).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' })}
                             </span>
+                          ) : p.fechaCreacion ? (
+                            <span>
+                              <span className="text-[#8b6914]">Invitación: </span>
+                              {new Date(p.fechaCreacion).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' })}
+                            </span>
+                          ) : (
+                            '—'
                           )}
                         </td>
-                        <td className="py-3.5 px-4 text-[#6e857f] whitespace-nowrap">
-                          {p.fechaCreacion ? new Date(p.fechaCreacion).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
-                        </td>
                         <td className="py-3.5 px-4 text-right whitespace-nowrap">
-                          {p.inviteLink && (
+                          {p.inviteLink && !isReceived && (
                             <button
                               type="button"
                               onClick={() => copyToClipboard(p.inviteLink!, false, p.id)}
