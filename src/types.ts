@@ -22,6 +22,25 @@ export type DocumentType = 'CC' | 'CE' | 'Pasaporte' | 'DNI' | 'Otro';
 
 export type PatientSex = 'Femenino' | 'Masculino' | '';
 
+export type EthnicOrigin =
+  | 'Mestizo(a)'
+  | 'Afrodescendiente'
+  | 'Indígena'
+  | 'Blanco(a)'
+  | 'Asiático(a)'
+  | 'Otro'
+  | 'Prefiero no decir';
+
+export const ETHNIC_ORIGIN_OPTIONS: EthnicOrigin[] = [
+  'Mestizo(a)',
+  'Afrodescendiente',
+  'Indígena',
+  'Blanco(a)',
+  'Asiático(a)',
+  'Otro',
+  'Prefiero no decir',
+];
+
 export type EducationLevel =
   | 'Primaria'
   | 'Bachillerato'
@@ -42,6 +61,7 @@ export interface PatientBasicInfo {
   referralSource: ReferralSource | '';
   referralOtherDetails: string;
   sex: PatientSex;
+  ethnicOrigin?: EthnicOrigin | '';
   phone: string;
   email: string;
 }
@@ -165,7 +185,13 @@ export interface PatientWeightHistoryInfo {
   currentWeightKg: string;
   heightCm: string; // Talla / Estatura en cm
   lowestWeightSince18Kg: string;
+  lowestWeightAge?: string;
+  lowestWeightDontRemember?: boolean;
+  lowestWeightAgeDontRemember?: boolean;
   highestWeightSince18Kg: string;
+  highestWeightAge?: string;
+  highestWeightDontRemember?: boolean;
+  highestWeightAgeDontRemember?: boolean;
 
   // Sub-sección 1.5: Trayectoria de peso y momentos clave de vida (Weight trajectory)
   weightTrajectoryMilestones?: WeightTrajectoryMilestone[];
@@ -394,6 +420,19 @@ export interface PatientHealthMapInfo {
   hospitalHistory: string;
   toxicAllergicHistory: string;
 
+  // A) Alergias estructuradas
+  hasDrugAllergies?: 'Sí' | 'No' | '';
+  drugAllergiesDetails?: string; // ¿cuál y qué reacción tuviste?
+  hasFoodAllergies?: 'Sí' | 'No' | '';
+  foodAllergiesDetails?: string; // ¿cuál?
+
+  // B) Salud ósea
+  hasBoneFracturesAfter40?: 'Sí' | 'No' | '';
+  boneFracturesDetails?: string; // cuál y a qué edad
+  hasBoneDensitometry?: 'Sí' | 'No' | '';
+  boneDensitometryYear?: string;
+  boneDensitometryResult?: BoneDensitometryResult;
+
   // Antecedentes gineco-obstétricos estructurados
   appliesGynecoObstetric: 'Sí' | 'No' | '';
   pregnanciesCount?: string; // Gestaciones
@@ -406,6 +445,10 @@ export interface PatientHealthMapInfo {
   menopauseStage?: MenopauseStage; // Perimenopausia o menopausia
   menopauseSymptoms?: string[]; // Síntomas asociados
   menopauseSymptomsOther?: string;
+
+  // C) Terapia hormonal para la menopausia (solo si sexo femenino y en menopausia / perimenopausia)
+  usesHormoneReplacementTherapy?: HormoneTherapyOption;
+  hormoneReplacementTherapyDetails?: string; // cuál y desde cuándo
 
   // Preguntas gineco-obstétricas complementarias
   currentlyBreastfeeding?: 'Sí' | 'No' | '';
@@ -433,6 +476,23 @@ export interface PatientHealthMapInfo {
   familyObesityMembers?: ObesityFamilyMemberEntry[];
   familyHistoryNotes?: string;
 }
+
+export type BoneDensitometryResult = 'Normal' | 'Osteopenia' | 'Osteoporosis' | 'No sé' | '';
+
+export const BONE_DENSITOMETRY_RESULTS: ('Normal' | 'Osteopenia' | 'Osteoporosis' | 'No sé')[] = [
+  'Normal',
+  'Osteopenia',
+  'Osteoporosis',
+  'No sé',
+];
+
+export type HormoneTherapyOption = 'Sí' | 'No' | 'La usé antes' | '';
+
+export const HORMONE_THERAPY_OPTIONS: ('Sí' | 'No' | 'La usé antes')[] = [
+  'Sí',
+  'No',
+  'La usé antes',
+];
 
 export type SmokingStatus =
   | 'Nunca he fumado'
@@ -911,6 +971,7 @@ export interface StepOneErrors {
   birthDate?: string;
   age?: string;
   sex?: string;
+  ethnicOrigin?: string;
   phone?: string;
   email?: string;
   occupation?: string;
@@ -931,7 +992,9 @@ export interface StepThreeErrors {
   currentWeightKg?: string;
   heightCm?: string;
   lowestWeightSince18Kg?: string;
+  lowestWeightAge?: string;
   highestWeightSince18Kg?: string;
+  highestWeightAge?: string;
   childhoodOnsetAge?: string;
   hasPreviousAttempts?: string;
   fluctuationCount?: string;
@@ -964,6 +1027,15 @@ export interface StepFourErrors {
   surgicalHistory?: string;
   hospitalHistory?: string;
   toxicAllergicHistory?: string;
+  hasDrugAllergies?: string;
+  drugAllergiesDetails?: string;
+  hasFoodAllergies?: string;
+  foodAllergiesDetails?: string;
+  hasBoneFracturesAfter40?: string;
+  boneFracturesDetails?: string;
+  hasBoneDensitometry?: string;
+  boneDensitometryYear?: string;
+  boneDensitometryResult?: string;
   appliesGynecoObstetric?: string;
   pregnanciesCount?: string;
   vaginalDeliveriesCount?: string;
@@ -973,6 +1045,8 @@ export interface StepFourErrors {
   cycleDuration?: string;
   menarcheAge?: string;
   menopauseStage?: string;
+  usesHormoneReplacementTherapy?: string;
+  hormoneReplacementTherapyDetails?: string;
   currentlyBreastfeeding?: string;
   contraceptiveMethod?: string;
   contraceptiveMethodOther?: string;

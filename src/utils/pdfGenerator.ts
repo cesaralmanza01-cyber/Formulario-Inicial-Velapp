@@ -482,6 +482,29 @@ export function generatePatientQuestionnairePdfDoc(
   y += 80;
 
   // ==========================================
+  // ALERTA PRIORITARIA: ALERGIA A MEDICAMENTOS (Inicio del reporte)
+  // ==========================================
+  if (
+    patient.mapa_salud?.hasDrugAllergies === 'Sí' &&
+    patient.mapa_salud.drugAllergiesDetails?.trim()
+  ) {
+    const allergyText = `ALERGIA A MEDICAMENTOS: ${patient.mapa_salud.drugAllergiesDetails.trim().toUpperCase()}`;
+    checkPageBreak(30);
+    doc.setFillColor(253, 238, 233); // Fondo coral/rojo claro #FDEEE9
+    doc.roundedRect(margin, y, contentWidth, 24, 3, 3, 'F');
+    doc.setDrawColor(198, 106, 77); // Borde coral/rojo #C66A4D
+    doc.setLineWidth(0.9);
+    doc.roundedRect(margin, y, contentWidth, 24, 3, 3, 'S');
+
+    doc.setTextColor(198, 106, 77);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9.5);
+    doc.text(allergyText, margin + 12, y + 15);
+
+    y += 30;
+  }
+
+  // ==========================================
   // 1. IDENTIFICACIÓN Y DATOS PERSONALES
   // ==========================================
   printSectionTitle('1. IDENTIFICACIÓN Y DATOS PERSONALES');
@@ -497,6 +520,9 @@ export function generatePatientQuestionnairePdfDoc(
   printField('Correo electrónico', patient.identificacion?.email || patient.userEmail);
   printField('Fecha de nacimiento', patient.identificacion?.birthDate);
   printField('Edad', patient.identificacion?.age ? `${patient.identificacion.age} años` : null);
+  if (patient.identificacion?.ethnicOrigin) {
+    printField('Origen étnico con el que se identifica', patient.identificacion.ethnicOrigin);
+  }
   printField('Ocupación y Profesión', patient.identificacion?.occupation);
   printField('Escolaridad (último nivel alcanzado)', patient.identificacion?.educationLevel);
   printField('Estado civil', patient.identificacion?.civilStatus);
@@ -506,6 +532,30 @@ export function generatePatientQuestionnairePdfDoc(
       ? `${patient.identificacion.referralSource}${patient.identificacion.referralOtherDetails ? ` — ${patient.identificacion.referralOtherDetails}` : ''}`
       : null
   );
+
+  // Nota exclusiva para la doctora si el paciente tiene ascendencia asiática
+  if (patient.identificacion?.ethnicOrigin === 'Asiático(a)') {
+    const alertHeight = 22;
+    checkPageBreak(alertHeight + 4);
+
+    doc.setFillColor(253, 238, 233); // #FDEEE9
+    doc.roundedRect(margin + 6, y, contentWidth - 12, alertHeight - 4, 3, 3, 'F');
+    doc.setDrawColor(241, 185, 168); // #F1B9A8
+    doc.setLineWidth(0.6);
+    doc.roundedRect(margin + 6, y, contentWidth - 12, alertHeight - 4, 3, 3, 'S');
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(198, 106, 77); // Coral #C66A4D
+    doc.text('Nota para la Dra. Lorena Castro:', margin + 14, y + 9);
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8.5);
+    doc.setTextColor(46, 58, 54);
+    doc.text('Ascendencia asiática: usar punto de corte de IMC ≥27.5', margin + 14, y + 17);
+
+    y += alertHeight;
+  }
 
   // ==========================================
   // 2. MOTIVO DE CONSULTA Y OBJETIVOS
@@ -529,10 +579,39 @@ export function generatePatientQuestionnairePdfDoc(
   printField('Peso actual', patient.relacion_peso?.currentWeightKg ? `${patient.relacion_peso.currentWeightKg} kg` : null);
   printField('Estatura / Talla', patient.relacion_peso?.heightCm ? `${patient.relacion_peso.heightCm} cm` : null);
   if (bmiStr) {
-    printField('Índice de Masa Corporal (IMC)', bmiStr);
+    const isAsian = patient.identificacion?.ethnicOrigin === 'Asiático(a)';
+    printField(
+      'Índice de Masa Corporal (IMC)',
+      isAsian ? `${bmiStr} (Nota: Punto de corte IMC ≥27.5 en ascendencia asiática)` : bmiStr
+    );
   }
-  printField('Menor peso alcanzado (+18)', patient.relacion_peso?.lowestWeightSince18Kg ? `${patient.relacion_peso.lowestWeightSince18Kg} kg` : null);
-  printField('Mayor peso alcanzado (+18)', patient.relacion_peso?.highestWeightSince18Kg ? `${patient.relacion_peso.highestWeightSince18Kg} kg` : null);
+
+  // Peso más alto y más bajo de la vida adulta
+  const highestWeightVal = patient.relacion_peso?.highestWeightSince18Kg?.trim();
+  const highestAgeVal = patient.relacion_peso?.highestWeightAge?.trim();
+  let highestWeightText: string | null = null;
+  if (patient.relacion_peso?.highestWeightDontRemember) {
+    highestWeightText = 'No recuerda';
+  } else if (highestWeightVal) {
+    highestWeightText = `${highestWeightVal} kg`;
+    if (highestAgeVal && !patient.relacion_peso?.highestWeightAgeDontRemember) {
+      highestWeightText += ` (a los ${highestAgeVal} años)`;
+    }
+  }
+  printField('Peso más alto en la vida adulta (sin contar embarazos)', highestWeightText);
+
+  const lowestWeightVal = patient.relacion_peso?.lowestWeightSince18Kg?.trim();
+  const lowestAgeVal = patient.relacion_peso?.lowestWeightAge?.trim();
+  let lowestWeightText: string | null = null;
+  if (patient.relacion_peso?.lowestWeightDontRemember) {
+    lowestWeightText = 'No recuerda';
+  } else if (lowestWeightVal) {
+    lowestWeightText = `${lowestWeightVal} kg`;
+    if (lowestAgeVal && !patient.relacion_peso?.lowestWeightAgeDontRemember) {
+      lowestWeightText += ` (a los ${lowestAgeVal} años)`;
+    }
+  }
+  printField('Peso más bajo en la vida adulta', lowestWeightText);
 
   // Etapa de establecimiento del sobrepeso
   if (patient.relacion_peso?.overweightOnsetStage) {
@@ -782,7 +861,42 @@ export function generatePatientQuestionnairePdfDoc(
   printField('Antecedentes farmacológicos (medicamentos habituales)', pharmDisplay, true);
   printField('Antecedentes quirúrgicos', patient.mapa_salud?.surgicalHistory || 'Niega');
   printField('Antecedentes hospitalarios', patient.mapa_salud?.hospitalHistory || 'Niega');
-  printField('Antecedentes tóxico-alérgicos (alergias / hábitos)', patient.mapa_salud?.toxicAllergicHistory || 'Niega');
+
+  // Alergias e intolerancias
+  printSubSectionTitle('Alergias e intolerancias');
+  const drugAllergyStr =
+    patient.mapa_salud?.hasDrugAllergies === 'Sí'
+      ? `Sí: ${patient.mapa_salud.drugAllergiesDetails || 'Reportada'}`
+      : patient.mapa_salud?.hasDrugAllergies || 'Niega';
+  printField('¿Alergia a algún medicamento?', drugAllergyStr);
+
+  const foodAllergyStr =
+    patient.mapa_salud?.hasFoodAllergies === 'Sí'
+      ? `Sí: ${patient.mapa_salud.foodAllergiesDetails || 'Reportada'}`
+      : patient.mapa_salud?.hasFoodAllergies || 'Niega';
+  printField('¿Alergia o intolerancia a alimentos?', foodAllergyStr);
+
+  if (patient.mapa_salud?.toxicAllergicHistory && patient.mapa_salud.toxicAllergicHistory !== 'Ninguno' && patient.mapa_salud.toxicAllergicHistory !== 'Sin alergias ni hábitos tóxicos') {
+    printField('Otras alergias o antecedentes tóxico-alérgicos', patient.mapa_salud.toxicAllergicHistory);
+  }
+
+  // Salud ósea
+  printSubSectionTitle('Salud ósea');
+  const fracturesStr =
+    patient.mapa_salud?.hasBoneFracturesAfter40 === 'Sí'
+      ? `Sí: ${patient.mapa_salud.boneFracturesDetails || 'Reportada'}`
+      : patient.mapa_salud?.hasBoneFracturesAfter40 || 'Niega';
+  printField('Fracturas de huesos (+40 años o caídas leves)', fracturesStr);
+
+  let densitometryStr = patient.mapa_salud?.hasBoneDensitometry || 'No realizada';
+  if (patient.mapa_salud?.hasBoneDensitometry === 'Sí') {
+    const details = [
+      patient.mapa_salud.boneDensitometryYear ? `Año: ${patient.mapa_salud.boneDensitometryYear}` : null,
+      patient.mapa_salud.boneDensitometryResult ? `Resultado: ${patient.mapa_salud.boneDensitometryResult}` : null,
+    ].filter(Boolean).join(' — ');
+    densitometryStr = `Sí (${details || 'Realizada'})`;
+  }
+  printField('Densitometría ósea', densitometryStr);
 
   // Hábitos: tabaco y alcohol
   if (patient.mapa_salud?.smokingStatus || patient.mapa_salud?.alcoholConsumption) {
@@ -833,6 +947,13 @@ export function generatePatientQuestionnairePdfDoc(
     }
     if (patient.mapa_salud.menopauseSymptomsOther) {
       printField('Otros síntomas hormonales', patient.mapa_salud.menopauseSymptomsOther);
+    }
+    if (patient.mapa_salud.usesHormoneReplacementTherapy) {
+      const hrtText =
+        patient.mapa_salud.usesHormoneReplacementTherapy === 'Sí'
+          ? `Sí: ${patient.mapa_salud.hormoneReplacementTherapyDetails || 'En uso'}`
+          : patient.mapa_salud.usesHormoneReplacementTherapy;
+      printField('Terapia hormonal para la menopausia', hrtText);
     }
     printField('¿Estás lactando actualmente?', patient.mapa_salud.currentlyBreastfeeding);
     const contraception =

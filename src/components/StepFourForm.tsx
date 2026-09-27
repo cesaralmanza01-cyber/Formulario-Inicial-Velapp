@@ -41,6 +41,10 @@ import {
   CONTRACEPTIVE_METHODS,
   PregnancyPlan,
   PREGNANCY_PLAN_OPTIONS,
+  BoneDensitometryResult,
+  BONE_DENSITOMETRY_RESULTS,
+  HormoneTherapyOption,
+  HORMONE_THERAPY_OPTIONS,
 } from '../types';
 
 interface StepFourFormProps {
@@ -265,6 +269,15 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
         surgicalHistory: '',
         hospitalHistory: '',
         toxicAllergicHistory: '',
+        hasDrugAllergies: '',
+        drugAllergiesDetails: '',
+        hasFoodAllergies: '',
+        foodAllergiesDetails: '',
+        hasBoneFracturesAfter40: '',
+        boneFracturesDetails: '',
+        hasBoneDensitometry: '',
+        boneDensitometryYear: '',
+        boneDensitometryResult: '',
         appliesGynecoObstetric: '',
         pregnanciesCount: '0',
         vaginalDeliveriesCount: '0',
@@ -276,6 +289,8 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
         menopauseStage: '',
         menopauseSymptoms: [],
         menopauseSymptomsOther: '',
+        usesHormoneReplacementTherapy: '',
+        hormoneReplacementTherapyDetails: '',
         currentlyBreastfeeding: '',
         contraceptiveMethod: '',
         contraceptiveMethodOther: '',
@@ -306,6 +321,15 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
     surgicalHistory: false,
     hospitalHistory: false,
     toxicAllergicHistory: false,
+    hasDrugAllergies: false,
+    drugAllergiesDetails: false,
+    hasFoodAllergies: false,
+    foodAllergiesDetails: false,
+    hasBoneFracturesAfter40: false,
+    boneFracturesDetails: false,
+    hasBoneDensitometry: false,
+    boneDensitometryYear: false,
+    boneDensitometryResult: false,
     appliesGynecoObstetric: false,
     pregnanciesCount: false,
     vaginalDeliveriesCount: false,
@@ -315,6 +339,8 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
     cycleDuration: false,
     menarcheAge: false,
     menopauseStage: false,
+    usesHormoneReplacementTherapy: false,
+    hormoneReplacementTherapyDetails: false,
     currentlyBreastfeeding: false,
     contraceptiveMethod: false,
     contraceptiveMethodOther: false,
@@ -387,10 +413,92 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
         return '';
 
       case 'toxicAllergicHistory':
-        if (!currentForm.toxicAllergicHistory.trim()) {
-          return 'Por favor registra alergias y hábitos de consumo o escribe "Ninguno".';
+        return '';
+
+      case 'hasDrugAllergies':
+        if (!currentForm.hasDrugAllergies) {
+          return 'Por favor indica si tienes alergia a algún medicamento.';
         }
         return '';
+
+      case 'drugAllergiesDetails':
+        if (currentForm.hasDrugAllergies === 'Sí' && !currentForm.drugAllergiesDetails?.trim()) {
+          return 'Por favor especifica a qué medicamento(s) y qué reacción tuviste.';
+        }
+        return '';
+
+      case 'hasFoodAllergies':
+        if (!currentForm.hasFoodAllergies) {
+          return 'Por favor indica si tienes alergia o intolerancia a algún alimento.';
+        }
+        return '';
+
+      case 'foodAllergiesDetails':
+        if (currentForm.hasFoodAllergies === 'Sí' && !currentForm.foodAllergiesDetails?.trim()) {
+          return 'Por favor especifica a qué alimento(s).';
+        }
+        return '';
+
+      case 'hasBoneFracturesAfter40':
+        if (!currentForm.hasBoneFracturesAfter40) {
+          return 'Por favor indica si has tenido fracturas de huesos después de los 40 años o con caídas leves.';
+        }
+        return '';
+
+      case 'boneFracturesDetails':
+        if (currentForm.hasBoneFracturesAfter40 === 'Sí' && !currentForm.boneFracturesDetails?.trim()) {
+          return 'Por favor indica cuál hueso y a qué edad ocurrió la fractura.';
+        }
+        return '';
+
+      case 'hasBoneDensitometry':
+        if (!currentForm.hasBoneDensitometry) {
+          return 'Por favor indica si te han hecho una densitometría ósea.';
+        }
+        return '';
+
+      case 'boneDensitometryYear':
+        if (currentForm.hasBoneDensitometry === 'Sí' && !currentForm.boneDensitometryYear?.trim()) {
+          return 'Por favor indica el año en que te realizaron la densitometría.';
+        }
+        return '';
+
+      case 'boneDensitometryResult':
+        if (currentForm.hasBoneDensitometry === 'Sí' && !currentForm.boneDensitometryResult) {
+          return 'Por favor selecciona el resultado de la densitometría ósea.';
+        }
+        return '';
+
+      case 'usesHormoneReplacementTherapy': {
+        const isMenopause =
+          isFemale &&
+          currentForm.appliesGynecoObstetric === 'Sí' &&
+          (currentForm.menopauseStage === 'Menopausia' ||
+            currentForm.menopauseStage === 'Perimenopausia' ||
+            currentForm.cycleRegularity === 'Ya no menstruo (menopausia / histerectomía)');
+        if (!isMenopause) return '';
+        if (!currentForm.usesHormoneReplacementTherapy) {
+          return 'Por favor indica si usas terapia hormonal para la menopausia.';
+        }
+        return '';
+      }
+
+      case 'hormoneReplacementTherapyDetails': {
+        const isMenopause =
+          isFemale &&
+          currentForm.appliesGynecoObstetric === 'Sí' &&
+          (currentForm.menopauseStage === 'Menopausia' ||
+            currentForm.menopauseStage === 'Perimenopausia' ||
+            currentForm.cycleRegularity === 'Ya no menstruo (menopausia / histerectomía)');
+        if (!isMenopause) return '';
+        if (
+          currentForm.usesHormoneReplacementTherapy === 'Sí' &&
+          !currentForm.hormoneReplacementTherapyDetails?.trim()
+        ) {
+          return 'Por favor indica cuál terapia hormonal usas y desde cuándo.';
+        }
+        return '';
+      }
 
       case 'appliesGynecoObstetric':
         if (!isFemale) return '';
@@ -814,7 +922,23 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
 
     if (!formData.surgicalHistory.trim()) return false;
     if (!formData.hospitalHistory.trim()) return false;
-    if (!formData.toxicAllergicHistory.trim()) return false;
+
+    // Alergias
+    if (!formData.hasDrugAllergies) return false;
+    if (formData.hasDrugAllergies === 'Sí' && !formData.drugAllergiesDetails?.trim()) return false;
+    if (!formData.hasFoodAllergies) return false;
+    if (formData.hasFoodAllergies === 'Sí' && !formData.foodAllergiesDetails?.trim()) return false;
+
+    // Salud ósea
+    if (!formData.hasBoneFracturesAfter40) return false;
+    if (formData.hasBoneFracturesAfter40 === 'Sí' && !formData.boneFracturesDetails?.trim()) return false;
+    if (!formData.hasBoneDensitometry) return false;
+    if (
+      formData.hasBoneDensitometry === 'Sí' &&
+      (!formData.boneDensitometryYear?.trim() || !formData.boneDensitometryResult)
+    ) {
+      return false;
+    }
 
     // Gineco-obstétrico validation (solo si sexo es femenino)
     if (isFemale) {
@@ -829,6 +953,21 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
           return false;
         }
         if (!formData.menopauseStage) return false;
+
+        const isMenopause =
+          formData.menopauseStage === 'Menopausia' ||
+          formData.menopauseStage === 'Perimenopausia' ||
+          formData.cycleRegularity === 'Ya no menstruo (menopausia / histerectomía)';
+        if (isMenopause) {
+          if (!formData.usesHormoneReplacementTherapy) return false;
+          if (
+            formData.usesHormoneReplacementTherapy === 'Sí' &&
+            !formData.hormoneReplacementTherapyDetails?.trim()
+          ) {
+            return false;
+          }
+        }
+
         if (!formData.currentlyBreastfeeding) return false;
         if (!formData.contraceptiveMethod) return false;
         if (formData.contraceptiveMethod === 'Otro' && !formData.contraceptiveMethodOther?.trim()) return false;
@@ -1007,6 +1146,13 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
     e.preventDefault();
     setAttemptedSubmit(true);
 
+    const isMenopause =
+      isFemale &&
+      formData.appliesGynecoObstetric === 'Sí' &&
+      (formData.menopauseStage === 'Menopausia' ||
+        formData.menopauseStage === 'Perimenopausia' ||
+        formData.cycleRegularity === 'Ya no menstruo (menopausia / histerectomía)');
+
     const allTouched: Record<string, boolean> = {
       pathologicalHistory: true,
       pharmacologicalHistory: true,
@@ -1014,6 +1160,15 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
       surgicalHistory: true,
       hospitalHistory: true,
       toxicAllergicHistory: true,
+      hasDrugAllergies: true,
+      drugAllergiesDetails: formData.hasDrugAllergies === 'Sí',
+      hasFoodAllergies: true,
+      foodAllergiesDetails: formData.hasFoodAllergies === 'Sí',
+      hasBoneFracturesAfter40: true,
+      boneFracturesDetails: formData.hasBoneFracturesAfter40 === 'Sí',
+      hasBoneDensitometry: true,
+      boneDensitometryYear: formData.hasBoneDensitometry === 'Sí',
+      boneDensitometryResult: formData.hasBoneDensitometry === 'Sí',
       appliesGynecoObstetric: isFemale,
       pregnanciesCount: isFemale,
       vaginalDeliveriesCount: isFemale,
@@ -1023,6 +1178,8 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
       cycleDuration: isFemale,
       menarcheAge: isFemale,
       menopauseStage: isFemale,
+      usesHormoneReplacementTherapy: isMenopause,
+      hormoneReplacementTherapyDetails: isMenopause && formData.usesHormoneReplacementTherapy === 'Sí',
       currentlyBreastfeeding: isFemale && formData.appliesGynecoObstetric === 'Sí',
       contraceptiveMethod: isFemale && formData.appliesGynecoObstetric === 'Sí',
       contraceptiveMethodOther:
@@ -1052,11 +1209,27 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
       surgicalHistory: validateField('surgicalHistory', formData),
       hospitalHistory: validateField('hospitalHistory', formData),
       toxicAllergicHistory: validateField('toxicAllergicHistory', formData),
+      hasDrugAllergies: validateField('hasDrugAllergies', formData),
+      drugAllergiesDetails: validateField('drugAllergiesDetails', formData),
+      hasFoodAllergies: validateField('hasFoodAllergies', formData),
+      foodAllergiesDetails: validateField('foodAllergiesDetails', formData),
+      hasBoneFracturesAfter40: validateField('hasBoneFracturesAfter40', formData),
+      boneFracturesDetails: validateField('boneFracturesDetails', formData),
+      hasBoneDensitometry: validateField('hasBoneDensitometry', formData),
+      boneDensitometryYear: validateField('boneDensitometryYear', formData),
+      boneDensitometryResult: validateField('boneDensitometryResult', formData),
       appliesGynecoObstetric: isFemale ? validateField('appliesGynecoObstetric', formData) : '',
       menarcheAge: isFemale ? validateField('menarcheAge', formData) : '',
       cycleRegularity: isFemale ? validateField('cycleRegularity', formData) : '',
       cycleDuration: isFemale ? validateField('cycleDuration', formData) : '',
       menopauseStage: isFemale ? validateField('menopauseStage', formData) : '',
+      usesHormoneReplacementTherapy: isMenopause
+        ? validateField('usesHormoneReplacementTherapy', formData)
+        : '',
+      hormoneReplacementTherapyDetails:
+        isMenopause && formData.usesHormoneReplacementTherapy === 'Sí'
+          ? validateField('hormoneReplacementTherapyDetails', formData)
+          : '',
       currentlyBreastfeeding:
         isFemale && formData.appliesGynecoObstetric === 'Sí'
           ? validateField('currentlyBreastfeeding', formData)
@@ -1732,43 +1905,472 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
           )}
         </div>
 
-        {/* 5. Antecedentes tóxico-alérgicos */}
-        <div id="field-toxicAllergicHistory" className="space-y-2">
-          <label
-            htmlFor="toxicAllergicHistory-input"
-            className="flex items-center justify-between text-sm font-semibold text-[#2E3A36]"
-          >
-            <span>
-              5. Antecedentes tóxico-alérgicos <span className="text-[#F2A488] font-bold">*</span>
-            </span>
-          </label>
-          <p className="text-xs text-[#5C6E68]">
-            Alergias (medicamentos, alimentos u otras) y consumo de tabaco, alcohol u otras
-            sustancias.
-          </p>
-          <textarea
-            id="toxicAllergicHistory-input"
-            rows={2}
-            value={formData.toxicAllergicHistory}
-            onChange={(e) => handleChange('toxicAllergicHistory', e.target.value)}
-            onBlur={() => handleBlur('toxicAllergicHistory')}
-            placeholder="Ej. Alergia a la Penicilina y a los mariscos. Consumo de alcohol social ocasional, no fumo... (o 'Sin alergias ni hábitos tóxicos')"
-            className={`w-full px-4 py-3 rounded-xl bg-[#FAF6F0]/80 border text-[#2E3A36] placeholder-[#8E9E99] text-sm transition-all duration-200 focus:outline-hidden focus:ring-2 focus:ring-[#6E9E93]/40 focus:bg-white resize-y ${
-              touched.toxicAllergicHistory && errors.toxicAllergicHistory
-                ? 'border-[#F2A488] bg-[#FDEEE9]/40'
-                : 'border-[#D9D3C8] hover:border-[#AEC9C0]'
-            }`}
-          />
-          {touched.toxicAllergicHistory && errors.toxicAllergicHistory && (
-            <motion.p
-              initial={{ opacity: 0, y: -4 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="text-xs text-[#C66A4D] flex items-center gap-1.5 pl-1"
-            >
-              <Info className="w-3.5 h-3.5 shrink-0" />
-              {errors.toxicAllergicHistory}
-            </motion.p>
-          )}
+        {/* 5. Alergias e intolerancias (Medicamentos y Alimentos) */}
+        <div id="field-allergiesSection" className="space-y-5 pt-2 border-t border-[#E8E2D8]">
+          <div className="flex flex-col space-y-1">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="w-5 h-5 text-[#6E9E93]" />
+              <h3 className="text-base font-semibold text-[#2E3A36]">
+                5. Alergias e intolerancias <span className="text-[#F2A488] font-bold">*</span>
+              </h3>
+            </div>
+            <p className="text-xs text-[#5C6E68] leading-relaxed">
+              Información de seguridad médica prioritaria para evitar reacciones adversas y personalizar tus pautas nutricionales y farmacológicas.
+            </p>
+          </div>
+
+          {/* 5.1 Alergia a medicamentos */}
+          <div id="field-hasDrugAllergies" className="space-y-3 p-4 sm:p-5 rounded-2xl bg-[#FAF6F0]/80 border border-[#D9D3C8]/80">
+            <label className="flex items-center justify-between text-xs font-semibold text-[#2E3A36]">
+              <span className="flex items-center gap-1.5">
+                <Pill className="w-4 h-4 text-[#6E9E93]" />
+                ¿Tienes alergia a algún medicamento? <span className="text-[#F2A488] font-bold">*</span>
+              </span>
+            </label>
+
+            <div className="grid grid-cols-2 gap-3 max-w-xs">
+              {(['Sí', 'No'] as const).map((opt) => {
+                const isSelected = formData.hasDrugAllergies === opt;
+                return (
+                  <button
+                    type="button"
+                    key={opt}
+                    onClick={() => {
+                      handleChange('hasDrugAllergies', opt);
+                      if (opt === 'No') {
+                        handleChange('drugAllergiesDetails', '');
+                      }
+                    }}
+                    className={`flex items-center justify-between px-4 py-2.5 rounded-xl border text-xs sm:text-sm font-medium transition-all duration-200 cursor-pointer ${
+                      isSelected
+                        ? 'bg-[#EBF3F0] border-[#6E9E93] text-[#2E3A36] shadow-2xs font-semibold'
+                        : 'bg-white border-[#D9D3C8] text-[#5C6E68] hover:border-[#AEC9C0]'
+                    }`}
+                  >
+                    <span>{opt}</span>
+                    <div
+                      className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 ml-1 transition-all ${
+                        isSelected
+                          ? 'bg-[#6E9E93] text-white'
+                          : 'border border-[#C8C2B7]'
+                      }`}
+                    >
+                      {isSelected && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {attemptedSubmit && !formData.hasDrugAllergies && errors.hasDrugAllergies && (
+              <motion.p
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="text-xs text-[#C66A4D] flex items-center gap-1.5 pl-1"
+              >
+                <Info className="w-3.5 h-3.5 shrink-0" />
+                {errors.hasDrugAllergies}
+              </motion.p>
+            )}
+
+            {/* Detalle de alergia a medicamentos si Sí */}
+            <AnimatePresence>
+              {formData.hasDrugAllergies === 'Sí' && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  id="field-drugAllergiesDetails"
+                  className="space-y-1.5 pt-2"
+                >
+                  <label
+                    htmlFor="drugAllergiesDetails-input"
+                    className="text-xs font-semibold text-[#2E3A36] block"
+                  >
+                    ¿Cuál medicamento y qué reacción tuviste? <span className="text-[#F2A488] font-bold">*</span>
+                  </label>
+                  <input
+                    id="drugAllergiesDetails-input"
+                    type="text"
+                    value={formData.drugAllergiesDetails || ''}
+                    onChange={(e) => handleChange('drugAllergiesDetails', e.target.value)}
+                    onBlur={() => handleBlur('drugAllergiesDetails')}
+                    placeholder="Ej. Penicilina (urticaria y broncoespasmo), AINEs (edema facial)..."
+                    className={`w-full px-3.5 py-2.5 rounded-xl bg-white border text-xs sm:text-sm text-[#2E3A36] placeholder-[#8E9E99] focus:outline-hidden focus:ring-2 focus:ring-[#6E9E93]/40 ${
+                      touched.drugAllergiesDetails && errors.drugAllergiesDetails
+                        ? 'border-[#F2A488] bg-[#FDEEE9]/40'
+                        : 'border-[#D9D3C8] hover:border-[#AEC9C0]'
+                    }`}
+                  />
+                  {touched.drugAllergiesDetails && errors.drugAllergiesDetails && (
+                    <motion.p
+                      initial={{ opacity: 0, y: -4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="text-xs text-[#C66A4D] flex items-center gap-1.5 pl-1"
+                    >
+                      <Info className="w-3.5 h-3.5 shrink-0" />
+                      {errors.drugAllergiesDetails}
+                    </motion.p>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          {/* 5.2 Alergia o intolerancia a alimentos */}
+          <div id="field-hasFoodAllergies" className="space-y-3 p-4 sm:p-5 rounded-2xl bg-[#FAF6F0]/80 border border-[#D9D3C8]/80">
+            <label className="flex items-center justify-between text-xs font-semibold text-[#2E3A36]">
+              <span className="flex items-center gap-1.5">
+                <Heart className="w-4 h-4 text-[#6E9E93]" />
+                ¿Tienes alergia o intolerancia a algún alimento? <span className="text-[#F2A488] font-bold">*</span>
+              </span>
+            </label>
+
+            <div className="grid grid-cols-2 gap-3 max-w-xs">
+              {(['Sí', 'No'] as const).map((opt) => {
+                const isSelected = formData.hasFoodAllergies === opt;
+                return (
+                  <button
+                    type="button"
+                    key={opt}
+                    onClick={() => {
+                      handleChange('hasFoodAllergies', opt);
+                      if (opt === 'No') {
+                        handleChange('foodAllergiesDetails', '');
+                      }
+                    }}
+                    className={`flex items-center justify-between px-4 py-2.5 rounded-xl border text-xs sm:text-sm font-medium transition-all duration-200 cursor-pointer ${
+                      isSelected
+                        ? 'bg-[#EBF3F0] border-[#6E9E93] text-[#2E3A36] shadow-2xs font-semibold'
+                        : 'bg-white border-[#D9D3C8] text-[#5C6E68] hover:border-[#AEC9C0]'
+                    }`}
+                  >
+                    <span>{opt}</span>
+                    <div
+                      className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 ml-1 transition-all ${
+                        isSelected
+                          ? 'bg-[#6E9E93] text-white'
+                          : 'border border-[#C8C2B7]'
+                      }`}
+                    >
+                      {isSelected && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {attemptedSubmit && !formData.hasFoodAllergies && errors.hasFoodAllergies && (
+              <motion.p
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="text-xs text-[#C66A4D] flex items-center gap-1.5 pl-1"
+              >
+                <Info className="w-3.5 h-3.5 shrink-0" />
+                {errors.hasFoodAllergies}
+              </motion.p>
+            )}
+
+            {/* Detalle de alergia a alimentos si Sí */}
+            <AnimatePresence>
+              {formData.hasFoodAllergies === 'Sí' && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  id="field-foodAllergiesDetails"
+                  className="space-y-1.5 pt-2"
+                >
+                  <label
+                    htmlFor="foodAllergiesDetails-input"
+                    className="text-xs font-semibold text-[#2E3A36] block"
+                  >
+                    ¿A cuál(es) alimento(s)? <span className="text-[#F2A488] font-bold">*</span>
+                  </label>
+                  <input
+                    id="foodAllergiesDetails-input"
+                    type="text"
+                    value={formData.foodAllergiesDetails || ''}
+                    onChange={(e) => handleChange('foodAllergiesDetails', e.target.value)}
+                    onBlur={() => handleBlur('foodAllergiesDetails')}
+                    placeholder="Ej. Mariscos, maní, intolerancia severa a la lactosa, gluten..."
+                    className={`w-full px-3.5 py-2.5 rounded-xl bg-white border text-xs sm:text-sm text-[#2E3A36] placeholder-[#8E9E99] focus:outline-hidden focus:ring-2 focus:ring-[#6E9E93]/40 ${
+                      touched.foodAllergiesDetails && errors.foodAllergiesDetails
+                        ? 'border-[#F2A488] bg-[#FDEEE9]/40'
+                        : 'border-[#D9D3C8] hover:border-[#AEC9C0]'
+                    }`}
+                  />
+                  {touched.foodAllergiesDetails && errors.foodAllergiesDetails && (
+                    <motion.p
+                      initial={{ opacity: 0, y: -4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="text-xs text-[#C66A4D] flex items-center gap-1.5 pl-1"
+                    >
+                      <Info className="w-3.5 h-3.5 shrink-0" />
+                      {errors.foodAllergiesDetails}
+                    </motion.p>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        </div>
+
+        {/* 6. Salud ósea */}
+        <div id="field-boneHealthSection" className="space-y-5 pt-2 border-t border-[#E8E2D8]">
+          <div className="flex flex-col space-y-1">
+            <div className="flex items-center gap-2">
+              <Activity className="w-5 h-5 text-[#6E9E93]" />
+              <h3 className="text-base font-semibold text-[#2E3A36]">
+                6. Salud ósea <span className="text-[#F2A488] font-bold">*</span>
+              </h3>
+            </div>
+            <p className="text-xs text-[#5C6E68] leading-relaxed">
+              La densidad mineral ósea y el riesgo de fragilidad son fundamentales para planificar la actividad física, nutrición y suplementación adecuada.
+            </p>
+          </div>
+
+          {/* 6.1 Fracturas de huesos después de los 40 años o con caídas leves */}
+          <div id="field-hasBoneFracturesAfter40" className="space-y-3 p-4 sm:p-5 rounded-2xl bg-[#FAF6F0]/80 border border-[#D9D3C8]/80">
+            <label className="flex items-center justify-between text-xs font-semibold text-[#2E3A36]">
+              <span>
+                ¿Has tenido fracturas de huesos después de los 40 años o con caídas leves? <span className="text-[#F2A488] font-bold">*</span>
+              </span>
+            </label>
+
+            <div className="grid grid-cols-2 gap-3 max-w-xs">
+              {(['Sí', 'No'] as const).map((opt) => {
+                const isSelected = formData.hasBoneFracturesAfter40 === opt;
+                return (
+                  <button
+                    type="button"
+                    key={opt}
+                    onClick={() => {
+                      handleChange('hasBoneFracturesAfter40', opt);
+                      if (opt === 'No') {
+                        handleChange('boneFracturesDetails', '');
+                      }
+                    }}
+                    className={`flex items-center justify-between px-4 py-2.5 rounded-xl border text-xs sm:text-sm font-medium transition-all duration-200 cursor-pointer ${
+                      isSelected
+                        ? 'bg-[#EBF3F0] border-[#6E9E93] text-[#2E3A36] shadow-2xs font-semibold'
+                        : 'bg-white border-[#D9D3C8] text-[#5C6E68] hover:border-[#AEC9C0]'
+                    }`}
+                  >
+                    <span>{opt}</span>
+                    <div
+                      className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 ml-1 transition-all ${
+                        isSelected
+                          ? 'bg-[#6E9E93] text-white'
+                          : 'border border-[#C8C2B7]'
+                      }`}
+                    >
+                      {isSelected && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {attemptedSubmit && !formData.hasBoneFracturesAfter40 && errors.hasBoneFracturesAfter40 && (
+              <motion.p
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="text-xs text-[#C66A4D] flex items-center gap-1.5 pl-1"
+              >
+                <Info className="w-3.5 h-3.5 shrink-0" />
+                {errors.hasBoneFracturesAfter40}
+              </motion.p>
+            )}
+
+            {/* Detalle si Sí */}
+            <AnimatePresence>
+              {formData.hasBoneFracturesAfter40 === 'Sí' && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  id="field-boneFracturesDetails"
+                  className="space-y-1.5 pt-2"
+                >
+                  <label
+                    htmlFor="boneFracturesDetails-input"
+                    className="text-xs font-semibold text-[#2E3A36] block"
+                  >
+                    ¿Cuál hueso y a qué edad ocurrió? <span className="text-[#F2A488] font-bold">*</span>
+                  </label>
+                  <input
+                    id="boneFracturesDetails-input"
+                    type="text"
+                    value={formData.boneFracturesDetails || ''}
+                    onChange={(e) => handleChange('boneFracturesDetails', e.target.value)}
+                    onBlur={() => handleBlur('boneFracturesDetails')}
+                    placeholder="Ej. Fractura de muñeca a los 46 años tras un tropiezo leve..."
+                    className={`w-full px-3.5 py-2.5 rounded-xl bg-white border text-xs sm:text-sm text-[#2E3A36] placeholder-[#8E9E99] focus:outline-hidden focus:ring-2 focus:ring-[#6E9E93]/40 ${
+                      touched.boneFracturesDetails && errors.boneFracturesDetails
+                        ? 'border-[#F2A488] bg-[#FDEEE9]/40'
+                        : 'border-[#D9D3C8] hover:border-[#AEC9C0]'
+                    }`}
+                  />
+                  {touched.boneFracturesDetails && errors.boneFracturesDetails && (
+                    <motion.p
+                      initial={{ opacity: 0, y: -4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="text-xs text-[#C66A4D] flex items-center gap-1.5 pl-1"
+                    >
+                      <Info className="w-3.5 h-3.5 shrink-0" />
+                      {errors.boneFracturesDetails}
+                    </motion.p>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          {/* 6.2 Densitometría ósea */}
+          <div id="field-hasBoneDensitometry" className="space-y-3 p-4 sm:p-5 rounded-2xl bg-[#FAF6F0]/80 border border-[#D9D3C8]/80">
+            <label className="flex items-center justify-between text-xs font-semibold text-[#2E3A36]">
+              <span>
+                ¿Te han hecho una densitometría ósea? <span className="text-[#F2A488] font-bold">*</span>
+              </span>
+            </label>
+
+            <div className="grid grid-cols-2 gap-3 max-w-xs">
+              {(['Sí', 'No'] as const).map((opt) => {
+                const isSelected = formData.hasBoneDensitometry === opt;
+                return (
+                  <button
+                    type="button"
+                    key={opt}
+                    onClick={() => {
+                      handleChange('hasBoneDensitometry', opt);
+                      if (opt === 'No') {
+                        handleChange('boneDensitometryYear', '');
+                        handleChange('boneDensitometryResult', '');
+                      }
+                    }}
+                    className={`flex items-center justify-between px-4 py-2.5 rounded-xl border text-xs sm:text-sm font-medium transition-all duration-200 cursor-pointer ${
+                      isSelected
+                        ? 'bg-[#EBF3F0] border-[#6E9E93] text-[#2E3A36] shadow-2xs font-semibold'
+                        : 'bg-white border-[#D9D3C8] text-[#5C6E68] hover:border-[#AEC9C0]'
+                    }`}
+                  >
+                    <span>{opt}</span>
+                    <div
+                      className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 ml-1 transition-all ${
+                        isSelected
+                          ? 'bg-[#6E9E93] text-white'
+                          : 'border border-[#C8C2B7]'
+                      }`}
+                    >
+                      {isSelected && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {attemptedSubmit && !formData.hasBoneDensitometry && errors.hasBoneDensitometry && (
+              <motion.p
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="text-xs text-[#C66A4D] flex items-center gap-1.5 pl-1"
+              >
+                <Info className="w-3.5 h-3.5 shrink-0" />
+                {errors.hasBoneDensitometry}
+              </motion.p>
+            )}
+
+            {/* Campos condicionales si Sí: año y resultado */}
+            <AnimatePresence>
+              {formData.hasBoneDensitometry === 'Sí' && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="space-y-4 pt-3 border-t border-[#E8E2D8]"
+                >
+                  {/* Año */}
+                  <div id="field-boneDensitometryYear" className="space-y-1.5">
+                    <label
+                      htmlFor="boneDensitometryYear-input"
+                      className="text-xs font-semibold text-[#2E3A36] block"
+                    >
+                      ¿En qué año te la realizaron aproximadamente? <span className="text-[#F2A488] font-bold">*</span>
+                    </label>
+                    <input
+                      id="boneDensitometryYear-input"
+                      type="text"
+                      value={formData.boneDensitometryYear || ''}
+                      onChange={(e) => handleChange('boneDensitometryYear', e.target.value)}
+                      onBlur={() => handleBlur('boneDensitometryYear')}
+                      placeholder="Ej. 2023"
+                      className={`w-full max-w-xs px-3.5 py-2.5 rounded-xl bg-white border text-xs sm:text-sm text-[#2E3A36] placeholder-[#8E9E99] focus:outline-hidden focus:ring-2 focus:ring-[#6E9E93]/40 ${
+                        touched.boneDensitometryYear && errors.boneDensitometryYear
+                          ? 'border-[#F2A488] bg-[#FDEEE9]/40'
+                          : 'border-[#D9D3C8] hover:border-[#AEC9C0]'
+                      }`}
+                    />
+                    {touched.boneDensitometryYear && errors.boneDensitometryYear && (
+                      <motion.p
+                        initial={{ opacity: 0, y: -4 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="text-xs text-[#C66A4D] flex items-center gap-1.5 pl-1"
+                      >
+                        <Info className="w-3.5 h-3.5 shrink-0" />
+                        {errors.boneDensitometryYear}
+                      </motion.p>
+                    )}
+                  </div>
+
+                  {/* Resultado */}
+                  <div id="field-boneDensitometryResult" className="space-y-2">
+                    <label className="text-xs font-semibold text-[#2E3A36] block">
+                      ¿Cuál fue el resultado informado? <span className="text-[#F2A488] font-bold">*</span>
+                    </label>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                      {BONE_DENSITOMETRY_RESULTS.map((res) => {
+                        const isSelected = formData.boneDensitometryResult === res;
+                        return (
+                          <button
+                            type="button"
+                            key={res}
+                            onClick={() => handleChange('boneDensitometryResult', res)}
+                            className={`p-3 rounded-xl border text-center flex items-center justify-between transition-all duration-200 cursor-pointer ${
+                              isSelected
+                                ? 'bg-[#EBF3F0] border-[#6E9E93] text-[#2E3A36] shadow-2xs font-semibold'
+                                : 'bg-white border-[#D9D3C8] text-[#5C6E68] hover:border-[#AEC9C0]'
+                            }`}
+                          >
+                            <span className="text-xs font-semibold">{res}</span>
+                            <div
+                              className={`w-3.5 h-3.5 rounded-full flex items-center justify-center shrink-0 ml-1 transition-all ${
+                                isSelected
+                                  ? 'bg-[#6E9E93] text-white'
+                                  : 'border border-[#C8C2B7]'
+                              }`}
+                            >
+                              {isSelected && <Check className="w-2 h-2 stroke-[3]" />}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {touched.boneDensitometryResult && errors.boneDensitometryResult && (
+                      <motion.p
+                        initial={{ opacity: 0, y: -4 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="text-xs text-[#C66A4D] flex items-center gap-1.5 pl-1"
+                      >
+                        <Info className="w-3.5 h-3.5 shrink-0" />
+                        {errors.boneDensitometryResult}
+                      </motion.p>
+                    )}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
         </div>
 
         {/* Bloque: Hábitos: tabaco y alcohol */}
@@ -2475,6 +3077,117 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
                         className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-[#D9D3C8] text-xs text-[#2E3A36] placeholder-[#8E9E99] focus:outline-hidden focus:ring-2 focus:ring-[#6E9E93]/40"
                       />
                     </div>
+                  </motion.div>
+                )}
+
+                {/* Terapia hormonal para la menopausia (solo si perimenopausia o menopausia / ya no menstrua) */}
+                {(formData.menopauseStage === 'Perimenopausia' ||
+                  formData.menopauseStage === 'Menopausia' ||
+                  formData.cycleRegularity === 'Ya no menstruo (menopausia / histerectomía)') && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    id="field-usesHormoneReplacementTherapy"
+                    className="space-y-3 p-4 rounded-2xl bg-[#FAF6F0]/80 border border-[#D9D3C8]/90"
+                  >
+                    <label className="text-xs font-semibold text-[#2E3A36] block">
+                      ¿Usas terapia hormonal para la menopausia?{' '}
+                      <span className="text-[#F2A488] font-bold">*</span>
+                    </label>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                      {HORMONE_THERAPY_OPTIONS.map((opt) => {
+                        const isSelected = formData.usesHormoneReplacementTherapy === opt;
+                        return (
+                          <button
+                            type="button"
+                            key={opt}
+                            onClick={() => {
+                              handleChange('usesHormoneReplacementTherapy', opt);
+                              if (opt !== 'Sí') {
+                                handleChange('hormoneReplacementTherapyDetails', '');
+                              }
+                            }}
+                            className={`p-3 rounded-xl border text-left flex items-center justify-between gap-2 text-xs transition-all duration-200 cursor-pointer ${
+                              isSelected
+                                ? 'bg-[#EBF3F0] border-[#6E9E93] text-[#2E3A36] font-semibold shadow-2xs'
+                                : 'bg-white/80 border-[#D9D3C8] text-[#5C6E68] hover:border-[#AEC9C0]'
+                            }`}
+                          >
+                            <span>{opt}</span>
+                            <div
+                              className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ml-1 transition-all ${
+                                isSelected
+                                  ? 'bg-[#6E9E93] border-[#6E9E93] text-white'
+                                  : 'border-[#C8C2B7] bg-white'
+                              }`}
+                            >
+                              {isSelected && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {attemptedSubmit &&
+                      !formData.usesHormoneReplacementTherapy &&
+                      errors.usesHormoneReplacementTherapy && (
+                      <motion.p
+                        initial={{ opacity: 0, y: -4 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="text-xs text-[#C66A4D] flex items-center gap-1.5 pl-1"
+                      >
+                        <Info className="w-3.5 h-3.5 shrink-0" />
+                        {errors.usesHormoneReplacementTherapy}
+                      </motion.p>
+                    )}
+
+                    {/* Detalle si Sí */}
+                    <AnimatePresence>
+                      {formData.usesHormoneReplacementTherapy === 'Sí' && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          exit={{ opacity: 0, height: 0 }}
+                          id="field-hormoneReplacementTherapyDetails"
+                          className="space-y-1.5 pt-2 border-t border-[#E8E2D8]"
+                        >
+                          <label
+                            htmlFor="hormoneReplacementTherapyDetails-input"
+                            className="text-xs font-semibold text-[#2E3A36] block"
+                          >
+                            ¿Cuál y desde cuándo? <span className="text-[#F2A488] font-bold">*</span>
+                          </label>
+                          <input
+                            id="hormoneReplacementTherapyDetails-input"
+                            type="text"
+                            value={formData.hormoneReplacementTherapyDetails || ''}
+                            onChange={(e) =>
+                              handleChange('hormoneReplacementTherapyDetails', e.target.value)
+                            }
+                            onBlur={() => handleBlur('hormoneReplacementTherapyDetails')}
+                            placeholder="Ej. Estradiol transdérmico en gel + progesterona oral desde 2022..."
+                            className={`w-full px-3.5 py-2.5 rounded-xl bg-white border text-xs text-[#2E3A36] placeholder-[#8E9E99] focus:outline-hidden focus:ring-2 focus:ring-[#6E9E93]/40 ${
+                              touched.hormoneReplacementTherapyDetails &&
+                              errors.hormoneReplacementTherapyDetails
+                                ? 'border-[#F2A488] bg-[#FDEEE9]/40'
+                                : 'border-[#D9D3C8] hover:border-[#AEC9C0]'
+                            }`}
+                          />
+                          {touched.hormoneReplacementTherapyDetails &&
+                            errors.hormoneReplacementTherapyDetails && (
+                            <motion.p
+                              initial={{ opacity: 0, y: -4 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              className="text-xs text-[#C66A4D] flex items-center gap-1.5 pl-1"
+                            >
+                              <Info className="w-3.5 h-3.5 shrink-0" />
+                              {errors.hormoneReplacementTherapyDetails}
+                            </motion.p>
+                          )}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </motion.div>
                 )}
 

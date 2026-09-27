@@ -25,6 +25,8 @@ import {
   DocumentType,
   PatientBasicInfo,
   PatientSex,
+  EthnicOrigin,
+  ETHNIC_ORIGIN_OPTIONS,
   FormErrors,
 } from '../types';
 import { VelaIcon } from './VelaIcon';
@@ -86,6 +88,7 @@ export const StepOneForm: React.FC<StepOneFormProps> = ({
         birthDate: '',
         age: '',
         sex: '',
+        ethnicOrigin: '',
         phone: '',
         email: '',
         occupation: '',
@@ -590,6 +593,56 @@ export const StepOneForm: React.FC<StepOneFormProps> = ({
               {errors.sex}
             </motion.p>
           )}
+        </div>
+
+        {/* Origen étnico (Opcional) */}
+        <div id="field-ethnicOrigin" className="space-y-3 pt-1">
+          <label className="flex items-center justify-between text-sm font-semibold text-[#2E3A36]">
+            <span className="flex items-center gap-2">
+              <Users className="w-4 h-4 text-[#6E9E93]" />
+              ¿Con qué origen étnico te identificas?
+            </span>
+            <span className="text-xs font-normal text-[#8E9E99]">Opcional</span>
+          </label>
+          <p className="text-xs text-[#5C6E68]">
+            Nos permite personalizar los puntos de corte de riesgo metabólico y de masa corporal según recomendaciones clínicas internacionales.
+          </p>
+
+          <div
+            role="radiogroup"
+            aria-label="Origen étnico"
+            className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5"
+          >
+            {ETHNIC_ORIGIN_OPTIONS.map((option) => {
+              const isSelected = formData.ethnicOrigin === option;
+              return (
+                <button
+                  type="button"
+                  key={option}
+                  id={`ethnic-${option.toLowerCase().replace(/[^a-z0-9]/g, '-')}`}
+                  onClick={() => {
+                    handleChange('ethnicOrigin', isSelected ? '' : option);
+                  }}
+                  className={`group relative flex items-center justify-between px-3.5 py-3 rounded-xl border text-xs sm:text-sm font-medium transition-all duration-200 text-left cursor-pointer ${
+                    isSelected
+                      ? 'bg-[#EBF3F0] border-[#6E9E93] text-[#2E3A36] shadow-2xs font-semibold'
+                      : 'bg-[#FAF6F0]/60 border-[#D9D3C8] text-[#5C6E68] hover:border-[#AEC9C0] hover:bg-[#FAF6F0]'
+                  }`}
+                >
+                  <span className="leading-snug">{option}</span>
+                  <div
+                    className={`w-3.5 h-3.5 rounded-full flex items-center justify-center shrink-0 ml-1.5 transition-all ${
+                      isSelected
+                        ? 'bg-[#6E9E93] text-white'
+                        : 'border border-[#C8C2B7] group-hover:border-[#AEC9C0]'
+                    }`}
+                  >
+                    {isSelected && <Check className="w-2 h-2 stroke-[3]" />}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {/* Datos de contacto: Celular & Correo electrónico */}

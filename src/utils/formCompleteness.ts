@@ -67,9 +67,7 @@ function isStep3Complete(data: PatientWeightHistoryInfo | null): boolean {
 
   if (
     !data.currentWeightKg.trim() ||
-    !data.heightCm?.trim() ||
-    !data.lowestWeightSince18Kg.trim() ||
-    !data.highestWeightSince18Kg.trim()
+    !data.heightCm?.trim()
   ) {
     return false;
   }
@@ -156,7 +154,23 @@ function isStep4Complete(data: PatientHealthMapInfo | null, patientSex?: Patient
   if (!hasPharmInfo) return false;
   if (!data.surgicalHistory.trim()) return false;
   if (!data.hospitalHistory.trim()) return false;
-  if (!data.toxicAllergicHistory.trim()) return false;
+
+  // Alergias (Obligatorias)
+  if (!data.hasDrugAllergies) return false;
+  if (data.hasDrugAllergies === 'Sí' && !data.drugAllergiesDetails?.trim()) return false;
+  if (!data.hasFoodAllergies) return false;
+  if (data.hasFoodAllergies === 'Sí' && !data.foodAllergiesDetails?.trim()) return false;
+
+  // Salud ósea (Obligatoria)
+  if (!data.hasBoneFracturesAfter40) return false;
+  if (data.hasBoneFracturesAfter40 === 'Sí' && !data.boneFracturesDetails?.trim()) return false;
+  if (!data.hasBoneDensitometry) return false;
+  if (
+    data.hasBoneDensitometry === 'Sí' &&
+    (!data.boneDensitometryYear?.trim() || !data.boneDensitometryResult)
+  ) {
+    return false;
+  }
 
   // Gineco-obstétrico: Solo es obligatorio si el paciente es de sexo femenino
   const isFemale = patientSex === 'Femenino';
@@ -172,6 +186,21 @@ function isStep4Complete(data: PatientHealthMapInfo | null, patientSex?: Patient
         return false;
       }
       if (!data.menopauseStage) return false;
+
+      const isMenopause =
+        data.menopauseStage === 'Menopausia' ||
+        data.menopauseStage === 'Perimenopausia' ||
+        data.cycleRegularity === 'Ya no menstruo (menopausia / histerectomía)';
+      if (isMenopause) {
+        if (!data.usesHormoneReplacementTherapy) return false;
+        if (
+          data.usesHormoneReplacementTherapy === 'Sí' &&
+          !data.hormoneReplacementTherapyDetails?.trim()
+        ) {
+          return false;
+        }
+      }
+
       if (!data.currentlyBreastfeeding) return false;
       if (!data.contraceptiveMethod) return false;
       if (data.contraceptiveMethod === 'Otro' && !data.contraceptiveMethodOther?.trim()) return false;

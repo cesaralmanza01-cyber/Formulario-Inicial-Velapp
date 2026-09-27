@@ -143,7 +143,13 @@ export const StepThreeForm: React.FC<StepThreeFormProps> = ({
         currentWeightKg: '',
         heightCm: '',
         lowestWeightSince18Kg: '',
+        lowestWeightAge: '',
+        lowestWeightDontRemember: false,
+        lowestWeightAgeDontRemember: false,
         highestWeightSince18Kg: '',
+        highestWeightAge: '',
+        highestWeightDontRemember: false,
+        highestWeightAgeDontRemember: false,
         weightTrajectoryMilestones: [],
         weightJourneyPoints: [],
         overweightOnsetStage: '',
@@ -230,20 +236,42 @@ export const StepThreeForm: React.FC<StepThreeFormProps> = ({
         return '';
       }
       case 'lowestWeightSince18Kg': {
-        const val = currentForm.lowestWeightSince18Kg.trim();
-        if (!val) return 'Por favor indica el peso más bajo desde tus 18 años.';
+        if (currentForm.lowestWeightDontRemember) return '';
+        const val = (currentForm.lowestWeightSince18Kg || '').trim();
+        if (!val) return '';
         const num = parseFloat(val);
         if (isNaN(num) || num < 25 || num > 350) {
-          return 'Ingresa un peso válido en kilogramos.';
+          return 'Ingresa un peso válido en kilogramos (ej. 52).';
+        }
+        return '';
+      }
+      case 'lowestWeightAge': {
+        if (currentForm.lowestWeightDontRemember || currentForm.lowestWeightAgeDontRemember) return '';
+        const val = (currentForm.lowestWeightAge || '').trim();
+        if (!val) return '';
+        const num = parseInt(val, 10);
+        if (isNaN(num) || num < 15 || num > 120) {
+          return 'Ingresa una edad válida en años (ej. 20).';
         }
         return '';
       }
       case 'highestWeightSince18Kg': {
-        const val = currentForm.highestWeightSince18Kg.trim();
-        if (!val) return 'Por favor indica el peso más alto desde tus 18 años.';
+        if (currentForm.highestWeightDontRemember) return '';
+        const val = (currentForm.highestWeightSince18Kg || '').trim();
+        if (!val) return '';
         const num = parseFloat(val);
         if (isNaN(num) || num < 25 || num > 350) {
-          return 'Ingresa un peso válido en kilogramos.';
+          return 'Ingresa un peso válido en kilogramos (ej. 85).';
+        }
+        return '';
+      }
+      case 'highestWeightAge': {
+        if (currentForm.highestWeightDontRemember || currentForm.highestWeightAgeDontRemember) return '';
+        const val = (currentForm.highestWeightAge || '').trim();
+        if (!val) return '';
+        const num = parseInt(val, 10);
+        if (isNaN(num) || num < 15 || num > 120) {
+          return 'Ingresa una edad válida en años (ej. 32).';
         }
         return '';
       }
@@ -710,12 +738,10 @@ export const StepThreeForm: React.FC<StepThreeFormProps> = ({
 
   // Evaluate form completeness
   const isFormComplete = (() => {
-    // 1. Pesos y talla obligatorios
+    // 1. Pesos y talla obligatorios (peso actual y talla)
     if (
       !formData.currentWeightKg.trim() ||
-      !formData.heightCm?.trim() ||
-      !formData.lowestWeightSince18Kg.trim() ||
-      !formData.highestWeightSince18Kg.trim()
+      !formData.heightCm?.trim()
     ) {
       return false;
     }
@@ -817,7 +843,9 @@ export const StepThreeForm: React.FC<StepThreeFormProps> = ({
       currentWeightKg: true,
       heightCm: true,
       lowestWeightSince18Kg: true,
+      lowestWeightAge: true,
       highestWeightSince18Kg: true,
+      highestWeightAge: true,
       hasPreviousAttempts: true,
       usedWeightMedications: true,
       hadBariatricSurgery: true,
@@ -866,7 +894,9 @@ export const StepThreeForm: React.FC<StepThreeFormProps> = ({
       currentWeightKg: validateField('currentWeightKg', formData),
       heightCm: validateField('heightCm', formData),
       lowestWeightSince18Kg: validateField('lowestWeightSince18Kg', formData),
+      lowestWeightAge: validateField('lowestWeightAge', formData),
       highestWeightSince18Kg: validateField('highestWeightSince18Kg', formData),
+      highestWeightAge: validateField('highestWeightAge', formData),
       childhoodOnsetAge: validateField('childhoodOnsetAge', formData),
       hasPreviousAttempts: validateField('hasPreviousAttempts', formData),
       fluctuationCount: validateField('fluctuationCount', formData),
@@ -997,8 +1027,9 @@ export const StepThreeForm: React.FC<StepThreeFormProps> = ({
           })()}
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 items-start">
-          {/* 1. Peso actual */}
+        {/* 1. Peso actual y Talla / Estatura (Obligatorios) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 items-start">
+          {/* Peso actual */}
           <div id="field-currentWeightKg" className="flex flex-col space-y-2">
             <div className="min-h-[42px] flex flex-col justify-end">
               <label
@@ -1044,7 +1075,7 @@ export const StepThreeForm: React.FC<StepThreeFormProps> = ({
             )}
           </div>
 
-          {/* 2. Talla / Estatura */}
+          {/* Talla / Estatura */}
           <div id="field-heightCm" className="flex flex-col space-y-2">
             <div className="min-h-[42px] flex flex-col justify-end">
               <label
@@ -1089,100 +1120,313 @@ export const StepThreeForm: React.FC<StepThreeFormProps> = ({
               </motion.p>
             )}
           </div>
+        </div>
 
-          {/* 3. Peso más bajo desde los 18 años */}
-          <div id="field-lowestWeightSince18Kg" className="flex flex-col space-y-2">
-            <div className="min-h-[42px] flex flex-col justify-end">
-              <label
-                htmlFor="lowestWeightSince18Kg-input"
-                className="text-sm font-semibold text-[#2E3A36] block leading-tight"
-              >
-                Peso más bajo <span className="text-[#F2A488] font-bold">*</span>
-              </label>
-              <span className="text-xs text-[#8E9E99] leading-normal mt-0.5">
-                Desde los 18 años
-              </span>
-            </div>
-            <div className="relative">
-              <input
-                id="lowestWeightSince18Kg-input"
-                type="number"
-                step="0.1"
-                min="25"
-                max="350"
-                value={formData.lowestWeightSince18Kg}
-                onChange={(e) =>
-                  handleChange('lowestWeightSince18Kg', e.target.value)
-                }
-                onBlur={() => handleBlur('lowestWeightSince18Kg')}
-                placeholder="Ej. 52"
-                className={`w-full pl-4 pr-11 py-3.5 rounded-xl bg-[#FAF6F0]/80 border text-[#2E3A36] placeholder-[#8E9E99] text-base transition-all duration-200 focus:outline-hidden focus:ring-2 focus:ring-[#6E9E93]/40 focus:bg-white ${
-                  touched.lowestWeightSince18Kg && errors.lowestWeightSince18Kg
-                    ? 'border-[#F2A488] bg-[#FDEEE9]/40'
-                    : 'border-[#D9D3C8] hover:border-[#AEC9C0]'
+        {/* 2. Extremos de peso en la vida adulta (Opcionales con "No recuerdo") */}
+        <div className="pt-2 border-t border-[#E8E2D8]/80 grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Peso más alto de la vida adulta */}
+          <div
+            id="field-highestWeightSince18Kg"
+            className="p-4 sm:p-5 rounded-2xl bg-[#FAF6F0]/70 border border-[#D9D3C8]/80 space-y-3.5"
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <label className="text-sm font-semibold text-[#2E3A36] block">
+                  Peso más alto de tu vida adulta (sin contar embarazos)
+                </label>
+                <span className="text-xs text-[#8E9E99]">
+                  Opcional • Máximo peso alcanzado como adulto
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const nextVal = !formData.highestWeightDontRemember;
+                  setFormData((prev) => ({
+                    ...prev,
+                    highestWeightDontRemember: nextVal,
+                    highestWeightSince18Kg: nextVal ? '' : prev.highestWeightSince18Kg,
+                    highestWeightAgeDontRemember: nextVal ? true : prev.highestWeightAgeDontRemember,
+                    highestWeightAge: nextVal ? '' : prev.highestWeightAge,
+                  }));
+                  setErrors((prev) => ({
+                    ...prev,
+                    highestWeightSince18Kg: '',
+                    highestWeightAge: '',
+                  }));
+                }}
+                className={`text-xs px-2.5 py-1 rounded-lg border transition-all cursor-pointer font-medium ${
+                  formData.highestWeightDontRemember
+                    ? 'bg-[#6E9E93] text-white border-[#6E9E93]'
+                    : 'bg-white border-[#D9D3C8] text-[#5C6E68] hover:border-[#AEC9C0]'
                 }`}
-              />
-              <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-semibold text-[#8E9E99] pointer-events-none select-none">
-                kg
-              </span>
-            </div>
-            {touched.lowestWeightSince18Kg && errors.lowestWeightSince18Kg && (
-              <motion.p
-                initial={{ opacity: 0, y: -4 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="text-xs text-[#C66A4D] flex items-center gap-1.5 pl-1"
               >
-                <Info className="w-3.5 h-3.5 shrink-0" />
-                {errors.lowestWeightSince18Kg}
-              </motion.p>
+                {formData.highestWeightDontRemember ? '✓ No recuerdo' : 'No recuerdo'}
+              </button>
+            </div>
+
+            {!formData.highestWeightDontRemember ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <div className="space-y-1.5">
+                  <label
+                    htmlFor="highestWeightSince18Kg-input"
+                    className="text-xs font-semibold text-[#5C6E68] block"
+                  >
+                    Peso aproximado (kg)
+                  </label>
+                  <div className="relative">
+                    <input
+                      id="highestWeightSince18Kg-input"
+                      type="number"
+                      step="0.1"
+                      min="25"
+                      max="350"
+                      value={formData.highestWeightSince18Kg}
+                      onChange={(e) =>
+                        handleChange('highestWeightSince18Kg', e.target.value)
+                      }
+                      onBlur={() => handleBlur('highestWeightSince18Kg')}
+                      placeholder="Ej. 85"
+                      className={`w-full pl-3.5 pr-10 py-2.5 rounded-xl bg-white border text-[#2E3A36] placeholder-[#8E9E99] text-sm transition-all duration-200 focus:outline-hidden focus:ring-2 focus:ring-[#6E9E93]/40 ${
+                        touched.highestWeightSince18Kg && errors.highestWeightSince18Kg
+                          ? 'border-[#F2A488] bg-[#FDEEE9]/40'
+                          : 'border-[#D9D3C8] hover:border-[#AEC9C0]'
+                      }`}
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-[#8E9E99] pointer-events-none select-none">
+                      kg
+                    </span>
+                  </div>
+                  {touched.highestWeightSince18Kg && errors.highestWeightSince18Kg && (
+                    <motion.p
+                      initial={{ opacity: 0, y: -4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="text-xs text-[#C66A4D] flex items-center gap-1 pl-0.5"
+                    >
+                      <Info className="w-3 h-3 shrink-0" />
+                      {errors.highestWeightSince18Kg}
+                    </motion.p>
+                  )}
+                </div>
+
+                <div id="field-highestWeightAge" className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label
+                      htmlFor="highestWeightAge-input"
+                      className="text-xs font-semibold text-[#5C6E68] block"
+                    >
+                      ¿A qué edad?
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const nextVal = !formData.highestWeightAgeDontRemember;
+                        setFormData((prev) => ({
+                          ...prev,
+                          highestWeightAgeDontRemember: nextVal,
+                          highestWeightAge: nextVal ? '' : prev.highestWeightAge,
+                        }));
+                        setErrors((prev) => ({ ...prev, highestWeightAge: '' }));
+                      }}
+                      className="text-[11px] text-[#5B887E] hover:underline cursor-pointer"
+                    >
+                      {formData.highestWeightAgeDontRemember ? '✓ No recuerdo edad' : 'No recuerdo edad'}
+                    </button>
+                  </div>
+                  <div className="relative">
+                    <input
+                      id="highestWeightAge-input"
+                      type="number"
+                      min="15"
+                      max="120"
+                      disabled={formData.highestWeightAgeDontRemember}
+                      value={formData.highestWeightAge || ''}
+                      onChange={(e) => handleChange('highestWeightAge', e.target.value)}
+                      onBlur={() => handleBlur('highestWeightAge')}
+                      placeholder={formData.highestWeightAgeDontRemember ? 'No recuerda' : 'Ej. 32'}
+                      className={`w-full pl-3.5 pr-11 py-2.5 rounded-xl border text-[#2E3A36] placeholder-[#8E9E99] text-sm transition-all duration-200 focus:outline-hidden focus:ring-2 focus:ring-[#6E9E93]/40 ${
+                        formData.highestWeightAgeDontRemember
+                          ? 'bg-[#EFEAE1] border-[#D9D3C8] text-[#8E9E99] cursor-not-allowed'
+                          : 'bg-white border-[#D9D3C8] hover:border-[#AEC9C0]'
+                      } ${
+                        touched.highestWeightAge && errors.highestWeightAge
+                          ? 'border-[#F2A488] bg-[#FDEEE9]/40'
+                          : ''
+                      }`}
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-[#8E9E99] pointer-events-none select-none">
+                      años
+                    </span>
+                  </div>
+                  {touched.highestWeightAge && errors.highestWeightAge && (
+                    <motion.p
+                      initial={{ opacity: 0, y: -4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="text-xs text-[#C66A4D] flex items-center gap-1 pl-0.5"
+                    >
+                      <Info className="w-3 h-3 shrink-0" />
+                      {errors.highestWeightAge}
+                    </motion.p>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <p className="text-xs text-[#5B887E] italic py-1">
+                Marcado como "No recuerdo". Puedes continuar tranquilamente.
+              </p>
             )}
           </div>
 
-          {/* 4. Peso más alto desde los 18 años */}
-          <div id="field-highestWeightSince18Kg" className="flex flex-col space-y-2">
-            <div className="min-h-[42px] flex flex-col justify-end">
-              <label
-                htmlFor="highestWeightSince18Kg-input"
-                className="text-sm font-semibold text-[#2E3A36] block leading-tight"
-              >
-                Peso más alto <span className="text-[#F2A488] font-bold">*</span>
-              </label>
-              <span className="text-xs text-[#8E9E99] leading-normal mt-0.5">
-                Desde los 18 años
-              </span>
-            </div>
-            <div className="relative">
-              <input
-                id="highestWeightSince18Kg-input"
-                type="number"
-                step="0.1"
-                min="25"
-                max="350"
-                value={formData.highestWeightSince18Kg}
-                onChange={(e) =>
-                  handleChange('highestWeightSince18Kg', e.target.value)
-                }
-                onBlur={() => handleBlur('highestWeightSince18Kg')}
-                placeholder="Ej. 83.8"
-                className={`w-full pl-4 pr-11 py-3.5 rounded-xl bg-[#FAF6F0]/80 border text-[#2E3A36] placeholder-[#8E9E99] text-base transition-all duration-200 focus:outline-hidden focus:ring-2 focus:ring-[#6E9E93]/40 focus:bg-white ${
-                  touched.highestWeightSince18Kg && errors.highestWeightSince18Kg
-                    ? 'border-[#F2A488] bg-[#FDEEE9]/40'
-                    : 'border-[#D9D3C8] hover:border-[#AEC9C0]'
+          {/* Peso más bajo de la vida adulta */}
+          <div
+            id="field-lowestWeightSince18Kg"
+            className="p-4 sm:p-5 rounded-2xl bg-[#FAF6F0]/70 border border-[#D9D3C8]/80 space-y-3.5"
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <label className="text-sm font-semibold text-[#2E3A36] block">
+                  Peso más bajo de tu vida adulta
+                </label>
+                <span className="text-xs text-[#8E9E99]">
+                  Opcional • Menor peso alcanzado como adulto
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const nextVal = !formData.lowestWeightDontRemember;
+                  setFormData((prev) => ({
+                    ...prev,
+                    lowestWeightDontRemember: nextVal,
+                    lowestWeightSince18Kg: nextVal ? '' : prev.lowestWeightSince18Kg,
+                    lowestWeightAgeDontRemember: nextVal ? true : prev.lowestWeightAgeDontRemember,
+                    lowestWeightAge: nextVal ? '' : prev.lowestWeightAge,
+                  }));
+                  setErrors((prev) => ({
+                    ...prev,
+                    lowestWeightSince18Kg: '',
+                    lowestWeightAge: '',
+                  }));
+                }}
+                className={`text-xs px-2.5 py-1 rounded-lg border transition-all cursor-pointer font-medium ${
+                  formData.lowestWeightDontRemember
+                    ? 'bg-[#6E9E93] text-white border-[#6E9E93]'
+                    : 'bg-white border-[#D9D3C8] text-[#5C6E68] hover:border-[#AEC9C0]'
                 }`}
-              />
-              <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-semibold text-[#8E9E99] pointer-events-none select-none">
-                kg
-              </span>
-            </div>
-            {touched.highestWeightSince18Kg && errors.highestWeightSince18Kg && (
-              <motion.p
-                initial={{ opacity: 0, y: -4 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="text-xs text-[#C66A4D] flex items-center gap-1.5 pl-1"
               >
-                <Info className="w-3.5 h-3.5 shrink-0" />
-                {errors.highestWeightSince18Kg}
-              </motion.p>
+                {formData.lowestWeightDontRemember ? '✓ No recuerdo' : 'No recuerdo'}
+              </button>
+            </div>
+
+            {!formData.lowestWeightDontRemember ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <div className="space-y-1.5">
+                  <label
+                    htmlFor="lowestWeightSince18Kg-input"
+                    className="text-xs font-semibold text-[#5C6E68] block"
+                  >
+                    Peso aproximado (kg)
+                  </label>
+                  <div className="relative">
+                    <input
+                      id="lowestWeightSince18Kg-input"
+                      type="number"
+                      step="0.1"
+                      min="25"
+                      max="350"
+                      value={formData.lowestWeightSince18Kg}
+                      onChange={(e) =>
+                        handleChange('lowestWeightSince18Kg', e.target.value)
+                      }
+                      onBlur={() => handleBlur('lowestWeightSince18Kg')}
+                      placeholder="Ej. 54"
+                      className={`w-full pl-3.5 pr-10 py-2.5 rounded-xl bg-white border text-[#2E3A36] placeholder-[#8E9E99] text-sm transition-all duration-200 focus:outline-hidden focus:ring-2 focus:ring-[#6E9E93]/40 ${
+                        touched.lowestWeightSince18Kg && errors.lowestWeightSince18Kg
+                          ? 'border-[#F2A488] bg-[#FDEEE9]/40'
+                          : 'border-[#D9D3C8] hover:border-[#AEC9C0]'
+                      }`}
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-[#8E9E99] pointer-events-none select-none">
+                      kg
+                    </span>
+                  </div>
+                  {touched.lowestWeightSince18Kg && errors.lowestWeightSince18Kg && (
+                    <motion.p
+                      initial={{ opacity: 0, y: -4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="text-xs text-[#C66A4D] flex items-center gap-1 pl-0.5"
+                    >
+                      <Info className="w-3 h-3 shrink-0" />
+                      {errors.lowestWeightSince18Kg}
+                    </motion.p>
+                  )}
+                </div>
+
+                <div id="field-lowestWeightAge" className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label
+                      htmlFor="lowestWeightAge-input"
+                      className="text-xs font-semibold text-[#5C6E68] block"
+                    >
+                      ¿A qué edad?
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const nextVal = !formData.lowestWeightAgeDontRemember;
+                        setFormData((prev) => ({
+                          ...prev,
+                          lowestWeightAgeDontRemember: nextVal,
+                          lowestWeightAge: nextVal ? '' : prev.lowestWeightAge,
+                        }));
+                        setErrors((prev) => ({ ...prev, lowestWeightAge: '' }));
+                      }}
+                      className="text-[11px] text-[#5B887E] hover:underline cursor-pointer"
+                    >
+                      {formData.lowestWeightAgeDontRemember ? '✓ No recuerdo edad' : 'No recuerdo edad'}
+                    </button>
+                  </div>
+                  <div className="relative">
+                    <input
+                      id="lowestWeightAge-input"
+                      type="number"
+                      min="15"
+                      max="120"
+                      disabled={formData.lowestWeightAgeDontRemember}
+                      value={formData.lowestWeightAge || ''}
+                      onChange={(e) => handleChange('lowestWeightAge', e.target.value)}
+                      onBlur={() => handleBlur('lowestWeightAge')}
+                      placeholder={formData.lowestWeightAgeDontRemember ? 'No recuerda' : 'Ej. 20'}
+                      className={`w-full pl-3.5 pr-11 py-2.5 rounded-xl border text-[#2E3A36] placeholder-[#8E9E99] text-sm transition-all duration-200 focus:outline-hidden focus:ring-2 focus:ring-[#6E9E93]/40 ${
+                        formData.lowestWeightAgeDontRemember
+                          ? 'bg-[#EFEAE1] border-[#D9D3C8] text-[#8E9E99] cursor-not-allowed'
+                          : 'bg-white border-[#D9D3C8] hover:border-[#AEC9C0]'
+                      } ${
+                        touched.lowestWeightAge && errors.lowestWeightAge
+                          ? 'border-[#F2A488] bg-[#FDEEE9]/40'
+                          : ''
+                      }`}
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-[#8E9E99] pointer-events-none select-none">
+                      años
+                    </span>
+                  </div>
+                  {touched.lowestWeightAge && errors.lowestWeightAge && (
+                    <motion.p
+                      initial={{ opacity: 0, y: -4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="text-xs text-[#C66A4D] flex items-center gap-1 pl-0.5"
+                    >
+                      <Info className="w-3 h-3 shrink-0" />
+                      {errors.lowestWeightAge}
+                    </motion.p>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <p className="text-xs text-[#5B887E] italic py-1">
+                Marcado como "No recuerdo". Puedes continuar tranquilamente.
+              </p>
             )}
           </div>
         </div>
