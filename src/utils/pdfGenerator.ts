@@ -1,4 +1,5 @@
 import jsPDF from 'jspdf';
+import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import {
   FirestoreQuestionnaireDocument,
   UploadedLabFile,
@@ -8,7 +9,8 @@ import {
   WeightStagePoint,
   LifeStageKey,
 } from '../types';
-import { getFileDataUrl } from './fileMemoryStore';
+import { getFileDataUrl, getFileDataUrlAsync } from './fileMemoryStore';
+import { evaluateClinicalRedFlags } from './clinicalFlags';
 
 /**
  * Formats date into readable Colombian / Latin American format
@@ -494,6 +496,7 @@ export function generatePatientQuestionnairePdfDoc(
   printField('Fecha de nacimiento', patient.identificacion?.birthDate);
   printField('Edad', patient.identificacion?.age ? `${patient.identificacion.age} años` : null);
   printField('Ocupación y Profesión', patient.identificacion?.occupation);
+  printField('Escolaridad (último nivel alcanzado)', patient.identificacion?.educationLevel);
   printField('Estado civil', patient.identificacion?.civilStatus);
   printField(
     'Medio por el cual conoció a Vela',
@@ -546,6 +549,47 @@ export function generatePatientQuestionnairePdfDoc(
         }`
       : '';
     printField('Etapa de origen del sobrepeso', `${stageDisplay}${childhoodDetail}`);
+
+    // Alerta clínica en rojo exclusiva para la doctora cuando el sobrepeso inició en la infancia
+    if (patient.relacion_peso.overweightOnsetStage === 'infancia') {
+      const isUnder5 =
+        patient.relacion_peso.childhoodOnsetAge &&
+        parseInt(patient.relacion_peso.childhoodOnsetAge, 10) < 5;
+      const under5Extra = isUnder5
+        ? 'Alerta prioritaria (< 5 años): alta sospecha de causa genética monogénica (vía leptina-melanocortina: MC4R, LEP, LEPR, POMC, PCSK1). Valorar derivación a genética médica.'
+        : '';
+
+      const alertHeight = under5Extra ? 36 : 26;
+      checkPageBreak(alertHeight + 4);
+
+      // Fondo coral pálido #FDEEE9 con borde coral #F1B9A8
+      doc.setFillColor(253, 238, 233);
+      doc.roundedRect(margin + 6, y, contentWidth - 12, alertHeight - 4, 3, 3, 'F');
+      doc.setDrawColor(241, 185, 168);
+      doc.setLineWidth(0.6);
+      doc.roundedRect(margin + 6, y, contentWidth - 12, alertHeight - 4, 3, 3, 'S');
+
+      // Título en coral oscuro
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8);
+      doc.setTextColor(198, 106, 77); // Coral #C66A4D
+      doc.text('Bandera roja — Nota interna para la Dra. Lorena Castro', margin + 14, y + 10);
+
+      // Texto de la alerta
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8.5);
+      doc.setTextColor(198, 106, 77);
+      doc.text('• Obesidad de inicio temprano — ¿genética?', margin + 14, y + 18.5);
+
+      if (under5Extra) {
+        doc.setFont('helvetica', 'italic');
+        doc.setFontSize(7.5);
+        doc.setTextColor(92, 110, 104);
+        doc.text(under5Extra, margin + 20, y + 26);
+      }
+
+      y += alertHeight;
+    }
   }
 
   // Curva de trayectoria de peso en las etapas de vida (Interactive Journey Chart drawn into PDF)
@@ -608,21 +652,87 @@ export function generatePatientQuestionnairePdfDoc(
   printSubSectionTitle('Fármacos para control de peso');
   if (patient.relacion_peso?.usedWeightMedications === 'Sí') {
     printField('¿Ha usado medicamentos para el peso?', 'Sí');
-    printField('Nombres de fármacos utilizados', patient.relacion_peso.weightMedicationsNames);
-    printField('Experiencia con dichos fármacos', patient.relacion_peso.weightMedicationsExperience, true);
-    printField('Efectos adversos o intolerancias', patient.relacion_peso.weightMedicationsAdverseEffects, true);
+
+    const medList =
+      patient.relacion_peso.weightMedicationsList &&
+      patient.relacion_peso.weightMedicationsList.length > 0
+        ? patient.relacion_peso.weightMedicationsList
+        : [
+            {
+              name: patient.relacion_peso.weightMedicationsNames || '',
+              dose: patient.relacion_peso.weightMedicationsDose || '',
+              currentlyUsing: patient.relacion_peso.weightMedicationsCurrentlyUsing || '',
+              discontinueReasons: patient.relacion_peso.weightMedicationsDiscontinueReasons || [],
+              discontinueOther: patient.relacion_peso.weightMedicationsDiscontinueOther || '',
+            },
+          ];
+
+    medList.forEach((med, idx) => {
+      const medTitle =
+        medList.length > 1
+          ? `Medicamento ${idx + 1}: ${med.name || 'Sin especificar'}`
+          : `Medicamento o inyectable: ${med.name || 'Sin especificar'}`;
+      const medLines: string[] = [];
+      if (med.dose) medLines.push(`• Dosis: ${med.dose}`);
+      if (med.currentlyUsing) medLines.push(`• Estado de uso: ${med.currentlyUsing}`);
+      if (
+        med.currentlyUsing === 'No, lo suspendí' &&
+        med.discontinueReasons &&
+        med.discontinueReasons.length > 0
+      ) {
+        const reasons = med.discontinueReasons
+          .map((r) => (r === 'Otro' && med.discontinueOther ? `Otro (${med.discontinueOther})` : r))
+          .join(', ');
+        medLines.push(`• Motivo de suspensión: ${reasons}`);
+      }
+      printField(medTitle, medLines.join('\n') || 'Registrado', true);
+    });
+
+    printField(
+      'Experiencia con dichos fármacos',
+      patient.relacion_peso.weightMedicationsExperience,
+      true
+    );
+    printField(
+      'Efectos adversos o intolerancias',
+      patient.relacion_peso.weightMedicationsAdverseEffects,
+      true
+    );
   } else {
     printField('¿Ha usado medicamentos para el peso?', 'No');
   }
 
   // Surgeries
   printSubSectionTitle('Antecedentes quirúrgicos de peso o contorno');
-  printField(
-    'Cirugía bariátrica previa',
-    patient.relacion_peso?.hadBariatricSurgery === 'Sí'
-      ? `Sí (${patient.relacion_peso.bariatricSurgeryTimeAgo || 'Hace algún tiempo'})`
-      : 'No'
-  );
+  if (patient.relacion_peso?.hadBariatricSurgery === 'Sí') {
+    const bariatricLines: string[] = [];
+    if (patient.relacion_peso.bariatricSurgeryTimeAgo) {
+      bariatricLines.push(`• Tipo y tiempo transcurrido: ${patient.relacion_peso.bariatricSurgeryTimeAgo}`);
+    }
+    if (patient.relacion_peso.bariatricPreOpWeightKg) {
+      bariatricLines.push(`• Peso antes de la cirugía: ${patient.relacion_peso.bariatricPreOpWeightKg} kg`);
+    }
+    if (patient.relacion_peso.bariatricLowestWeightPostOpKg) {
+      bariatricLines.push(`• Peso más bajo alcanzado tras la cirugía: ${patient.relacion_peso.bariatricLowestWeightPostOpKg} kg`);
+    }
+    if (patient.relacion_peso.bariatricWeightRegain) {
+      let regainText = `• ¿Ha vuelto a subir de peso tras la cirugía?: ${patient.relacion_peso.bariatricWeightRegain}`;
+      if (
+        patient.relacion_peso.bariatricWeightRegain === 'Sí' &&
+        patient.relacion_peso.bariatricWeightRegainedKg
+      ) {
+        regainText += ` (aproximadamente ${patient.relacion_peso.bariatricWeightRegainedKg} kg)`;
+      }
+      bariatricLines.push(regainText);
+    }
+    printField(
+      'Cirugía bariátrica previa',
+      bariatricLines.length > 0 ? `Sí\n${bariatricLines.join('\n')}` : 'Sí',
+      true
+    );
+  } else {
+    printField('Cirugía bariátrica previa', patient.relacion_peso?.hadBariatricSurgery || 'No');
+  }
   printField(
     'Cirugías estéticas o de contorno',
     patient.relacion_peso?.hadAestheticSurgery === 'Sí'
@@ -636,13 +746,33 @@ export function generatePatientQuestionnairePdfDoc(
   printSectionTitle('4. MAPA DE SALUD Y ANTECEDENTES');
   printField('Antecedentes patológicos (diagnósticos)', patient.mapa_salud?.pathologicalHistory || 'Niega');
   // Pharmacological history & Obesogenic drugs
-  let pharmDisplay = patient.mapa_salud?.pharmacologicalHistory || '';
-  if (patient.mapa_salud?.selectedObesogenicDrugs && patient.mapa_salud.selectedObesogenicDrugs.length > 0) {
-    const drugsFormatted = `Fármacos con potencial obesogénico identificados: ${patient.mapa_salud.selectedObesogenicDrugs.join(', ')}`;
-    pharmDisplay = pharmDisplay ? `${drugsFormatted}\nOtros medicamentos: ${pharmDisplay}` : drugsFormatted;
-  }
-  if (patient.mapa_salud?.otherMedicationsDetails && patient.mapa_salud.otherMedicationsDetails.trim()) {
-    pharmDisplay = pharmDisplay ? `${pharmDisplay}\nOtros: ${patient.mapa_salud.otherMedicationsDetails.trim()}` : `Otros medicamentos: ${patient.mapa_salud.otherMedicationsDetails.trim()}`;
+  let pharmDisplay = '';
+  if (patient.mapa_salud?.medicationEntries && patient.mapa_salud.medicationEntries.length > 0) {
+    const lines = patient.mapa_salud.medicationEntries.map((m) => {
+      const details: string[] = [];
+      if (m.dose?.trim()) {
+        details.push(`Dosis: ${m.dose.trim()}`);
+      }
+      if (m.startMonth || m.startYear) {
+        const dateStr = [m.startMonth, m.startYear].filter(Boolean).join(' ');
+        details.push(`Inicio: ${dateStr}`);
+      }
+      const typeBadge = m.isCustom ? '' : ' [Potencial obesogénico]';
+      return `• ${m.name}${typeBadge}${details.length > 0 ? ` (${details.join(' — ')})` : ''}`;
+    });
+    pharmDisplay = lines.join('\n');
+    if (patient.mapa_salud?.otherMedicationsDetails?.trim()) {
+      pharmDisplay += `\nNotas adicionales: ${patient.mapa_salud.otherMedicationsDetails.trim()}`;
+    }
+  } else {
+    pharmDisplay = patient.mapa_salud?.pharmacologicalHistory || '';
+    if (patient.mapa_salud?.selectedObesogenicDrugs && patient.mapa_salud.selectedObesogenicDrugs.length > 0) {
+      const drugsFormatted = `Fármacos con potencial obesogénico identificados: ${patient.mapa_salud.selectedObesogenicDrugs.join(', ')}`;
+      pharmDisplay = pharmDisplay ? `${drugsFormatted}\nOtros medicamentos: ${pharmDisplay}` : drugsFormatted;
+    }
+    if (patient.mapa_salud?.otherMedicationsDetails && patient.mapa_salud.otherMedicationsDetails.trim()) {
+      pharmDisplay = pharmDisplay ? `${pharmDisplay}\nOtros: ${patient.mapa_salud.otherMedicationsDetails.trim()}` : `Otros medicamentos: ${patient.mapa_salud.otherMedicationsDetails.trim()}`;
+    }
   }
   if (!pharmDisplay.trim()) {
     pharmDisplay = patient.mapa_salud?.takesObesogenicMedications === 'No' ? 'Niega fármacos obesogénicos o de uso habitual' : 'Niega';
@@ -651,6 +781,38 @@ export function generatePatientQuestionnairePdfDoc(
   printField('Antecedentes quirúrgicos', patient.mapa_salud?.surgicalHistory || 'Niega');
   printField('Antecedentes hospitalarios', patient.mapa_salud?.hospitalHistory || 'Niega');
   printField('Antecedentes tóxico-alérgicos (alergias / hábitos)', patient.mapa_salud?.toxicAllergicHistory || 'Niega');
+
+  // Hábitos: tabaco y alcohol
+  if (patient.mapa_salud?.smokingStatus || patient.mapa_salud?.alcoholConsumption) {
+    printSubSectionTitle('Hábitos: tabaco y alcohol');
+
+    // Tabaco y vapeador
+    let tobaccoText = patient.mapa_salud?.smokingStatus || 'No especificado';
+    if (patient.mapa_salud?.smokingStatus === 'Fumo actualmente') {
+      const details = [
+        patient.mapa_salud.smokingCigarettesPerDay ? `${patient.mapa_salud.smokingCigarettesPerDay} al día` : null,
+        patient.mapa_salud.smokingYears ? `fuma hace ${patient.mapa_salud.smokingYears}` : null,
+      ].filter(Boolean).join(' • ');
+      if (details) tobaccoText += ` (${details})`;
+    } else if (patient.mapa_salud?.smokingStatus === 'Fumé pero ya lo dejé') {
+      if (patient.mapa_salud.smokingQuitTimeAgo) {
+        tobaccoText += ` (lo dejó hace: ${patient.mapa_salud.smokingQuitTimeAgo})`;
+      }
+    }
+    if (patient.mapa_salud?.usesVape) {
+      tobaccoText += ' • Usa vapeador / cigarrillo electrónico';
+    }
+    printField('¿Fumas o has fumado?', tobaccoText);
+
+    // Alcohol
+    let alcoholText = patient.mapa_salud?.alcoholConsumption || 'No especificado';
+    if (patient.mapa_salud?.alcoholConsumption && patient.mapa_salud.alcoholConsumption !== 'No consumo') {
+      if (patient.mapa_salud.alcoholTypicalDrinksDetails?.trim()) {
+        alcoholText += ` — Bebida y cantidad típica: ${patient.mapa_salud.alcoholTypicalDrinksDetails.trim()}`;
+      }
+    }
+    printField('¿Consumes alcohol?', alcoholText);
+  }
 
   // Gineco-obstetric: solo si aplica y el paciente no es de sexo masculino
   const isFemalePatient = patient.identificacion?.sex !== 'Masculino';
@@ -670,6 +832,13 @@ export function generatePatientQuestionnairePdfDoc(
     if (patient.mapa_salud.menopauseSymptomsOther) {
       printField('Otros síntomas hormonales', patient.mapa_salud.menopauseSymptomsOther);
     }
+    printField('¿Estás lactando actualmente?', patient.mapa_salud.currentlyBreastfeeding);
+    const contraception =
+      patient.mapa_salud.contraceptiveMethod === 'Otro' && patient.mapa_salud.contraceptiveMethodOther?.trim()
+        ? `Otro (${patient.mapa_salud.contraceptiveMethodOther.trim()})`
+        : patient.mapa_salud.contraceptiveMethod;
+    printField('Método de planificación familiar', contraception);
+    printField('¿Planeas un embarazo próximamente?', patient.mapa_salud.pregnancyPlan);
   }
 
   // Eating disorders history
@@ -1140,26 +1309,40 @@ export function generatePatientQuestionnairePdfDoc(
   // ==========================================
   // 10. BANDERAS ROJAS / PUNTOS CLÍNICOS A PROFUNDIZAR
   // ==========================================
-  if (patient.banderas_revisar && patient.banderas_revisar.length > 0) {
+  const effectiveFlags =
+    patient.banderas_revisar && patient.banderas_revisar.length > 0
+      ? patient.banderas_revisar
+      : evaluateClinicalRedFlags(patient.revision_sistemas, patient.relacion_peso).flags;
+
+  if (effectiveFlags && effectiveFlags.length > 0) {
     checkPageBreak(40);
     // Pale Coral Background #FDEEE9
     doc.setFillColor(253, 238, 233);
-    doc.roundedRect(margin, y, contentWidth, 20, 3, 3, 'F');
+    doc.roundedRect(margin, y, contentWidth, 23, 3, 3, 'F');
     doc.setDrawColor(241, 185, 168);
     doc.setLineWidth(0.5);
-    doc.roundedRect(margin, y, contentWidth, 20, 3, 3, 'S');
+    doc.roundedRect(margin, y, contentWidth, 23, 3, 3, 'S');
 
     doc.setTextColor(198, 106, 77); // Coral #C66A4D
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(9.5);
     doc.text(
-      `PUNTOS CLÍNICOS A PROFUNDIZAR EN CONSULTA (${patient.banderas_revisar.length})`,
+      `PUNTOS CLÍNICOS A PROFUNDIZAR EN CONSULTA (${effectiveFlags.length})`,
       margin + 10,
-      y + 13.5
+      y + 11
     );
-    y += 28;
 
-    patient.banderas_revisar.forEach((f) => {
+    doc.setFont('helvetica', 'italic');
+    doc.setFontSize(7.5);
+    doc.setTextColor(92, 110, 104);
+    doc.text(
+      'Bandera roja — Nota interna para la Dra. Lorena Castro',
+      margin + 10,
+      y + 18.5
+    );
+    y += 29;
+
+    effectiveFlags.forEach((f) => {
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(8.5);
       const sympLines = doc.splitTextToSize(`• [${f.category}] ${f.symptom}`, contentWidth - 16);

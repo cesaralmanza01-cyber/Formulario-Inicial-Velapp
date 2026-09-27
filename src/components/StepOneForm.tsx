@@ -5,6 +5,7 @@ import {
   CreditCard,
   Calendar,
   Briefcase,
+  GraduationCap,
   HeartHandshake,
   Compass,
   ArrowRight,
@@ -19,6 +20,7 @@ import {
 } from 'lucide-react';
 import {
   CivilStatus,
+  EducationLevel,
   ReferralSource,
   DocumentType,
   PatientBasicInfo,
@@ -32,6 +34,15 @@ interface StepOneFormProps {
   onBack?: () => void;
   onContinue: (data: PatientBasicInfo) => void;
 }
+
+const EDUCATION_LEVEL_OPTIONS: EducationLevel[] = [
+  'Primaria',
+  'Bachillerato',
+  'Técnico / Tecnológico',
+  'Universitario',
+  'Posgrado',
+  'Ninguna',
+];
 
 const CIVIL_STATUS_OPTIONS: CivilStatus[] = [
   'Soltero/a',
@@ -78,6 +89,7 @@ export const StepOneForm: React.FC<StepOneFormProps> = ({
         phone: '',
         email: '',
         occupation: '',
+        educationLevel: '',
         civilStatus: '',
         referralSource: '',
         referralOtherDetails: '',
@@ -87,6 +99,7 @@ export const StepOneForm: React.FC<StepOneFormProps> = ({
 
   const [errors, setErrors] = useState<FormErrors>({});
   const [touched, setTouched] = useState<Record<string, boolean>>({});
+  const [attemptedSubmit, setAttemptedSubmit] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [autoSavedTime, setAutoSavedTime] = useState<string>('');
 
@@ -172,6 +185,9 @@ export const StepOneForm: React.FC<StepOneFormProps> = ({
       case 'occupation':
         if (!value.trim()) return 'Por favor compártenos tu ocupación o actividad.';
         return '';
+      case 'educationLevel':
+        if (!value) return 'Por favor selecciona tu nivel de escolaridad.';
+        return '';
       case 'civilStatus':
         if (!value) return 'Por favor selecciona una opción de estado civil.';
         return '';
@@ -199,7 +215,9 @@ export const StepOneForm: React.FC<StepOneFormProps> = ({
     value: string
   ) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
-    if (touched[field]) {
+    if (value) {
+      setErrors((prev) => ({ ...prev, [field]: '' }));
+    } else if (attemptedSubmit || touched[field]) {
       const errorMsg = validateField(field, value);
       setErrors((prev) => ({ ...prev, [field]: errorMsg }));
     }
@@ -215,12 +233,14 @@ export const StepOneForm: React.FC<StepOneFormProps> = ({
     formData.phone.trim().replace(/\D/g, '').length >= 7 &&
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim()) &&
     formData.occupation.trim().length > 0 &&
+    Boolean(formData.educationLevel) &&
     formData.civilStatus.length > 0 &&
     formData.referralSource.length > 0 &&
     (formData.referralSource !== 'Otro' || formData.referralOtherDetails.trim().length > 0);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setAttemptedSubmit(true);
 
     // Mark all as touched
     const allTouched: Record<string, boolean> = {
@@ -232,6 +252,7 @@ export const StepOneForm: React.FC<StepOneFormProps> = ({
       phone: true,
       email: true,
       occupation: true,
+      educationLevel: true,
       civilStatus: true,
       referralSource: true,
       referralOtherDetails: formData.referralSource === 'Otro',
@@ -248,6 +269,7 @@ export const StepOneForm: React.FC<StepOneFormProps> = ({
       phone: validateField('phone', formData.phone),
       email: validateField('email', formData.email),
       occupation: validateField('occupation', formData.occupation),
+      educationLevel: validateField('educationLevel', formData.educationLevel || ''),
       civilStatus: validateField('civilStatus', formData.civilStatus),
       referralSource: validateField('referralSource', formData.referralSource),
       referralOtherDetails: validateField(
@@ -536,7 +558,6 @@ export const StepOneForm: React.FC<StepOneFormProps> = ({
                   id={`sex-${option.toLowerCase()}`}
                   onClick={() => {
                     handleChange('sex', option);
-                    handleBlur('sex');
                   }}
                   className={`group relative flex items-center justify-between px-4 py-3.5 rounded-xl border text-sm font-medium transition-all duration-200 text-left cursor-pointer ${
                     isSelected
@@ -559,7 +580,7 @@ export const StepOneForm: React.FC<StepOneFormProps> = ({
             })}
           </div>
 
-          {touched.sex && errors.sex && (
+          {attemptedSubmit && !formData.sex && errors.sex && (
             <motion.p
               initial={{ opacity: 0, y: -4 }}
               animate={{ opacity: 1, y: 0 }}
@@ -691,7 +712,65 @@ export const StepOneForm: React.FC<StepOneFormProps> = ({
           )}
         </div>
 
-        {/* 6. Estado civil */}
+        {/* 6. Escolaridad */}
+        <div id="field-educationLevel" className="space-y-3 pt-1">
+          <label className="flex items-center justify-between text-sm font-semibold text-[#2E3A36]">
+            <span className="flex items-center gap-2">
+              <GraduationCap className="w-4 h-4 text-[#6E9E93]" />
+              Escolaridad (último nivel alcanzado) <span className="text-[#F2A488] font-bold">*</span>
+            </span>
+            <span className="text-xs font-normal text-[#8E9E99]">Selecciona una opción</span>
+          </label>
+
+          <div
+            role="radiogroup"
+            aria-label="Escolaridad (último nivel alcanzado)"
+            className="grid grid-cols-2 sm:grid-cols-3 gap-2.5"
+          >
+            {EDUCATION_LEVEL_OPTIONS.map((level) => {
+              const isSelected = formData.educationLevel === level;
+              return (
+                <button
+                  type="button"
+                  key={level}
+                  id={`education-level-${level.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`}
+                  onClick={() => {
+                    handleChange('educationLevel', level);
+                  }}
+                  className={`group relative flex items-center justify-between px-3.5 py-3 rounded-xl border text-sm font-medium transition-all duration-200 text-left cursor-pointer ${
+                    isSelected
+                      ? 'bg-[#EBF3F0] border-[#6E9E93] text-[#2E3A36] shadow-2xs font-semibold'
+                      : 'bg-[#FAF6F0]/60 border-[#D9D3C8] text-[#5C6E68] hover:border-[#AEC9C0] hover:bg-[#FAF6F0]'
+                  }`}
+                >
+                  <span className="truncate">{level}</span>
+                  <div
+                    className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 ml-1 transition-all ${
+                      isSelected
+                        ? 'bg-[#6E9E93] text-white'
+                        : 'border border-[#C8C2B7] group-hover:border-[#AEC9C0]'
+                    }`}
+                  >
+                    {isSelected && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          {attemptedSubmit && !formData.educationLevel && errors.educationLevel && (
+            <motion.p
+              initial={{ opacity: 0, y: -4 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="text-xs text-[#C66A4D] flex items-center gap-1.5 pl-1"
+            >
+              <Info className="w-3.5 h-3.5 shrink-0" />
+              {errors.educationLevel}
+            </motion.p>
+          )}
+        </div>
+
+        {/* 7. Estado civil */}
         <div id="field-civilStatus" className="space-y-3 pt-1">
           <label className="flex items-center justify-between text-sm font-semibold text-[#2E3A36]">
             <span className="flex items-center gap-2">
@@ -720,7 +799,6 @@ export const StepOneForm: React.FC<StepOneFormProps> = ({
                   id={`civil-status-${status.toLowerCase().replace(/\s+/g, '-')}`}
                   onClick={() => {
                     handleChange('civilStatus', status);
-                    handleBlur('civilStatus');
                   }}
                   className={`group relative flex items-center justify-between px-3.5 py-3 rounded-xl border text-sm font-medium transition-all duration-200 text-left cursor-pointer ${
                     isSelected
@@ -743,7 +821,7 @@ export const StepOneForm: React.FC<StepOneFormProps> = ({
             })}
           </div>
 
-          {touched.civilStatus && errors.civilStatus && (
+          {attemptedSubmit && !formData.civilStatus && errors.civilStatus && (
             <motion.p
               initial={{ opacity: 0, y: -4 }}
               animate={{ opacity: 1, y: 0 }}
@@ -779,7 +857,6 @@ export const StepOneForm: React.FC<StepOneFormProps> = ({
                   id={`referral-${option.toLowerCase().replace(/\s+/g, '-')}`}
                   onClick={() => {
                     handleChange('referralSource', option);
-                    handleBlur('referralSource');
                   }}
                   className={`group relative flex items-center justify-between px-4 py-3 rounded-xl border text-sm font-medium transition-all duration-200 text-left cursor-pointer ${
                     isSelected
@@ -844,7 +921,7 @@ export const StepOneForm: React.FC<StepOneFormProps> = ({
             )}
           </AnimatePresence>
 
-          {touched.referralSource && errors.referralSource && (
+          {attemptedSubmit && !formData.referralSource && errors.referralSource && (
             <motion.p
               initial={{ opacity: 0, y: -4 }}
               animate={{ opacity: 1, y: 0 }}

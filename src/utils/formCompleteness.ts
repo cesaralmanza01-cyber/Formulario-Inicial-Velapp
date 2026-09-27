@@ -45,6 +45,7 @@ function isStep1Complete(data: PatientBasicInfo | null): boolean {
     Boolean(data.phone && data.phone.trim().replace(/\D/g, '').length >= 7) &&
     Boolean(data.email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email.trim())) &&
     data.occupation.trim().length > 0 &&
+    Boolean(data.educationLevel) &&
     data.civilStatus.length > 0 &&
     data.referralSource.length > 0 &&
     (data.referralSource !== 'Otro' || data.referralOtherDetails.trim().length > 0)
@@ -89,8 +90,31 @@ function isStep3Complete(data: PatientWeightHistoryInfo | null): boolean {
 
   if (!data.usedWeightMedications) return false;
   if (data.usedWeightMedications === 'Sí') {
+    const list =
+      data.weightMedicationsList && data.weightMedicationsList.length > 0
+        ? data.weightMedicationsList
+        : [
+            {
+              name: data.weightMedicationsNames || '',
+              dose: data.weightMedicationsDose || '',
+              currentlyUsing: data.weightMedicationsCurrentlyUsing || '',
+              discontinueReasons: data.weightMedicationsDiscontinueReasons || [],
+              discontinueOther: data.weightMedicationsDiscontinueOther || '',
+            },
+          ];
+
+    const anyInvalid = list.some((m) => {
+      if (!m.name?.trim() || !m.dose?.trim() || !m.currentlyUsing) return true;
+      if (m.currentlyUsing === 'No, lo suspendí') {
+        if (!m.discontinueReasons || m.discontinueReasons.length === 0) return true;
+        if (m.discontinueReasons.includes('Otro') && !m.discontinueOther?.trim()) return true;
+      }
+      return false;
+    });
+
+    if (anyInvalid) return false;
+
     if (
-      !data.weightMedicationsNames?.trim() ||
       !data.weightMedicationsExperience?.trim() ||
       !data.weightMedicationsAdverseEffects?.trim()
     ) {
@@ -101,6 +125,10 @@ function isStep3Complete(data: PatientWeightHistoryInfo | null): boolean {
   if (!data.hadBariatricSurgery) return false;
   if (data.hadBariatricSurgery === 'Sí') {
     if (!data.bariatricSurgeryTimeAgo?.trim()) return false;
+    if (!data.bariatricPreOpWeightKg?.trim()) return false;
+    if (!data.bariatricLowestWeightPostOpKg?.trim()) return false;
+    if (!data.bariatricWeightRegain) return false;
+    if (data.bariatricWeightRegain === 'Sí' && !data.bariatricWeightRegainedKg?.trim()) return false;
   }
 
   if (!data.hadAestheticSurgery) return false;
@@ -122,7 +150,8 @@ function isStep4Complete(data: PatientHealthMapInfo | null, patientSex?: Patient
     data.takesObesogenicMedications === 'No' ||
     (data.takesObesogenicMedications === 'Sí' &&
       ((data.selectedObesogenicDrugs && data.selectedObesogenicDrugs.length > 0) ||
-        (data.otherMedicationsDetails && data.otherMedicationsDetails.trim().length > 0)));
+        (data.otherMedicationsDetails && data.otherMedicationsDetails.trim().length > 0) ||
+        (data.medicationEntries && data.medicationEntries.length > 0)));
 
   if (!hasPharmInfo) return false;
   if (!data.surgicalHistory.trim()) return false;
@@ -143,10 +172,27 @@ function isStep4Complete(data: PatientHealthMapInfo | null, patientSex?: Patient
         return false;
       }
       if (!data.menopauseStage) return false;
+      if (!data.currentlyBreastfeeding) return false;
+      if (!data.contraceptiveMethod) return false;
+      if (data.contraceptiveMethod === 'Otro' && !data.contraceptiveMethodOther?.trim()) return false;
+      if (!data.pregnancyPlan) return false;
     }
   }
 
   if (!data.hasEatingDisorderHistory) return false;
+
+  // Hábitos: tabaco y alcohol
+  if (!data.smokingStatus) return false;
+  if (data.smokingStatus === 'Fumo actualmente') {
+    if (!data.smokingCigarettesPerDay?.trim() || !data.smokingYears?.trim()) return false;
+  } else if (data.smokingStatus === 'Fumé pero ya lo dejé') {
+    if (!data.smokingQuitTimeAgo?.trim()) return false;
+  }
+
+  if (!data.alcoholConsumption) return false;
+  if (data.alcoholConsumption !== 'No consumo') {
+    if (!data.alcoholTypicalDrinksDetails?.trim()) return false;
+  }
 
   // Antecedentes familiares: pregunta ampliada sobre obesidad en la familia
   if (!data.hasFamilyObesityHistory) return false;

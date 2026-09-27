@@ -22,6 +22,14 @@ export type DocumentType = 'CC' | 'CE' | 'Pasaporte' | 'DNI' | 'Otro';
 
 export type PatientSex = 'Femenino' | 'Masculino' | '';
 
+export type EducationLevel =
+  | 'Primaria'
+  | 'Bachillerato'
+  | 'Técnico / Tecnológico'
+  | 'Universitario'
+  | 'Posgrado'
+  | 'Ninguna';
+
 export interface PatientBasicInfo {
   fullName: string;
   documentType: DocumentType;
@@ -29,6 +37,7 @@ export interface PatientBasicInfo {
   birthDate: string;
   age: string;
   occupation: string;
+  educationLevel?: EducationLevel | '';
   civilStatus: CivilStatus | '';
   referralSource: ReferralSource | '';
   referralOtherDetails: string;
@@ -118,6 +127,39 @@ export type PreviousMethodOption =
 
 export type ExerciseInAttempts = 'Sí' | 'No' | 'A veces';
 
+export type WeightMedicationCurrentlyUsing =
+  | 'Sí, lo uso actualmente'
+  | 'No, lo suspendí'
+  | '';
+
+export type WeightMedicationDiscontinueReason =
+  | 'Efectos secundarios'
+  | 'Costo'
+  | 'No vi resultados'
+  | 'Alcancé mi meta'
+  | 'Falta de disponibilidad'
+  | 'Indicación médica'
+  | 'Otro';
+
+export const WEIGHT_MEDICATION_DISCONTINUE_REASONS: WeightMedicationDiscontinueReason[] = [
+  'Efectos secundarios',
+  'Costo',
+  'No vi resultados',
+  'Alcancé mi meta',
+  'Falta de disponibilidad',
+  'Indicación médica',
+  'Otro',
+];
+
+export interface WeightMedicationItem {
+  id: string;
+  name: string;
+  dose: string;
+  currentlyUsing: WeightMedicationCurrentlyUsing;
+  discontinueReasons: WeightMedicationDiscontinueReason[];
+  discontinueOther?: string;
+}
+
 export interface PatientWeightHistoryInfo {
   // Sub-sección 1: Tu peso y talla
   currentWeightKg: string;
@@ -167,12 +209,21 @@ export interface PatientWeightHistoryInfo {
   // Sub-sección 3: Medicamentos para el peso
   usedWeightMedications: 'Sí' | 'No' | '';
   weightMedicationsNames?: string;
+  weightMedicationsDose?: string;
+  weightMedicationsCurrentlyUsing?: WeightMedicationCurrentlyUsing;
+  weightMedicationsDiscontinueReasons?: WeightMedicationDiscontinueReason[];
+  weightMedicationsDiscontinueOther?: string;
+  weightMedicationsList?: WeightMedicationItem[];
   weightMedicationsExperience?: string;
   weightMedicationsAdverseEffects?: string;
 
   // Sub-sección 4: Cirugía bariátrica
   hadBariatricSurgery: 'Sí' | 'No' | '';
   bariatricSurgeryTimeAgo?: string;
+  bariatricPreOpWeightKg?: string;
+  bariatricLowestWeightPostOpKg?: string;
+  bariatricWeightRegain?: 'Sí' | 'No' | '';
+  bariatricWeightRegainedKg?: string;
 
   // Sub-sección 5: Cirugías estéticas
   hadAestheticSurgery: 'Sí' | 'No' | '';
@@ -243,6 +294,44 @@ export type CycleRegularity =
   | 'Ya no menstruo (menopausia / histerectomía)'
   | '';
 
+export type ContraceptiveMethod =
+  | 'Ninguno'
+  | 'Pastillas anticonceptivas'
+  | 'Inyección'
+  | 'Implante subdérmico'
+  | 'DIU de cobre'
+  | 'DIU hormonal'
+  | 'Preservativo'
+  | 'Pomeroy (ligadura de trompas)'
+  | 'Vasectomía de la pareja'
+  | 'Otro';
+
+export const CONTRACEPTIVE_METHODS: ContraceptiveMethod[] = [
+  'Ninguno',
+  'Pastillas anticonceptivas',
+  'Inyección',
+  'Implante subdérmico',
+  'DIU de cobre',
+  'DIU hormonal',
+  'Preservativo',
+  'Pomeroy (ligadura de trompas)',
+  'Vasectomía de la pareja',
+  'Otro',
+];
+
+export type PregnancyPlan =
+  | 'Sí, en el próximo año'
+  | 'Sí, más adelante'
+  | 'No'
+  | 'No estoy segura';
+
+export const PREGNANCY_PLAN_OPTIONS: PregnancyPlan[] = [
+  'Sí, en el próximo año',
+  'Sí, más adelante',
+  'No',
+  'No estoy segura',
+];
+
 export const OBESOGENIC_DRUGS_LIST = [
   'Olanzapina',
   'Clozapina',
@@ -267,19 +356,30 @@ export const OBESOGENIC_DRUGS_LIST = [
   'Propranolol',
   'Metoprolol',
   'Bisoprolol',
+  'Anticonceptivos hormonales (pastillas, inyección, implante, DIU hormonal)',
 ] as const;
 
 export type ObesogenicDrug = (typeof OBESOGENIC_DRUGS_LIST)[number];
+
+export interface PatientMedicationEntry {
+  id: string;
+  name: string;
+  isCustom?: boolean;
+  startMonth?: string;
+  startYear?: string;
+  dose?: string;
+}
 
 export interface PatientHealthMapInfo {
   // Sub-sección 1: Antecedentes generales
   pathologicalHistory: string;
   pharmacologicalHistory: string;
 
-  // Pregunta estructurada sobre fármacos obesogénicos
+  // Pregunta estructurada sobre fármacos obesogénicos y habituales
   takesObesogenicMedications?: 'Sí' | 'No' | '';
   selectedObesogenicDrugs?: string[]; // Lista seleccionable de fármacos obesogénicos
-  otherMedicationsDetails?: string; // Campo para 'otros' medicamentos no listados
+  medicationEntries?: PatientMedicationEntry[]; // Detalle con fecha de inicio (mes/año) y dosis por cada medicamento
+  otherMedicationsDetails?: string; // Campo para 'otros' medicamentos no listados u observaciones
 
   surgicalHistory: string;
   hospitalHistory: string;
@@ -298,9 +398,25 @@ export interface PatientHealthMapInfo {
   menopauseSymptoms?: string[]; // Síntomas asociados
   menopauseSymptomsOther?: string;
 
+  // Preguntas gineco-obstétricas complementarias
+  currentlyBreastfeeding?: 'Sí' | 'No' | '';
+  contraceptiveMethod?: ContraceptiveMethod | '';
+  contraceptiveMethodOther?: string;
+  pregnancyPlan?: PregnancyPlan | '';
+
   // Trastornos de la conducta alimentaria (TCA)
   hasEatingDisorderHistory: 'Sí' | 'No' | '';
   eatingDisorderDetails?: string;
+
+  // Hábitos: tabaco y alcohol
+  smokingStatus?: SmokingStatus | '';
+  smokingCigarettesPerDay?: string;
+  smokingYears?: string;
+  smokingQuitTimeAgo?: string;
+  usesVape?: boolean;
+
+  alcoholConsumption?: AlcoholConsumption | '';
+  alcoholTypicalDrinksDetails?: string;
 
   // Sub-sección 2: Antecedentes familiares
   familyHistory: FamilyHistoryCondition[];
@@ -308,6 +424,18 @@ export interface PatientHealthMapInfo {
   familyObesityMembers?: ObesityFamilyMemberEntry[];
   familyHistoryNotes?: string;
 }
+
+export type SmokingStatus =
+  | 'Nunca he fumado'
+  | 'Fumo actualmente'
+  | 'Fumé pero ya lo dejé';
+
+export type AlcoholConsumption =
+  | 'No consumo'
+  | 'Ocasionalmente (menos de 1 vez al mes)'
+  | '1 a 4 veces al mes'
+  | '2 a 3 veces por semana'
+  | '4 o más veces por semana';
 
 export interface BodyCategoryState {
   hasNoSymptoms: boolean;
@@ -606,6 +734,7 @@ export interface StepOneErrors {
   phone?: string;
   email?: string;
   occupation?: string;
+  educationLevel?: string;
   civilStatus?: string;
   referralSource?: string;
   referralOtherDetails?: string;
@@ -632,10 +761,17 @@ export interface StepThreeErrors {
   restrictiveDiets?: string;
   usedWeightMedications?: string;
   weightMedicationsNames?: string;
+  weightMedicationsDose?: string;
+  weightMedicationsCurrentlyUsing?: string;
+  weightMedicationsDiscontinueReasons?: string;
   weightMedicationsExperience?: string;
   weightMedicationsAdverseEffects?: string;
   hadBariatricSurgery?: string;
   bariatricSurgeryTimeAgo?: string;
+  bariatricPreOpWeightKg?: string;
+  bariatricLowestWeightPostOpKg?: string;
+  bariatricWeightRegain?: string;
+  bariatricWeightRegainedKg?: string;
   hadAestheticSurgery?: string;
   aestheticSurgeryDetails?: string;
   aestheticSurgeryTimeAgo?: string;
@@ -657,8 +793,18 @@ export interface StepFourErrors {
   cycleDuration?: string;
   menarcheAge?: string;
   menopauseStage?: string;
+  currentlyBreastfeeding?: string;
+  contraceptiveMethod?: string;
+  contraceptiveMethodOther?: string;
+  pregnancyPlan?: string;
   hasEatingDisorderHistory?: string;
   eatingDisorderDetails?: string;
+  smokingStatus?: string;
+  smokingCigarettesPerDay?: string;
+  smokingYears?: string;
+  smokingQuitTimeAgo?: string;
+  alcoholConsumption?: string;
+  alcoholTypicalDrinksDetails?: string;
   familyHistory?: string;
   hasFamilyObesityHistory?: string;
   familyObesityMembers?: string;

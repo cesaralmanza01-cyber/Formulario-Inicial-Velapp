@@ -17,9 +17,14 @@ import {
   Trash2,
   AlertCircle,
   Pill,
+  Clock,
+  X,
+  Cigarette,
+  Wine,
 } from 'lucide-react';
 import {
   PatientHealthMapInfo,
+  PatientMedicationEntry,
   FamilyHistoryCondition,
   CycleRegularity,
   MenopauseStage,
@@ -30,6 +35,12 @@ import {
   FAMILY_COMORBIDITIES_LIST,
   ObesityFamilyMemberEntry,
   PatientSex,
+  SmokingStatus,
+  AlcoholConsumption,
+  ContraceptiveMethod,
+  CONTRACEPTIVE_METHODS,
+  PregnancyPlan,
+  PREGNANCY_PLAN_OPTIONS,
 } from '../types';
 
 interface StepFourFormProps {
@@ -38,6 +49,20 @@ interface StepFourFormProps {
   onBack: () => void;
   onContinue: (data: PatientHealthMapInfo) => void;
 }
+
+const SMOKING_STATUS_OPTIONS: SmokingStatus[] = [
+  'Nunca he fumado',
+  'Fumo actualmente',
+  'Fumé pero ya lo dejé',
+];
+
+const ALCOHOL_CONSUMPTION_OPTIONS: AlcoholConsumption[] = [
+  'No consumo',
+  'Ocasionalmente (menos de 1 vez al mes)',
+  '1 a 4 veces al mes',
+  '2 a 3 veces por semana',
+  '4 o más veces por semana',
+];
 
 const FAMILY_CONDITIONS: { id: FamilyHistoryCondition; label: string; description: string }[] = [
   {
@@ -126,6 +151,69 @@ const MENOPAUSE_SYMPTOMS_OPTIONS = [
   'Dolor muscular o articular',
 ];
 
+const MONTHS_SPANISH = [
+  'Enero',
+  'Febrero',
+  'Marzo',
+  'Abril',
+  'Mayo',
+  'Junio',
+  'Julio',
+  'Agosto',
+  'Septiembre',
+  'Octubre',
+  'Noviembre',
+  'Diciembre',
+];
+
+const currentYear = new Date().getFullYear();
+const MEDICATION_YEARS = Array.from({ length: currentYear - 1980 + 1 }, (_, i) =>
+  (currentYear - i).toString()
+).concat(['Antes de 1980']);
+
+const COMMON_OTHER_MEDICATIONS_SUGGESTIONS = [
+  'Levotiroxina (Eutirox)',
+  'Losartán',
+  'Metformina',
+  'Atorvastatina',
+  'Anticonceptivos',
+  'Omeprazol',
+  'Enalapril',
+  'Sertralina',
+  'Ácido acetilsalicílico (Aspirina)',
+];
+
+const buildPharmacologicalHistoryString = (
+  selectedDrugs: string[],
+  entries: PatientMedicationEntry[],
+  extraNotes?: string
+): string => {
+  const parts: string[] = [];
+
+  if (entries && entries.length > 0) {
+    const formattedMeds = entries.map((entry) => {
+      const details: string[] = [];
+      if (entry.dose?.trim()) {
+        details.push(`Dosis: ${entry.dose.trim()}`);
+      }
+      if (entry.startMonth || entry.startYear) {
+        const dateStr = [entry.startMonth, entry.startYear].filter(Boolean).join(' ');
+        details.push(`Inicio: ${dateStr}`);
+      }
+      return details.length > 0 ? `${entry.name} (${details.join(', ')})` : entry.name;
+    });
+    parts.push(formattedMeds.join(' | '));
+  } else if (selectedDrugs && selectedDrugs.length > 0) {
+    parts.push(`Fármacos de la lista: ${selectedDrugs.join(', ')}`);
+  }
+
+  if (extraNotes?.trim()) {
+    parts.push(`Otros/Notas: ${extraNotes.trim()}`);
+  }
+
+  return parts.join(' | ');
+};
+
 export const StepFourForm: React.FC<StepFourFormProps> = ({
   initialData,
   patientSex,
@@ -150,7 +238,18 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
     const saved = localStorage.getItem('vela_step4_data');
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        const sel = parsed.selectedObesogenicDrugs || [];
+        let entries: PatientMedicationEntry[] = parsed.medicationEntries || [];
+        sel.forEach((d: string) => {
+          if (!entries.some((e) => e.name === d || e.id === d)) {
+            entries.push({ id: d, name: d, isCustom: false, startMonth: '', startYear: '', dose: '' });
+          }
+        });
+        return {
+          ...parsed,
+          medicationEntries: entries,
+        };
       } catch {
         // fallthrough to initial
       }
@@ -161,6 +260,7 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
         pharmacologicalHistory: '',
         takesObesogenicMedications: '',
         selectedObesogenicDrugs: [],
+        medicationEntries: [],
         otherMedicationsDetails: '',
         surgicalHistory: '',
         hospitalHistory: '',
@@ -176,8 +276,19 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
         menopauseStage: '',
         menopauseSymptoms: [],
         menopauseSymptomsOther: '',
+        currentlyBreastfeeding: '',
+        contraceptiveMethod: '',
+        contraceptiveMethodOther: '',
+        pregnancyPlan: '',
         hasEatingDisorderHistory: '',
         eatingDisorderDetails: '',
+        smokingStatus: '',
+        smokingCigarettesPerDay: '',
+        smokingYears: '',
+        smokingQuitTimeAgo: '',
+        usesVape: false,
+        alcoholConsumption: '',
+        alcoholTypicalDrinksDetails: '',
         familyHistory: [],
         hasFamilyObesityHistory: '',
         familyObesityMembers: [],
@@ -185,6 +296,8 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
       }
     );
   });
+
+  const [customMedInput, setCustomMedInput] = useState<string>('');
 
   const [touched, setTouched] = useState<Record<string, boolean>>({
     pathologicalHistory: false,
@@ -202,8 +315,18 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
     cycleDuration: false,
     menarcheAge: false,
     menopauseStage: false,
+    currentlyBreastfeeding: false,
+    contraceptiveMethod: false,
+    contraceptiveMethodOther: false,
+    pregnancyPlan: false,
     hasEatingDisorderHistory: false,
     eatingDisorderDetails: false,
+    smokingStatus: false,
+    smokingCigarettesPerDay: false,
+    smokingYears: false,
+    smokingQuitTimeAgo: false,
+    alcoholConsumption: false,
+    alcoholTypicalDrinksDetails: false,
     familyHistory: false,
     hasFamilyObesityHistory: false,
     familyObesityMembers: false,
@@ -219,6 +342,7 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
   });
 
   const [errors, setErrors] = useState<StepFourErrors>({});
+  const [attemptedSubmit, setAttemptedSubmit] = useState(false);
 
   // Auto-save draft on every change
   useEffect(() => {
@@ -241,9 +365,10 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
       case 'takesObesogenicMedications': {
         const hasSelectedDrugs = (currentForm.selectedObesogenicDrugs || []).length > 0;
         const hasOtherMeds = !!currentForm.otherMedicationsDetails?.trim();
+        const hasMedEntries = (currentForm.medicationEntries || []).length > 0;
         const saysNo = currentForm.takesObesogenicMedications === 'No';
 
-        if (!hasSelectedDrugs && !hasOtherMeds && !saysNo) {
+        if (!hasSelectedDrugs && !hasOtherMeds && !hasMedEntries && !saysNo) {
           return 'Por favor selecciona si tomas alguno de los medicamentos de la lista, escribe tus medicamentos en "Otros" o marca "No tomo ningún medicamento".';
         }
         return '';
@@ -306,9 +431,89 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
         }
         return '';
 
+      case 'currentlyBreastfeeding':
+        if (!isFemale) return '';
+        if (currentForm.appliesGynecoObstetric === 'Sí' && !currentForm.currentlyBreastfeeding) {
+          return 'Por favor indica si estás lactando actualmente.';
+        }
+        return '';
+
+      case 'contraceptiveMethod':
+        if (!isFemale) return '';
+        if (currentForm.appliesGynecoObstetric === 'Sí') {
+          if (!currentForm.contraceptiveMethod) {
+            return 'Por favor selecciona el método de planificación familiar que utilizas.';
+          }
+          if (
+            currentForm.contraceptiveMethod === 'Otro' &&
+            !currentForm.contraceptiveMethodOther?.trim()
+          ) {
+            return 'Por favor especifica qué método de planificación familiar utilizas.';
+          }
+        }
+        return '';
+
+      case 'contraceptiveMethodOther':
+        if (!isFemale) return '';
+        if (
+          currentForm.appliesGynecoObstetric === 'Sí' &&
+          currentForm.contraceptiveMethod === 'Otro' &&
+          !currentForm.contraceptiveMethodOther?.trim()
+        ) {
+          return 'Por favor especifica qué método de planificación familiar utilizas.';
+        }
+        return '';
+
+      case 'pregnancyPlan':
+        if (!isFemale) return '';
+        if (currentForm.appliesGynecoObstetric === 'Sí' && !currentForm.pregnancyPlan) {
+          return 'Por favor selecciona si planeas un embarazo próximamente.';
+        }
+        return '';
+
       case 'hasEatingDisorderHistory':
         if (!currentForm.hasEatingDisorderHistory) {
           return 'Por favor responde a esta pregunta.';
+        }
+        return '';
+
+      case 'smokingStatus':
+        if (!currentForm.smokingStatus) {
+          return 'Por favor selecciona una opción sobre el hábito de fumar.';
+        }
+        return '';
+
+      case 'smokingCigarettesPerDay':
+        if (currentForm.smokingStatus === 'Fumo actualmente' && !currentForm.smokingCigarettesPerDay?.trim()) {
+          return 'Por favor indica cuántos cigarrillos al día consumes aproximadamente.';
+        }
+        return '';
+
+      case 'smokingYears':
+        if (currentForm.smokingStatus === 'Fumo actualmente' && !currentForm.smokingYears?.trim()) {
+          return 'Por favor indica hace cuántos años fumas.';
+        }
+        return '';
+
+      case 'smokingQuitTimeAgo':
+        if (currentForm.smokingStatus === 'Fumé pero ya lo dejé' && !currentForm.smokingQuitTimeAgo?.trim()) {
+          return 'Por favor indica hace cuánto tiempo dejaste de fumar.';
+        }
+        return '';
+
+      case 'alcoholConsumption':
+        if (!currentForm.alcoholConsumption) {
+          return 'Por favor selecciona una opción sobre el consumo de alcohol.';
+        }
+        return '';
+
+      case 'alcoholTypicalDrinksDetails':
+        if (
+          currentForm.alcoholConsumption &&
+          currentForm.alcoholConsumption !== 'No consumo' &&
+          !currentForm.alcoholTypicalDrinksDetails?.trim()
+        ) {
+          return 'Por favor describe qué tipo de bebida y cuántos tragos sueles consumir.';
         }
         return '';
 
@@ -346,7 +551,9 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
     const updatedForm = { ...formData, [field]: value };
     setFormData(updatedForm);
 
-    if (touched[field]) {
+    if (value && (!Array.isArray(value) || value.length > 0)) {
+      setErrors((prev) => ({ ...prev, [field]: '' }));
+    } else if (attemptedSubmit || touched[field]) {
       const errorMsg = validateField(field, updatedForm);
       setErrors((prev) => ({ ...prev, [field]: errorMsg }));
     }
@@ -379,27 +586,50 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
   };
 
   const toggleObesogenicDrug = (drugName: string) => {
-    const current = formData.selectedObesogenicDrugs || [];
-    const exists = current.includes(drugName);
-    const updated = exists
-      ? current.filter((d) => d !== drugName)
-      : [...current, drugName];
+    const currentSelected = formData.selectedObesogenicDrugs || [];
+    const isSelected = currentSelected.includes(drugName);
+    const updatedSelected = isSelected
+      ? currentSelected.filter((d) => d !== drugName)
+      : [...currentSelected, drugName];
 
-    // Compute updated narrative summary for pharmacologicalHistory
-    const parts: string[] = [];
-    if (updated.length > 0) {
-      parts.push(`Fármacos de la lista: ${updated.join(', ')}`);
-    }
-    if (formData.otherMedicationsDetails?.trim()) {
-      parts.push(`Otros: ${formData.otherMedicationsDetails.trim()}`);
+    let updatedEntries = [...(formData.medicationEntries || [])];
+    if (isSelected) {
+      updatedEntries = updatedEntries.filter((e) => e.name !== drugName && e.id !== drugName);
+    } else {
+      if (!updatedEntries.some((e) => e.name === drugName || e.id === drugName)) {
+        updatedEntries.push({
+          id: drugName,
+          name: drugName,
+          isCustom: false,
+          startMonth: '',
+          startYear: '',
+          dose: '',
+        });
+      }
     }
 
-    const hasAnyMed = updated.length > 0 || !!formData.otherMedicationsDetails?.trim();
+    const narrative = buildPharmacologicalHistoryString(
+      updatedSelected,
+      updatedEntries,
+      formData.otherMedicationsDetails
+    );
+
+    const hasAnyMed =
+      updatedSelected.length > 0 ||
+      updatedEntries.length > 0 ||
+      !!formData.otherMedicationsDetails?.trim();
+
     const updatedFormData: PatientHealthMapInfo = {
       ...formData,
-      takesObesogenicMedications: hasAnyMed ? 'Sí' : (formData.takesObesogenicMedications === 'No' ? 'No' : ''),
-      selectedObesogenicDrugs: updated,
-      pharmacologicalHistory: parts.join(' | ') || (formData.takesObesogenicMedications === 'No' ? 'Ninguno actualmente' : ''),
+      takesObesogenicMedications: hasAnyMed
+        ? 'Sí'
+        : formData.takesObesogenicMedications === 'No'
+        ? 'No'
+        : '',
+      selectedObesogenicDrugs: updatedSelected,
+      medicationEntries: updatedEntries,
+      pharmacologicalHistory:
+        narrative || (formData.takesObesogenicMedications === 'No' ? 'Ninguno actualmente' : ''),
     };
 
     setFormData(updatedFormData);
@@ -413,22 +643,129 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
     }
   };
 
-  const handleOtherMedsChange = (text: string) => {
-    const selected = formData.selectedObesogenicDrugs || [];
-    const parts: string[] = [];
-    if (selected.length > 0) {
-      parts.push(`Fármacos de la lista: ${selected.join(', ')}`);
-    }
-    if (text.trim()) {
-      parts.push(`Otros: ${text.trim()}`);
+  const handleAddCustomMedication = (nameToAdd?: string) => {
+    const rawName = nameToAdd || customMedInput;
+    const trimmed = rawName.trim();
+    if (!trimmed) return;
+
+    const currentEntries = formData.medicationEntries || [];
+    if (currentEntries.some((e) => e.name.toLowerCase() === trimmed.toLowerCase())) {
+      setCustomMedInput('');
+      return;
     }
 
-    const hasAnyMed = selected.length > 0 || !!text.trim();
+    const newEntry: PatientMedicationEntry = {
+      id: `custom-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      name: trimmed,
+      isCustom: true,
+      startMonth: '',
+      startYear: '',
+      dose: '',
+    };
+
+    const updatedEntries = [...currentEntries, newEntry];
+    const narrative = buildPharmacologicalHistoryString(
+      formData.selectedObesogenicDrugs || [],
+      updatedEntries,
+      formData.otherMedicationsDetails
+    );
+
+    const updatedFormData: PatientHealthMapInfo = {
+      ...formData,
+      takesObesogenicMedications: 'Sí',
+      medicationEntries: updatedEntries,
+      pharmacologicalHistory: narrative,
+    };
+
+    setFormData(updatedFormData);
+    setCustomMedInput('');
+    if (touched.pharmacologicalHistory || touched.takesObesogenicMedications) {
+      const err = validateField('pharmacologicalHistory', updatedFormData);
+      setErrors((prev) => ({
+        ...prev,
+        pharmacologicalHistory: err,
+        takesObesogenicMedications: err,
+      }));
+    }
+  };
+
+  const handleRemoveMedicationEntry = (id: string) => {
+    const currentEntries = formData.medicationEntries || [];
+    const entryToRemove = currentEntries.find((e) => e.id === id);
+    const updatedEntries = currentEntries.filter((e) => e.id !== id);
+
+    let updatedSelected = formData.selectedObesogenicDrugs || [];
+    if (entryToRemove && !entryToRemove.isCustom) {
+      updatedSelected = updatedSelected.filter((d) => d !== entryToRemove.name);
+    }
+
+    const narrative = buildPharmacologicalHistoryString(
+      updatedSelected,
+      updatedEntries,
+      formData.otherMedicationsDetails
+    );
+
+    const hasAnyMed =
+      updatedSelected.length > 0 ||
+      updatedEntries.length > 0 ||
+      !!formData.otherMedicationsDetails?.trim();
+
+    const updatedFormData: PatientHealthMapInfo = {
+      ...formData,
+      takesObesogenicMedications: hasAnyMed
+        ? 'Sí'
+        : formData.takesObesogenicMedications === 'No'
+        ? 'No'
+        : '',
+      selectedObesogenicDrugs: updatedSelected,
+      medicationEntries: updatedEntries,
+      pharmacologicalHistory:
+        narrative || (formData.takesObesogenicMedications === 'No' ? 'Ninguno actualmente' : ''),
+    };
+
+    setFormData(updatedFormData);
+  };
+
+  const handleUpdateMedicationEntry = (
+    id: string,
+    updates: Partial<PatientMedicationEntry>
+  ) => {
+    const currentEntries = formData.medicationEntries || [];
+    const updatedEntries = currentEntries.map((e) =>
+      e.id === id ? { ...e, ...updates } : e
+    );
+
+    const narrative = buildPharmacologicalHistoryString(
+      formData.selectedObesogenicDrugs || [],
+      updatedEntries,
+      formData.otherMedicationsDetails
+    );
+
+    const updatedFormData: PatientHealthMapInfo = {
+      ...formData,
+      medicationEntries: updatedEntries,
+      pharmacologicalHistory: narrative,
+    };
+
+    setFormData(updatedFormData);
+  };
+
+  const handleOtherMedsChange = (text: string) => {
+    const selected = formData.selectedObesogenicDrugs || [];
+    const entries = formData.medicationEntries || [];
+    const narrative = buildPharmacologicalHistoryString(selected, entries, text);
+
+    const hasAnyMed = selected.length > 0 || entries.length > 0 || !!text.trim();
     const updatedFormData: PatientHealthMapInfo = {
       ...formData,
       otherMedicationsDetails: text,
-      takesObesogenicMedications: hasAnyMed ? 'Sí' : (formData.takesObesogenicMedications === 'No' ? 'No' : ''),
-      pharmacologicalHistory: parts.join(' | ') || (formData.takesObesogenicMedications === 'No' ? 'Ninguno actualmente' : ''),
+      takesObesogenicMedications: hasAnyMed
+        ? 'Sí'
+        : formData.takesObesogenicMedications === 'No'
+        ? 'No'
+        : '',
+      pharmacologicalHistory:
+        narrative || (formData.takesObesogenicMedications === 'No' ? 'Ninguno actualmente' : ''),
     };
 
     setFormData(updatedFormData);
@@ -447,6 +784,7 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
       ...formData,
       takesObesogenicMedications: 'No',
       selectedObesogenicDrugs: [],
+      medicationEntries: [],
       otherMedicationsDetails: '',
       pharmacologicalHistory: 'Ninguno (no toma medicamentos actualmente)',
     };
@@ -467,11 +805,12 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
   const isFormValid = (() => {
     if (!formData.pathologicalHistory.trim()) return false;
     
-    // Validar antecedentes farmacológicos (debe haber marcado fármacos, escrito en Otros o marcado No tomo ningún medicamento)
+    // Validar antecedentes farmacológicos (debe haber marcado fármacos, agregado medicaciones, escrito en Otros o marcado No tomo ningún medicamento)
     const hasSelectedDrugs = (formData.selectedObesogenicDrugs || []).length > 0;
     const hasOtherMeds = !!formData.otherMedicationsDetails?.trim();
+    const hasMedEntries = (formData.medicationEntries || []).length > 0;
     const saysNo = formData.takesObesogenicMedications === 'No';
-    if (!hasSelectedDrugs && !hasOtherMeds && !saysNo) return false;
+    if (!hasSelectedDrugs && !hasOtherMeds && !hasMedEntries && !saysNo) return false;
 
     if (!formData.surgicalHistory.trim()) return false;
     if (!formData.hospitalHistory.trim()) return false;
@@ -490,11 +829,28 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
           return false;
         }
         if (!formData.menopauseStage) return false;
+        if (!formData.currentlyBreastfeeding) return false;
+        if (!formData.contraceptiveMethod) return false;
+        if (formData.contraceptiveMethod === 'Otro' && !formData.contraceptiveMethodOther?.trim()) return false;
+        if (!formData.pregnancyPlan) return false;
       }
     }
 
     // TCA
     if (!formData.hasEatingDisorderHistory) return false;
+
+    // Hábitos: tabaco y alcohol
+    if (!formData.smokingStatus) return false;
+    if (formData.smokingStatus === 'Fumo actualmente') {
+      if (!formData.smokingCigarettesPerDay?.trim() || !formData.smokingYears?.trim()) return false;
+    } else if (formData.smokingStatus === 'Fumé pero ya lo dejé') {
+      if (!formData.smokingQuitTimeAgo?.trim()) return false;
+    }
+
+    if (!formData.alcoholConsumption) return false;
+    if (formData.alcoholConsumption !== 'No consumo') {
+      if (!formData.alcoholTypicalDrinksDetails?.trim()) return false;
+    }
 
     // Antecedentes familiares de obesidad
     if (!formData.hasFamilyObesityHistory) return false;
@@ -628,6 +984,7 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setAttemptedSubmit(true);
 
     const allTouched: Record<string, boolean> = {
       pathologicalHistory: true,
@@ -645,8 +1002,21 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
       cycleDuration: isFemale,
       menarcheAge: isFemale,
       menopauseStage: isFemale,
+      currentlyBreastfeeding: isFemale && formData.appliesGynecoObstetric === 'Sí',
+      contraceptiveMethod: isFemale && formData.appliesGynecoObstetric === 'Sí',
+      contraceptiveMethodOther:
+        isFemale &&
+        formData.appliesGynecoObstetric === 'Sí' &&
+        formData.contraceptiveMethod === 'Otro',
+      pregnancyPlan: isFemale && formData.appliesGynecoObstetric === 'Sí',
       hasEatingDisorderHistory: true,
       eatingDisorderDetails: true,
+      smokingStatus: true,
+      smokingCigarettesPerDay: formData.smokingStatus === 'Fumo actualmente',
+      smokingYears: formData.smokingStatus === 'Fumo actualmente',
+      smokingQuitTimeAgo: formData.smokingStatus === 'Fumé pero ya lo dejé',
+      alcoholConsumption: true,
+      alcoholTypicalDrinksDetails: formData.alcoholConsumption !== 'No consumo' && !!formData.alcoholConsumption,
       familyHistory: true,
       hasFamilyObesityHistory: true,
       familyObesityMembers: true,
@@ -666,7 +1036,31 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
       cycleRegularity: isFemale ? validateField('cycleRegularity', formData) : '',
       cycleDuration: isFemale ? validateField('cycleDuration', formData) : '',
       menopauseStage: isFemale ? validateField('menopauseStage', formData) : '',
+      currentlyBreastfeeding:
+        isFemale && formData.appliesGynecoObstetric === 'Sí'
+          ? validateField('currentlyBreastfeeding', formData)
+          : '',
+      contraceptiveMethod:
+        isFemale && formData.appliesGynecoObstetric === 'Sí'
+          ? validateField('contraceptiveMethod', formData)
+          : '',
+      contraceptiveMethodOther:
+        isFemale &&
+        formData.appliesGynecoObstetric === 'Sí' &&
+        formData.contraceptiveMethod === 'Otro'
+          ? validateField('contraceptiveMethodOther', formData)
+          : '',
+      pregnancyPlan:
+        isFemale && formData.appliesGynecoObstetric === 'Sí'
+          ? validateField('pregnancyPlan', formData)
+          : '',
       hasEatingDisorderHistory: validateField('hasEatingDisorderHistory', formData),
+      smokingStatus: validateField('smokingStatus', formData),
+      smokingCigarettesPerDay: validateField('smokingCigarettesPerDay', formData),
+      smokingYears: validateField('smokingYears', formData),
+      smokingQuitTimeAgo: validateField('smokingQuitTimeAgo', formData),
+      alcoholConsumption: validateField('alcoholConsumption', formData),
+      alcoholTypicalDrinksDetails: validateField('alcoholTypicalDrinksDetails', formData),
       hasFamilyObesityHistory: validateField('hasFamilyObesityHistory', formData),
       familyObesityMembers: validateField('familyObesityMembers', formData),
     };
@@ -675,22 +1069,27 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
 
     const hasAnyError = Object.values(newErrors).some((err) => !!err);
     if (!hasAnyError && isFormValid) {
-      const dataToSave: PatientHealthMapInfo = isFemale
-        ? formData
-        : {
-            ...formData,
-            appliesGynecoObstetric: 'No',
-            pregnanciesCount: undefined,
-            vaginalDeliveriesCount: undefined,
-            cesareanCount: undefined,
-            lossesCount: undefined,
-            cycleRegularity: undefined,
-            cycleDuration: undefined,
-            menarcheAge: undefined,
-            menopauseStage: undefined,
-            menopauseSymptoms: [],
-            menopauseSymptomsOther: '',
-          };
+      const dataToSave: PatientHealthMapInfo =
+        isFemale && formData.appliesGynecoObstetric === 'Sí'
+          ? formData
+          : {
+              ...formData,
+              appliesGynecoObstetric: isFemale ? formData.appliesGynecoObstetric : 'No',
+              pregnanciesCount: undefined,
+              vaginalDeliveriesCount: undefined,
+              cesareanCount: undefined,
+              lossesCount: undefined,
+              cycleRegularity: undefined,
+              cycleDuration: undefined,
+              menarcheAge: undefined,
+              menopauseStage: undefined,
+              menopauseSymptoms: [],
+              menopauseSymptomsOther: '',
+              currentlyBreastfeeding: undefined,
+              contraceptiveMethod: undefined,
+              contraceptiveMethodOther: undefined,
+              pregnancyPlan: undefined,
+            };
       onContinue(dataToSave);
     } else {
       // Scroll smoothly to first invalid field
@@ -928,18 +1327,37 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
                     {OBESOGENIC_DRUGS_LIST.map((drug) => {
                       const isSelected = (formData.selectedObesogenicDrugs || []).includes(drug);
+                      const hasSub = drug.includes('(');
+                      const mainTitle = hasSub ? drug.substring(0, drug.indexOf('(')).trim() : drug;
+                      const subTitle = hasSub ? drug.substring(drug.indexOf('(')).trim() : null;
+
                       return (
                         <button
                           key={drug}
                           type="button"
                           onClick={() => toggleObesogenicDrug(drug)}
                           className={`px-3 py-2.5 rounded-xl text-xs font-medium border flex items-center justify-between transition-all duration-150 cursor-pointer text-left ${
+                            hasSub ? 'col-span-2 sm:col-span-2 md:col-span-2' : ''
+                          } ${
                             isSelected
                               ? 'border-[#6E9E93] bg-[#6E9E93] text-white shadow-2xs font-semibold ring-1 ring-[#6E9E93]'
                               : 'border-[#D9D3C8] bg-white text-[#2E3A36] hover:border-[#6E9E93] hover:bg-[#EBF3F0]'
                           }`}
                         >
-                          <span className="truncate">{drug}</span>
+                          <div className="flex flex-col min-w-0 pr-1">
+                            <span className={hasSub ? 'font-medium leading-snug' : 'truncate'}>
+                              {mainTitle}
+                            </span>
+                            {subTitle && (
+                              <span
+                                className={`text-[10px] leading-tight mt-0.5 ${
+                                  isSelected ? 'text-white/90' : 'text-[#5C6E68]'
+                                }`}
+                              >
+                                {subTitle}
+                              </span>
+                            )}
+                          </div>
                           {isSelected ? (
                             <Check className="w-3.5 h-3.5 shrink-0 ml-1" />
                           ) : (
@@ -953,26 +1371,208 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
               )}
             </AnimatePresence>
 
-            {/* Espacio abierto para 'Otros medicamentos' */}
-            <div className="pt-3 border-t border-[#E8E2D8] space-y-1.5">
-              <label
-                htmlFor="otherMedications-input"
-                className="text-xs font-semibold text-[#2E3A36] flex items-center justify-between flex-wrap gap-1"
-              >
-                <span>¿Qué otros medicamentos, suplementos o tratamientos tomas?</span>
-                <span className="text-[11px] text-[#5C6E68] font-normal">
-                  (tiroides, anticonceptivos, antihipertensivos, analgésicos, vitaminas, etc.)
-                </span>
-              </label>
-              <textarea
-                id="otherMedications-input"
-                rows={2}
-                value={formData.otherMedicationsDetails || ''}
-                onChange={(e) => handleOtherMedsChange(e.target.value)}
-                onBlur={() => handleBlur('pharmacologicalHistory')}
-                placeholder="Escribe aquí qué otros medicamentos tomas habitualmente, con dosis o frecuencia si las recuerdas (ej. Levotiroxina 50 mcg en ayunas, Losartán 50 mg, píldoras anticonceptivas, etc.)..."
-                className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-[#D9D3C8] text-[#2E3A36] placeholder-[#8E9E99] text-xs sm:text-sm transition-all duration-200 focus:outline-hidden focus:ring-2 focus:ring-[#6E9E93]/40 resize-y"
-              />
+            {/* Lista interactiva de medicamentos seleccionados con sus dos campos: Desde cuándo y Dosis */}
+            <AnimatePresence>
+              {(formData.medicationEntries || []).length > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  transition={{ duration: 0.25, ease: 'easeOut' }}
+                  className="space-y-3 pt-3 border-t border-[#E8E2D8] overflow-hidden"
+                >
+                  <div className="flex items-center justify-between pb-1">
+                    <span className="text-xs font-semibold text-[#2E3A36] uppercase tracking-wider flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5 text-[#6E9E93]" />
+                      Detalle de tus medicamentos seleccionados ({(formData.medicationEntries || []).length})
+                    </span>
+                    <span className="text-[11px] text-[#5C6E68]">
+                      Completa fecha de inicio y dosis
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-[#5C6E68] leading-relaxed">
+                    Indica aproximadamente desde cuándo tomas cada medicamento y la dosis. Esta información nos permite cruzar con exactitud la fecha de inicio del fármaco con las variaciones en tu curva de peso.
+                  </p>
+
+                  <div className="space-y-2.5">
+                    {(formData.medicationEntries || []).map((entry) => (
+                      <motion.div
+                        key={entry.id}
+                        layout
+                        initial={{ opacity: 0, y: -6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.95 }}
+                        transition={{ duration: 0.2 }}
+                        className="p-3.5 sm:p-4 rounded-2xl bg-white border border-[#AEC9C0]/80 shadow-2xs space-y-3"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-xs sm:text-sm font-semibold text-[#2E3A36]">
+                              {entry.name}
+                            </span>
+                            {!entry.isCustom ? (
+                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#EBF3F0] text-[#5B887E] font-medium border border-[#AEC9C0]/50">
+                                Fármaco con potencial de peso
+                              </span>
+                            ) : (
+                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#FAF6F0] text-[#5C6E68] font-medium border border-[#D9D3C8]">
+                                Otro medicamento / suplemento
+                              </span>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveMedicationEntry(entry.id)}
+                            className="text-[#8E9E99] hover:text-[#C66A4D] p-1 rounded-lg hover:bg-[#FDEEE9]/60 transition-colors cursor-pointer"
+                            title="Quitar este medicamento"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                          {/* 1. Desde cuándo lo toma (Mes y Año) */}
+                          <div className="space-y-1">
+                            <label className="text-[11px] font-semibold text-[#2E3A36] block">
+                              ¿Desde cuándo lo tomas? <span className="text-[#8E9E99] font-normal">(aprox.)</span>
+                            </label>
+                            <div className="grid grid-cols-2 gap-1.5">
+                              <select
+                                value={entry.startMonth || ''}
+                                onChange={(e) =>
+                                  handleUpdateMedicationEntry(entry.id, { startMonth: e.target.value })
+                                }
+                                className="w-full px-2.5 py-2 rounded-xl bg-[#FAF6F0]/60 border border-[#D9D3C8] text-xs text-[#2E3A36] focus:outline-hidden focus:ring-2 focus:ring-[#6E9E93]/40 focus:bg-white"
+                              >
+                                <option value="">Mes...</option>
+                                {MONTHS_SPANISH.map((m) => (
+                                  <option key={m} value={m}>
+                                    {m}
+                                  </option>
+                                ))}
+                              </select>
+
+                              <select
+                                value={entry.startYear || ''}
+                                onChange={(e) =>
+                                  handleUpdateMedicationEntry(entry.id, { startYear: e.target.value })
+                                }
+                                className="w-full px-2.5 py-2 rounded-xl bg-[#FAF6F0]/60 border border-[#D9D3C8] text-xs text-[#2E3A36] focus:outline-hidden focus:ring-2 focus:ring-[#6E9E93]/40 focus:bg-white"
+                              >
+                                <option value="">Año...</option>
+                                {MEDICATION_YEARS.map((y) => (
+                                  <option key={y} value={y}>
+                                    {y}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
+
+                          {/* 2. Dosis (campo de texto libre) */}
+                          <div className="space-y-1">
+                            <label className="text-[11px] font-semibold text-[#2E3A36] block">
+                              Dosis <span className="text-[#8E9E99] font-normal">(ej. 500mg, 1 tableta al día)</span>
+                            </label>
+                            <input
+                              type="text"
+                              value={entry.dose || ''}
+                              onChange={(e) =>
+                                handleUpdateMedicationEntry(entry.id, { dose: e.target.value })
+                              }
+                              placeholder="Ej. 500 mg, 1 tableta diaria, 50 mcg..."
+                              className="w-full px-3 py-2 rounded-xl bg-[#FAF6F0]/60 border border-[#D9D3C8] text-xs text-[#2E3A36] placeholder-[#8E9E99] focus:outline-hidden focus:ring-2 focus:ring-[#6E9E93]/40 focus:bg-white"
+                            />
+                          </div>
+                        </div>
+                      </motion.div>
+                    ))}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Espacio abierto para 'Otros medicamentos' con posibilidad de agregar fármacos individuales */}
+            <div className="pt-3 border-t border-[#E8E2D8] space-y-2.5">
+              <div>
+                <label
+                  htmlFor="customMed-input"
+                  className="text-xs font-semibold text-[#2E3A36] flex items-center justify-between flex-wrap gap-1"
+                >
+                  <span>¿Qué otros medicamentos, suplementos o tratamientos tomas?</span>
+                  <span className="text-[11px] text-[#5C6E68] font-normal">
+                    (tiroides, anticonceptivos, antihipertensivos, analgésicos, vitaminas, etc.)
+                  </span>
+                </label>
+                <p className="text-[11px] text-[#5C6E68] mt-0.5">
+                  Escribe el nombre y agrégalo para registrar desde cuándo lo tomas y su dosis:
+                </p>
+              </div>
+
+              <div className="flex gap-2">
+                <input
+                  id="customMed-input"
+                  type="text"
+                  value={customMedInput}
+                  onChange={(e) => setCustomMedInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleAddCustomMedication();
+                    }
+                  }}
+                  placeholder="Ej. Levotiroxina, Losartán, Metformina, Anticonceptivos..."
+                  className="flex-1 px-3.5 py-2 rounded-xl bg-white border border-[#D9D3C8] text-[#2E3A36] placeholder-[#8E9E99] text-xs sm:text-sm focus:outline-hidden focus:ring-2 focus:ring-[#6E9E93]/40"
+                />
+                <button
+                  type="button"
+                  onClick={() => handleAddCustomMedication()}
+                  disabled={!customMedInput.trim()}
+                  className="px-4 py-2 rounded-xl bg-[#6E9E93] text-white text-xs font-semibold hover:bg-[#5B887E] disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer shrink-0"
+                >
+                  + Agregar
+                </button>
+              </div>
+
+              {/* Sugerencias rápidas comunes */}
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                <span className="text-[11px] text-[#8E9E99] self-center mr-1">Frecuentes:</span>
+                {COMMON_OTHER_MEDICATIONS_SUGGESTIONS.map((sug) => {
+                  const alreadyAdded = (formData.medicationEntries || []).some(
+                    (e) => e.name.toLowerCase() === sug.toLowerCase()
+                  );
+                  if (alreadyAdded) return null;
+                  return (
+                    <button
+                      key={sug}
+                      type="button"
+                      onClick={() => handleAddCustomMedication(sug)}
+                      className="px-2.5 py-1 rounded-lg bg-[#FAF6F0] hover:bg-[#EBF3F0] text-[#2E3A36] text-[11px] border border-[#D9D3C8] hover:border-[#6E9E93] transition-colors cursor-pointer"
+                    >
+                      + {sug}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Observaciones adicionales opcionales */}
+              <div className="pt-2">
+                <label
+                  htmlFor="otherMedications-input"
+                  className="text-[11px] font-semibold text-[#5C6E68] block mb-1"
+                >
+                  Notas adicionales u observaciones sobre tu medicación (opcional):
+                </label>
+                <textarea
+                  id="otherMedications-input"
+                  rows={2}
+                  value={formData.otherMedicationsDetails || ''}
+                  onChange={(e) => handleOtherMedsChange(e.target.value)}
+                  onBlur={() => handleBlur('pharmacologicalHistory')}
+                  placeholder="Otras observaciones, suplementos ocasionales, pautas especiales..."
+                  className="w-full px-3.5 py-2 rounded-xl bg-white border border-[#D9D3C8] text-[#2E3A36] placeholder-[#8E9E99] text-xs transition-all duration-200 focus:outline-hidden focus:ring-2 focus:ring-[#6E9E93]/40 resize-y"
+                />
+              </div>
             </div>
 
             {/* Botón explícito para indicar que no toma ningún medicamento */}
@@ -1017,7 +1617,11 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
             </div>
           </div>
 
-          {(touched.takesObesogenicMedications || touched.pharmacologicalHistory) &&
+          {attemptedSubmit &&
+            (formData.selectedObesogenicDrugs || []).length === 0 &&
+            !formData.otherMedicationsDetails?.trim() &&
+            (formData.medicationEntries || []).length === 0 &&
+            formData.takesObesogenicMedications !== 'No' &&
             (errors.takesObesogenicMedications || errors.pharmacologicalHistory) && (
               <motion.p
                 initial={{ opacity: 0, y: -4 }}
@@ -1146,6 +1750,306 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
           )}
         </div>
 
+        {/* Bloque: Hábitos: tabaco y alcohol */}
+        <div id="field-habitsSmokingAlcohol" className="space-y-6 pt-5 border-t border-[#E8E2D8]">
+          <div className="flex flex-col space-y-1">
+            <div className="flex items-center gap-2">
+              <Cigarette className="w-5 h-5 text-[#6E9E93]" />
+              <h3 className="text-base sm:text-lg font-semibold text-[#2E3A36]">
+                Hábitos: tabaco y alcohol
+              </h3>
+            </div>
+            <p className="text-xs text-[#5C6E68] leading-relaxed">
+              Registra tus hábitos respecto al consumo de tabaco, vapeo y alcohol para una valoración médica integral.
+            </p>
+          </div>
+
+          {/* 1. ¿Fumas o has fumado? */}
+          <div id="field-smokingStatus" className="space-y-3">
+            <label className="flex items-center justify-between text-sm font-semibold text-[#2E3A36]">
+              <span className="flex items-center gap-2">
+                ¿Fumas o has fumado? <span className="text-[#F2A488] font-bold">*</span>
+              </span>
+              <span className="text-xs font-normal text-[#8E9E99]">Selecciona una opción</span>
+            </label>
+
+            <div
+              role="radiogroup"
+              aria-label="¿Fumas o has fumado?"
+              className="grid grid-cols-1 sm:grid-cols-3 gap-2.5"
+            >
+              {SMOKING_STATUS_OPTIONS.map((status) => {
+                const isSelected = formData.smokingStatus === status;
+                return (
+                  <button
+                    type="button"
+                    key={status}
+                    id={`smoking-status-${status.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`}
+                    onClick={() => {
+                      handleChange('smokingStatus', status);
+                    }}
+                    className={`group relative flex items-center justify-between px-3.5 py-3 rounded-xl border text-sm font-medium transition-all duration-200 text-left cursor-pointer ${
+                      isSelected
+                        ? 'bg-[#EBF3F0] border-[#6E9E93] text-[#2E3A36] shadow-2xs font-semibold'
+                        : 'bg-[#FAF6F0]/60 border-[#D9D3C8] text-[#5C6E68] hover:border-[#AEC9C0] hover:bg-[#FAF6F0]'
+                    }`}
+                  >
+                    <span className="truncate">{status}</span>
+                    <div
+                      className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 ml-1 transition-all ${
+                        isSelected
+                          ? 'bg-[#6E9E93] text-white'
+                          : 'border border-[#C8C2B7] group-hover:border-[#AEC9C0]'
+                      }`}
+                    >
+                      {isSelected && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {attemptedSubmit && !formData.smokingStatus && errors.smokingStatus && (
+              <motion.p
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="text-xs text-[#C66A4D] flex items-center gap-1.5 pl-1"
+              >
+                <Info className="w-3.5 h-3.5 shrink-0" />
+                {errors.smokingStatus}
+              </motion.p>
+            )}
+
+            {/* Condicionales de tabaco */}
+            <AnimatePresence>
+              {formData.smokingStatus === 'Fumo actualmente' && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="pt-2 grid grid-cols-1 sm:grid-cols-2 gap-3"
+                >
+                  <div id="field-smokingCigarettesPerDay" className="space-y-1.5">
+                    <label
+                      htmlFor="smokingCigarettesPerDay-input"
+                      className="text-xs font-semibold text-[#2E3A36] block"
+                    >
+                      ¿Cuántos cigarrillos al día? <span className="text-[#F2A488] font-bold">*</span>
+                    </label>
+                    <input
+                      id="smokingCigarettesPerDay-input"
+                      type="text"
+                      value={formData.smokingCigarettesPerDay || ''}
+                      onChange={(e) => handleChange('smokingCigarettesPerDay', e.target.value)}
+                      onBlur={() => handleBlur('smokingCigarettesPerDay')}
+                      placeholder="Ej. 5 al día, media cajetilla"
+                      className={`w-full px-3.5 py-2.5 rounded-xl bg-white border text-[#2E3A36] text-sm placeholder-[#8E9E99] transition-all focus:outline-hidden focus:ring-2 focus:ring-[#6E9E93]/40 ${
+                        touched.smokingCigarettesPerDay && errors.smokingCigarettesPerDay
+                          ? 'border-[#F2A488] bg-[#FDEEE9]/40'
+                          : 'border-[#D9D3C8] hover:border-[#AEC9C0]'
+                      }`}
+                    />
+                    {touched.smokingCigarettesPerDay && errors.smokingCigarettesPerDay && (
+                      <p className="text-xs text-[#C66A4D] flex items-center gap-1 pl-1">
+                        <Info className="w-3 h-3 shrink-0" />
+                        {errors.smokingCigarettesPerDay}
+                      </p>
+                    )}
+                  </div>
+
+                  <div id="field-smokingYears" className="space-y-1.5">
+                    <label
+                      htmlFor="smokingYears-input"
+                      className="text-xs font-semibold text-[#2E3A36] block"
+                    >
+                      ¿Hace cuántos años fumas? <span className="text-[#F2A488] font-bold">*</span>
+                    </label>
+                    <input
+                      id="smokingYears-input"
+                      type="text"
+                      value={formData.smokingYears || ''}
+                      onChange={(e) => handleChange('smokingYears', e.target.value)}
+                      onBlur={() => handleBlur('smokingYears')}
+                      placeholder="Ej. 5 años, desde los 18"
+                      className={`w-full px-3.5 py-2.5 rounded-xl bg-white border text-[#2E3A36] text-sm placeholder-[#8E9E99] transition-all focus:outline-hidden focus:ring-2 focus:ring-[#6E9E93]/40 ${
+                        touched.smokingYears && errors.smokingYears
+                          ? 'border-[#F2A488] bg-[#FDEEE9]/40'
+                          : 'border-[#D9D3C8] hover:border-[#AEC9C0]'
+                      }`}
+                    />
+                    {touched.smokingYears && errors.smokingYears && (
+                      <p className="text-xs text-[#C66A4D] flex items-center gap-1 pl-1">
+                        <Info className="w-3 h-3 shrink-0" />
+                        {errors.smokingYears}
+                      </p>
+                    )}
+                  </div>
+                </motion.div>
+              )}
+
+              {formData.smokingStatus === 'Fumé pero ya lo dejé' && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="pt-2 max-w-md"
+                >
+                  <div id="field-smokingQuitTimeAgo" className="space-y-1.5">
+                    <label
+                      htmlFor="smokingQuitTimeAgo-input"
+                      className="text-xs font-semibold text-[#2E3A36] block"
+                    >
+                      ¿Hace cuánto lo dejaste? <span className="text-[#F2A488] font-bold">*</span>
+                    </label>
+                    <input
+                      id="smokingQuitTimeAgo-input"
+                      type="text"
+                      value={formData.smokingQuitTimeAgo || ''}
+                      onChange={(e) => handleChange('smokingQuitTimeAgo', e.target.value)}
+                      onBlur={() => handleBlur('smokingQuitTimeAgo')}
+                      placeholder="Ej. Hace 3 años, 6 meses"
+                      className={`w-full px-3.5 py-2.5 rounded-xl bg-white border text-[#2E3A36] text-sm placeholder-[#8E9E99] transition-all focus:outline-hidden focus:ring-2 focus:ring-[#6E9E93]/40 ${
+                        touched.smokingQuitTimeAgo && errors.smokingQuitTimeAgo
+                          ? 'border-[#F2A488] bg-[#FDEEE9]/40'
+                          : 'border-[#D9D3C8] hover:border-[#AEC9C0]'
+                      }`}
+                    />
+                    {touched.smokingQuitTimeAgo && errors.smokingQuitTimeAgo && (
+                      <p className="text-xs text-[#C66A4D] flex items-center gap-1 pl-1">
+                        <Info className="w-3 h-3 shrink-0" />
+                        {errors.smokingQuitTimeAgo}
+                      </p>
+                    )}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Opción de vapeador */}
+            <div className="pt-1">
+              <button
+                type="button"
+                id="field-usesVape"
+                onClick={() => handleChange('usesVape', !formData.usesVape)}
+                className={`flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl border text-sm transition-all duration-200 cursor-pointer ${
+                  formData.usesVape
+                    ? 'bg-[#EBF3F0] border-[#6E9E93] text-[#2E3A36] font-semibold shadow-2xs'
+                    : 'bg-[#FAF6F0]/60 border-[#D9D3C8] text-[#5C6E68] hover:border-[#AEC9C0] hover:bg-[#FAF6F0]'
+                }`}
+              >
+                <div
+                  className={`w-4 h-4 rounded-md flex items-center justify-center shrink-0 transition-all ${
+                    formData.usesVape
+                      ? 'bg-[#6E9E93] text-white'
+                      : 'border border-[#C8C2B7]'
+                  }`}
+                >
+                  {formData.usesVape && <Check className="w-3 h-3 stroke-[3]" />}
+                </div>
+                <span>Uso vapeador o cigarrillo electrónico</span>
+              </button>
+            </div>
+          </div>
+
+          {/* 2. ¿Consumes alcohol? */}
+          <div id="field-alcoholConsumption" className="space-y-3 pt-3 border-t border-[#E8E2D8]/70">
+            <label className="flex items-center justify-between text-sm font-semibold text-[#2E3A36]">
+              <span className="flex items-center gap-2">
+                <Wine className="w-4 h-4 text-[#6E9E93]" />
+                ¿Consumes alcohol? <span className="text-[#F2A488] font-bold">*</span>
+              </span>
+              <span className="text-xs font-normal text-[#8E9E99]">Selecciona una opción</span>
+            </label>
+
+            <div
+              role="radiogroup"
+              aria-label="¿Consumes alcohol?"
+              className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5"
+            >
+              {ALCOHOL_CONSUMPTION_OPTIONS.map((option) => {
+                const isSelected = formData.alcoholConsumption === option;
+                return (
+                  <button
+                    type="button"
+                    key={option}
+                    id={`alcohol-consumption-${option.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`}
+                    onClick={() => {
+                      handleChange('alcoholConsumption', option);
+                    }}
+                    className={`group relative flex items-center justify-between px-3.5 py-3 rounded-xl border text-sm font-medium transition-all duration-200 text-left cursor-pointer ${
+                      isSelected
+                        ? 'bg-[#EBF3F0] border-[#6E9E93] text-[#2E3A36] shadow-2xs font-semibold'
+                        : 'bg-[#FAF6F0]/60 border-[#D9D3C8] text-[#5C6E68] hover:border-[#AEC9C0] hover:bg-[#FAF6F0]'
+                    }`}
+                  >
+                    <span className="truncate">{option}</span>
+                    <div
+                      className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 ml-1 transition-all ${
+                        isSelected
+                          ? 'bg-[#6E9E93] text-white'
+                          : 'border border-[#C8C2B7] group-hover:border-[#AEC9C0]'
+                      }`}
+                    >
+                      {isSelected && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {attemptedSubmit && !formData.alcoholConsumption && errors.alcoholConsumption && (
+              <motion.p
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="text-xs text-[#C66A4D] flex items-center gap-1.5 pl-1"
+              >
+                <Info className="w-3.5 h-3.5 shrink-0" />
+                {errors.alcoholConsumption}
+              </motion.p>
+            )}
+
+            {/* Condicional de alcohol */}
+            <AnimatePresence>
+              {formData.alcoholConsumption && formData.alcoholConsumption !== 'No consumo' && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="pt-2"
+                >
+                  <div id="field-alcoholTypicalDrinksDetails" className="space-y-1.5">
+                    <label
+                      htmlFor="alcoholTypicalDrinksDetails-input"
+                      className="text-xs font-semibold text-[#2E3A36] block"
+                    >
+                      ¿Qué bebida y cuántos tragos en una ocasión típica? <span className="text-[#F2A488] font-bold">*</span>
+                    </label>
+                    <input
+                      id="alcoholTypicalDrinksDetails-input"
+                      type="text"
+                      value={formData.alcoholTypicalDrinksDetails || ''}
+                      onChange={(e) => handleChange('alcoholTypicalDrinksDetails', e.target.value)}
+                      onBlur={() => handleBlur('alcoholTypicalDrinksDetails')}
+                      placeholder="Ej. 1-2 copas de vino los fines de semana, 2 cervezas, etc."
+                      className={`w-full px-3.5 py-2.5 rounded-xl bg-white border text-[#2E3A36] text-sm placeholder-[#8E9E99] transition-all focus:outline-hidden focus:ring-2 focus:ring-[#6E9E93]/40 ${
+                        touched.alcoholTypicalDrinksDetails && errors.alcoholTypicalDrinksDetails
+                          ? 'border-[#F2A488] bg-[#FDEEE9]/40'
+                          : 'border-[#D9D3C8] hover:border-[#AEC9C0]'
+                      }`}
+                    />
+                    {touched.alcoholTypicalDrinksDetails && errors.alcoholTypicalDrinksDetails && (
+                      <p className="text-xs text-[#C66A4D] flex items-center gap-1 pl-1">
+                        <Info className="w-3 h-3 shrink-0" />
+                        {errors.alcoholTypicalDrinksDetails}
+                      </p>
+                    )}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        </div>
+
         {/* 6. Antecedentes gineco-obstétricos estructurados (solo visible si sexo es Femenino) */}
         {isFemale && (
           <div id="field-appliesGynecoObstetric" className="space-y-5 pt-3 border-t border-[#E8E2D8]">
@@ -1175,7 +2079,6 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
                   key={opt.value}
                   onClick={() => {
                     handleChange('appliesGynecoObstetric', opt.value);
-                    handleBlur('appliesGynecoObstetric');
                   }}
                   className={`flex items-center justify-between px-4 py-3 rounded-xl border text-sm font-medium transition-all duration-200 cursor-pointer ${
                     isSelected
@@ -1198,7 +2101,7 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
             })}
           </div>
 
-          {touched.appliesGynecoObstetric && errors.appliesGynecoObstetric && (
+          {attemptedSubmit && !formData.appliesGynecoObstetric && errors.appliesGynecoObstetric && (
             <motion.p
               initial={{ opacity: 0, y: -4 }}
               animate={{ opacity: 1, y: 0 }}
@@ -1361,7 +2264,6 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
                           key={opt.id}
                           onClick={() => {
                             handleChange('cycleRegularity', opt.id);
-                            handleBlur('cycleRegularity');
                           }}
                           className={`p-3 rounded-xl border text-left flex items-start justify-between gap-2 transition-all duration-200 cursor-pointer ${
                             isSelected
@@ -1387,7 +2289,10 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
                     })}
                   </div>
 
-                  {touched.cycleRegularity && errors.cycleRegularity && (
+                  {attemptedSubmit &&
+                    formData.appliesGynecoObstetric === 'Sí' &&
+                    !formData.cycleRegularity &&
+                    errors.cycleRegularity && (
                     <motion.p
                       initial={{ opacity: 0, y: -4 }}
                       animate={{ opacity: 1, y: 0 }}
@@ -1452,7 +2357,6 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
                           key={opt.id}
                           onClick={() => {
                             handleChange('menopauseStage', opt.id);
-                            handleBlur('menopauseStage');
                           }}
                           className={`p-3 rounded-xl border text-left flex items-start justify-between gap-2 transition-all duration-200 cursor-pointer ${
                             isSelected
@@ -1478,7 +2382,10 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
                     })}
                   </div>
 
-                  {touched.menopauseStage && errors.menopauseStage && (
+                  {attemptedSubmit &&
+                    formData.appliesGynecoObstetric === 'Sí' &&
+                    !formData.menopauseStage &&
+                    errors.menopauseStage && (
                     <motion.p
                       initial={{ opacity: 0, y: -4 }}
                       animate={{ opacity: 1, y: 0 }}
@@ -1549,6 +2456,186 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
                     </div>
                   </motion.div>
                 )}
+
+                {/* 1) ¿Estás lactando actualmente? */}
+                <div id="field-currentlyBreastfeeding" className="space-y-2 pt-3 border-t border-[#D9D3C8]/70">
+                  <label className="text-xs font-semibold text-[#2E3A36] block">
+                    ¿Estás lactando actualmente?{' '}
+                    <span className="text-[#F2A488] font-bold">*</span>
+                  </label>
+                  <div className="grid grid-cols-2 gap-3 max-w-xs">
+                    {(['Sí', 'No'] as const).map((opt) => {
+                      const isSelected = formData.currentlyBreastfeeding === opt;
+                      return (
+                        <button
+                          type="button"
+                          key={opt}
+                          onClick={() => handleChange('currentlyBreastfeeding', opt)}
+                          className={`flex items-center justify-between px-4 py-2.5 rounded-xl border text-sm font-medium transition-all duration-200 cursor-pointer ${
+                            isSelected
+                              ? 'bg-[#EBF3F0] border-[#6E9E93] text-[#2E3A36] shadow-2xs font-semibold'
+                              : 'bg-[#FAF6F0]/60 border-[#D9D3C8] text-[#5C6E68] hover:border-[#AEC9C0] hover:bg-[#FAF6F0]'
+                          }`}
+                        >
+                          <span>{opt}</span>
+                          <div
+                            className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 ml-1 transition-all ${
+                              isSelected
+                                ? 'bg-[#6E9E93] text-white'
+                                : 'border border-[#C8C2B7]'
+                            }`}
+                          >
+                            {isSelected && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {attemptedSubmit &&
+                    formData.appliesGynecoObstetric === 'Sí' &&
+                    !formData.currentlyBreastfeeding &&
+                    errors.currentlyBreastfeeding && (
+                    <motion.p
+                      initial={{ opacity: 0, y: -4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="text-xs text-[#C66A4D] flex items-center gap-1.5 pl-1"
+                    >
+                      <Info className="w-3.5 h-3.5 shrink-0" />
+                      {errors.currentlyBreastfeeding}
+                    </motion.p>
+                  )}
+                </div>
+
+                {/* 2) ¿Qué método de planificación familiar usas? */}
+                <div id="field-contraceptiveMethod" className="space-y-2 pt-3 border-t border-[#D9D3C8]/70">
+                  <label className="text-xs font-semibold text-[#2E3A36] block">
+                    ¿Qué método de planificación familiar usas?{' '}
+                    <span className="text-[#F2A488] font-bold">*</span>
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {CONTRACEPTIVE_METHODS.map((method) => {
+                      const isSelected = formData.contraceptiveMethod === method;
+                      return (
+                        <button
+                          type="button"
+                          key={method}
+                          onClick={() => handleChange('contraceptiveMethod', method)}
+                          className={`p-3 rounded-xl border text-left flex items-center justify-between gap-2 transition-all duration-200 cursor-pointer ${
+                            isSelected
+                              ? 'bg-[#EBF3F0] border-[#6E9E93] text-[#2E3A36] shadow-2xs font-semibold'
+                              : 'bg-[#FAF6F0]/60 border-[#D9D3C8] text-[#5C6E68] hover:border-[#AEC9C0] hover:bg-[#FAF6F0]'
+                          }`}
+                        >
+                          <span className="text-xs">{method}</span>
+                          <div
+                            className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 ml-1 transition-all ${
+                              isSelected
+                                ? 'bg-[#6E9E93] text-white'
+                                : 'border border-[#C8C2B7]'
+                            }`}
+                          >
+                            {isSelected && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {formData.contraceptiveMethod === 'Otro' && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      id="field-contraceptiveMethodOther"
+                      className="pt-1.5"
+                    >
+                      <input
+                        type="text"
+                        value={formData.contraceptiveMethodOther || ''}
+                        onChange={(e) => handleChange('contraceptiveMethodOther', e.target.value)}
+                        onBlur={() => handleBlur('contraceptiveMethodOther')}
+                        placeholder="Especifica qué otro método de planificación familiar utilizas..."
+                        className={`w-full px-3.5 py-2.5 rounded-xl bg-white border text-xs text-[#2E3A36] placeholder-[#8E9E99] focus:outline-hidden focus:ring-2 focus:ring-[#6E9E93]/40 ${
+                          touched.contraceptiveMethodOther && errors.contraceptiveMethodOther
+                            ? 'border-[#F2A488] bg-[#FDEEE9]/40'
+                            : 'border-[#D9D3C8]'
+                        }`}
+                      />
+                      {touched.contraceptiveMethodOther && errors.contraceptiveMethodOther && (
+                        <motion.p
+                          initial={{ opacity: 0, y: -4 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className="text-xs text-[#C66A4D] flex items-center gap-1.5 pl-1 mt-1"
+                        >
+                          <Info className="w-3.5 h-3.5 shrink-0" />
+                          {errors.contraceptiveMethodOther}
+                        </motion.p>
+                      )}
+                    </motion.div>
+                  )}
+
+                  {attemptedSubmit &&
+                    formData.appliesGynecoObstetric === 'Sí' &&
+                    !formData.contraceptiveMethod &&
+                    errors.contraceptiveMethod && (
+                    <motion.p
+                      initial={{ opacity: 0, y: -4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="text-xs text-[#C66A4D] flex items-center gap-1.5 pl-1"
+                    >
+                      <Info className="w-3.5 h-3.5 shrink-0" />
+                      {errors.contraceptiveMethod}
+                    </motion.p>
+                  )}
+                </div>
+
+                {/* 3) ¿Planeas un embarazo próximamente? */}
+                <div id="field-pregnancyPlan" className="space-y-2 pt-3 border-t border-[#D9D3C8]/70">
+                  <label className="text-xs font-semibold text-[#2E3A36] block">
+                    ¿Planeas un embarazo próximamente?{' '}
+                    <span className="text-[#F2A488] font-bold">*</span>
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {PREGNANCY_PLAN_OPTIONS.map((plan) => {
+                      const isSelected = formData.pregnancyPlan === plan;
+                      return (
+                        <button
+                          type="button"
+                          key={plan}
+                          onClick={() => handleChange('pregnancyPlan', plan)}
+                          className={`p-3 rounded-xl border text-left flex items-center justify-between gap-2 transition-all duration-200 cursor-pointer ${
+                            isSelected
+                              ? 'bg-[#EBF3F0] border-[#6E9E93] text-[#2E3A36] shadow-2xs font-semibold'
+                              : 'bg-[#FAF6F0]/60 border-[#D9D3C8] text-[#5C6E68] hover:border-[#AEC9C0] hover:bg-[#FAF6F0]'
+                          }`}
+                        >
+                          <span className="text-xs">{plan}</span>
+                          <div
+                            className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 ml-1 transition-all ${
+                              isSelected
+                                ? 'bg-[#6E9E93] text-white'
+                                : 'border border-[#C8C2B7]'
+                            }`}
+                          >
+                            {isSelected && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {attemptedSubmit &&
+                    formData.appliesGynecoObstetric === 'Sí' &&
+                    !formData.pregnancyPlan &&
+                    errors.pregnancyPlan && (
+                    <motion.p
+                      initial={{ opacity: 0, y: -4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="text-xs text-[#C66A4D] flex items-center gap-1.5 pl-1"
+                    >
+                      <Info className="w-3.5 h-3.5 shrink-0" />
+                      {errors.pregnancyPlan}
+                    </motion.p>
+                  )}
+                </div>
               </motion.div>
             )}
           </AnimatePresence>
@@ -1579,7 +2666,6 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
                   key={opt}
                   onClick={() => {
                     handleChange('hasEatingDisorderHistory', opt);
-                    handleBlur('hasEatingDisorderHistory');
                   }}
                   className={`flex items-center justify-between px-4 py-3 rounded-xl border text-sm font-medium transition-all duration-200 cursor-pointer ${
                     isSelected
@@ -1602,7 +2688,7 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
             })}
           </div>
 
-          {touched.hasEatingDisorderHistory && errors.hasEatingDisorderHistory && (
+          {attemptedSubmit && !formData.hasEatingDisorderHistory && errors.hasEatingDisorderHistory && (
             <motion.p
               initial={{ opacity: 0, y: -4 }}
               animate={{ opacity: 1, y: 0 }}
@@ -1738,7 +2824,7 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
             </button>
           </div>
 
-          {touched.hasFamilyObesityHistory && errors.hasFamilyObesityHistory && (
+          {attemptedSubmit && !formData.hasFamilyObesityHistory && errors.hasFamilyObesityHistory && (
             <motion.p
               initial={{ opacity: 0, y: -4 }}
               animate={{ opacity: 1, y: 0 }}

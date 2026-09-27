@@ -234,7 +234,7 @@ export const WeightTrajectoryTimeline: React.FC<WeightTrajectoryTimelineProps> =
           </h2>
         </div>
         <p className="text-xs sm:text-sm text-[#5C6E68] mt-1.5 leading-relaxed">
-          En medicina integrativa sabemos que el peso no varía por azar: responde a etapas de vida,
+          En Vela sabemos que el peso no varía por azar: responde a etapas de vida,
           emociones, estrés, cambios hormonales y rutinas. Ubicar estos hitos ayuda a identificar
           tus <strong>disparadores reales</strong> para tratarlos desde la raíz.
         </p>
@@ -243,7 +243,7 @@ export const WeightTrajectoryTimeline: React.FC<WeightTrajectoryTimelineProps> =
         <div className="mt-3 p-3.5 rounded-2xl bg-[#FAF6F0] border border-[#E8E2D8] flex items-start gap-2.5">
           <Lightbulb className="w-4 h-4 text-[#B27318] shrink-0 mt-0.5" />
           <p className="text-xs text-[#5C6E68] leading-relaxed">
-            <span className="font-semibold text-[#2E3A36]">Ejercicio de Trajectory:</span> Señala los momentos en que tu peso subió o bajó de forma notoria y qué vivías entonces (ej. exámenes, nuevo trabajo, postparto, dietas estrictas, etc.).
+            <span className="font-semibold text-[#2E3A36]">Trayectoria del peso:</span> Señala los momentos en que tu peso subió o bajó de forma notoria y qué vivías entonces (ej. exámenes, nuevo trabajo, postparto, dietas estrictas, etc.).
           </p>
         </div>
       </div>

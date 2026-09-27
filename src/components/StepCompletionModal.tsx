@@ -664,11 +664,35 @@ export const StepCompletionModal: React.FC<StepCompletionModalProps> = ({
                       {step4Data.pathologicalHistory}
                     </span>
                   </div>
-                  <div className="flex justify-between">
+                  <div className="flex justify-between items-start">
                     <span className="text-[#5C6E68]">Medicamentos:</span>
-                    <span className="font-medium text-[#2E3A36] text-right truncate max-w-[200px]">
-                      {step4Data.pharmacologicalHistory}
-                    </span>
+                    <div className="text-right max-w-[240px]">
+                      {step4Data.medicationEntries && step4Data.medicationEntries.length > 0 ? (
+                        <div className="space-y-1">
+                          {step4Data.medicationEntries.map((m) => (
+                            <div key={m.id} className="font-medium text-[#2E3A36] text-[11px]">
+                              {m.name}
+                              {(m.dose || m.startMonth || m.startYear) && (
+                                <span className="text-[#5C6E68] block text-[10px]">
+                                  {[
+                                    m.dose ? `Dosis: ${m.dose}` : null,
+                                    m.startMonth || m.startYear
+                                      ? `Inicio: ${[m.startMonth, m.startYear].filter(Boolean).join(' ')}`
+                                      : null,
+                                  ]
+                                    .filter(Boolean)
+                                    .join(' • ')}
+                                </span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="font-medium text-[#2E3A36] truncate block">
+                          {step4Data.pharmacologicalHistory || 'Ninguno'}
+                        </span>
+                      )}
+                    </div>
                   </div>
                   {step1Data?.sex !== 'Masculino' && step4Data.appliesGynecoObstetric === 'Sí' && (
                     <div className="bg-[#FAF6F0]/80 p-2 rounded-xl space-y-1 text-[11px]">

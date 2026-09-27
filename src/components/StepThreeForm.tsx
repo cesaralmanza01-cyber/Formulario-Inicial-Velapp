@@ -20,6 +20,8 @@ import {
   Zap,
   RefreshCw,
   ShieldQuestion,
+  Plus,
+  Trash2,
 } from 'lucide-react';
 import {
   PatientWeightHistoryInfo,
@@ -32,6 +34,10 @@ import {
   LifeStageKey,
   WeightTrajectoryPattern,
   WeightStigmaContext,
+  WeightMedicationCurrentlyUsing,
+  WeightMedicationDiscontinueReason,
+  WEIGHT_MEDICATION_DISCONTINUE_REASONS,
+  WeightMedicationItem,
 } from '../types';
 import { VelaIcon } from './VelaIcon';
 import { WeightTrajectoryTimeline } from './WeightTrajectoryTimeline';
@@ -159,10 +165,19 @@ export const StepThreeForm: React.FC<StepThreeFormProps> = ({
         restrictiveDietsDetails: '',
         usedWeightMedications: '',
         weightMedicationsNames: '',
+        weightMedicationsDose: '',
+        weightMedicationsCurrentlyUsing: '',
+        weightMedicationsDiscontinueReasons: [],
+        weightMedicationsDiscontinueOther: '',
+        weightMedicationsList: [],
         weightMedicationsExperience: '',
         weightMedicationsAdverseEffects: '',
         hadBariatricSurgery: '',
         bariatricSurgeryTimeAgo: '',
+        bariatricPreOpWeightKg: '',
+        bariatricLowestWeightPostOpKg: '',
+        bariatricWeightRegain: '',
+        bariatricWeightRegainedKg: '',
         hadAestheticSurgery: '',
         aestheticSurgeryDetails: '',
         aestheticSurgeryTimeAgo: '',
@@ -172,6 +187,7 @@ export const StepThreeForm: React.FC<StepThreeFormProps> = ({
 
   const [errors, setErrors] = useState<StepThreeErrors>({});
   const [touched, setTouched] = useState<Record<string, boolean>>({});
+  const [attemptedSubmit, setAttemptedSubmit] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [autoSavedTime, setAutoSavedTime] = useState<string>('');
 
@@ -290,11 +306,66 @@ export const StepThreeForm: React.FC<StepThreeFormProps> = ({
         return '';
 
       case 'weightMedicationsNames':
-        if (
-          currentForm.usedWeightMedications === 'Sí' &&
-          !currentForm.weightMedicationsNames?.trim()
-        ) {
-          return 'Por favor indica qué medicamentos o inyectables utilizaste.';
+        if (currentForm.usedWeightMedications === 'Sí') {
+          const list = currentForm.weightMedicationsList && currentForm.weightMedicationsList.length > 0
+            ? currentForm.weightMedicationsList
+            : [{ name: currentForm.weightMedicationsNames || '' }];
+          if (list.some((m) => !m.name?.trim())) {
+            return 'Por favor indica qué medicamentos o inyectables utilizaste.';
+          }
+        }
+        return '';
+
+      case 'weightMedicationsDose':
+        if (currentForm.usedWeightMedications === 'Sí') {
+          const list = currentForm.weightMedicationsList && currentForm.weightMedicationsList.length > 0
+            ? currentForm.weightMedicationsList
+            : [{ dose: currentForm.weightMedicationsDose || '' }];
+          if (list.some((m) => !m.dose?.trim())) {
+            return 'Por favor indica la dosis para cada medicamento (ej. 2.4 mg semanal).';
+          }
+        }
+        return '';
+
+      case 'weightMedicationsCurrentlyUsing':
+        if (currentForm.usedWeightMedications === 'Sí') {
+          const list = currentForm.weightMedicationsList && currentForm.weightMedicationsList.length > 0
+            ? currentForm.weightMedicationsList
+            : [{ currentlyUsing: currentForm.weightMedicationsCurrentlyUsing || '' }];
+          if (list.some((m) => !m.currentlyUsing)) {
+            return 'Por favor responde si lo usas actualmente o si lo suspendiste.';
+          }
+        }
+        return '';
+
+      case 'weightMedicationsDiscontinueReasons':
+        if (currentForm.usedWeightMedications === 'Sí') {
+          const list = currentForm.weightMedicationsList && currentForm.weightMedicationsList.length > 0
+            ? currentForm.weightMedicationsList
+            : [
+                {
+                  currentlyUsing: currentForm.weightMedicationsCurrentlyUsing || '',
+                  discontinueReasons: currentForm.weightMedicationsDiscontinueReasons || [],
+                  discontinueOther: currentForm.weightMedicationsDiscontinueOther || '',
+                },
+              ];
+          const hasMissingReasons = list.some(
+            (m) =>
+              m.currentlyUsing === 'No, lo suspendí' &&
+              (!m.discontinueReasons || m.discontinueReasons.length === 0)
+          );
+          if (hasMissingReasons) {
+            return 'Por favor selecciona al menos un motivo por el cual lo dejaste.';
+          }
+          const hasMissingOther = list.some(
+            (m) =>
+              m.currentlyUsing === 'No, lo suspendí' &&
+              m.discontinueReasons?.includes('Otro') &&
+              !m.discontinueOther?.trim()
+          );
+          if (hasMissingOther) {
+            return 'Por favor especifica el motivo en "Otro".';
+          }
         }
         return '';
 
@@ -328,7 +399,72 @@ export const StepThreeForm: React.FC<StepThreeFormProps> = ({
           currentForm.hadBariatricSurgery === 'Sí' &&
           !currentForm.bariatricSurgeryTimeAgo?.trim()
         ) {
-          return 'Por favor indícanos hace cuánto tiempo fue la cirugía.';
+          return 'Por favor indícanos hace cuánto tiempo y qué tipo de cirugía fue.';
+        }
+        return '';
+
+      case 'bariatricPreOpWeightKg':
+        if (
+          currentForm.hadBariatricSurgery === 'Sí' &&
+          !currentForm.bariatricPreOpWeightKg?.trim()
+        ) {
+          return 'Por favor ingresa tu peso antes de la cirugía.';
+        }
+        if (
+          currentForm.hadBariatricSurgery === 'Sí' &&
+          currentForm.bariatricPreOpWeightKg
+        ) {
+          const val = Number(currentForm.bariatricPreOpWeightKg);
+          if (isNaN(val) || val <= 0) {
+            return 'Ingresa un peso válido en kg.';
+          }
+        }
+        return '';
+
+      case 'bariatricLowestWeightPostOpKg':
+        if (
+          currentForm.hadBariatricSurgery === 'Sí' &&
+          !currentForm.bariatricLowestWeightPostOpKg?.trim()
+        ) {
+          return 'Por favor ingresa el peso más bajo que alcanzaste tras la cirugía.';
+        }
+        if (
+          currentForm.hadBariatricSurgery === 'Sí' &&
+          currentForm.bariatricLowestWeightPostOpKg
+        ) {
+          const val = Number(currentForm.bariatricLowestWeightPostOpKg);
+          if (isNaN(val) || val <= 0) {
+            return 'Ingresa un peso válido en kg.';
+          }
+        }
+        return '';
+
+      case 'bariatricWeightRegain':
+        if (
+          currentForm.hadBariatricSurgery === 'Sí' &&
+          !currentForm.bariatricWeightRegain
+        ) {
+          return 'Por favor responde si has vuelto a subir de peso tras la cirugía.';
+        }
+        return '';
+
+      case 'bariatricWeightRegainedKg':
+        if (
+          currentForm.hadBariatricSurgery === 'Sí' &&
+          currentForm.bariatricWeightRegain === 'Sí' &&
+          !currentForm.bariatricWeightRegainedKg?.trim()
+        ) {
+          return 'Por favor ingresa los kilos aproximados que volviste a subir.';
+        }
+        if (
+          currentForm.hadBariatricSurgery === 'Sí' &&
+          currentForm.bariatricWeightRegain === 'Sí' &&
+          currentForm.bariatricWeightRegainedKg
+        ) {
+          const val = Number(currentForm.bariatricWeightRegainedKg);
+          if (isNaN(val) || val <= 0) {
+            return 'Ingresa una cantidad de kilos válida.';
+          }
         }
         return '';
 
@@ -376,11 +512,178 @@ export const StepThreeForm: React.FC<StepThreeFormProps> = ({
     if (field === 'overweightOnsetStage' && value !== 'infancia') {
       updated = { ...updated, childhoodOnsetAge: '' };
     }
+    if (field === 'hadBariatricSurgery' && value !== 'Sí') {
+      updated = {
+        ...updated,
+        bariatricSurgeryTimeAgo: '',
+        bariatricPreOpWeightKg: '',
+        bariatricLowestWeightPostOpKg: '',
+        bariatricWeightRegain: '',
+        bariatricWeightRegainedKg: '',
+      };
+    }
+    if (field === 'bariatricWeightRegain' && value !== 'Sí') {
+      updated = {
+        ...updated,
+        bariatricWeightRegainedKg: '',
+      };
+    }
     setFormData(updated);
-    if (touched[field]) {
+
+    if (value && (!Array.isArray(value) || value.length > 0)) {
+      setErrors((prev) => ({ ...prev, [field]: '' }));
+    } else if (attemptedSubmit || touched[field]) {
       const errorMsg = validateField(field, updated);
       setErrors((prev) => ({ ...prev, [field]: errorMsg }));
     }
+  };
+
+  const handleMedicationItemChange = (
+    index: number,
+    field: keyof WeightMedicationItem,
+    value: any
+  ) => {
+    setFormData((prev) => {
+      const currentList: WeightMedicationItem[] =
+        prev.weightMedicationsList && prev.weightMedicationsList.length > 0
+          ? prev.weightMedicationsList.map((m) => ({ ...m }))
+          : [
+              {
+                id: 'med-1',
+                name: prev.weightMedicationsNames || '',
+                dose: prev.weightMedicationsDose || '',
+                currentlyUsing: prev.weightMedicationsCurrentlyUsing || '',
+                discontinueReasons: prev.weightMedicationsDiscontinueReasons || [],
+                discontinueOther: prev.weightMedicationsDiscontinueOther || '',
+              },
+            ];
+
+      if (!currentList[index]) {
+        currentList[index] = {
+          id: `med-${Date.now()}`,
+          name: '',
+          dose: '',
+          currentlyUsing: '',
+          discontinueReasons: [],
+          discontinueOther: '',
+        };
+      }
+
+      currentList[index] = {
+        ...currentList[index],
+        [field]: value,
+      };
+
+      const names = currentList.map((m) => m.name.trim()).filter(Boolean).join(', ');
+      const primary = currentList[0];
+
+      return {
+        ...prev,
+        weightMedicationsList: currentList,
+        weightMedicationsNames: names || currentList[0]?.name || '',
+        weightMedicationsDose: primary?.dose || '',
+        weightMedicationsCurrentlyUsing: primary?.currentlyUsing || '',
+        weightMedicationsDiscontinueReasons: primary?.discontinueReasons || [],
+        weightMedicationsDiscontinueOther: primary?.discontinueOther || '',
+      };
+    });
+
+    if (field === 'currentlyUsing' && value) {
+      setErrors((prev) => ({ ...prev, weightMedicationsCurrentlyUsing: '' }));
+    }
+    if (field === 'discontinueReasons' && Array.isArray(value) && value.length > 0) {
+      setErrors((prev) => ({ ...prev, weightMedicationsDiscontinueReasons: '' }));
+    }
+    if (field === 'name' && typeof value === 'string' && value.trim()) {
+      setErrors((prev) => ({ ...prev, weightMedicationsNames: '' }));
+    }
+    if (field === 'dose' && typeof value === 'string' && value.trim()) {
+      setErrors((prev) => ({ ...prev, weightMedicationsDose: '' }));
+    }
+  };
+
+  const handleAddMedicationItem = () => {
+    setFormData((prev) => {
+      const currentList =
+        prev.weightMedicationsList && prev.weightMedicationsList.length > 0
+          ? [...prev.weightMedicationsList]
+          : [
+              {
+                id: 'med-1',
+                name: prev.weightMedicationsNames || '',
+                dose: prev.weightMedicationsDose || '',
+                currentlyUsing: prev.weightMedicationsCurrentlyUsing || '',
+                discontinueReasons: prev.weightMedicationsDiscontinueReasons || [],
+                discontinueOther: prev.weightMedicationsDiscontinueOther || '',
+              },
+            ];
+      return {
+        ...prev,
+        weightMedicationsList: [
+          ...currentList,
+          {
+            id: `med-${Date.now()}`,
+            name: '',
+            dose: '',
+            currentlyUsing: '',
+            discontinueReasons: [],
+            discontinueOther: '',
+          },
+        ],
+      };
+    });
+  };
+
+  const handleRemoveMedicationItem = (index: number) => {
+    setFormData((prev) => {
+      const currentList = prev.weightMedicationsList ? [...prev.weightMedicationsList] : [];
+      if (currentList.length <= 1) return prev;
+      currentList.splice(index, 1);
+      const names = currentList.map((m) => m.name.trim()).filter(Boolean).join(', ');
+      const primary = currentList[0];
+      return {
+        ...prev,
+        weightMedicationsList: currentList,
+        weightMedicationsNames: names,
+        weightMedicationsDose: primary?.dose || '',
+        weightMedicationsCurrentlyUsing: primary?.currentlyUsing || '',
+        weightMedicationsDiscontinueReasons: primary?.discontinueReasons || [],
+        weightMedicationsDiscontinueOther: primary?.discontinueOther || '',
+      };
+    });
+  };
+
+  const handleToggleDiscontinueReason = (
+    index: number,
+    reason: WeightMedicationDiscontinueReason
+  ) => {
+    const list =
+      formData.weightMedicationsList && formData.weightMedicationsList.length > 0
+        ? formData.weightMedicationsList
+        : [
+            {
+              id: 'med-1',
+              name: formData.weightMedicationsNames || '',
+              dose: formData.weightMedicationsDose || '',
+              currentlyUsing: formData.weightMedicationsCurrentlyUsing || '',
+              discontinueReasons: formData.weightMedicationsDiscontinueReasons || [],
+              discontinueOther: formData.weightMedicationsDiscontinueOther || '',
+            },
+          ];
+
+    const currentItem = list[index] || {
+      id: 'med-1',
+      name: '',
+      dose: '',
+      currentlyUsing: '' as const,
+      discontinueReasons: [],
+    };
+    const currentReasons = currentItem.discontinueReasons || [];
+    const nextReasons = currentReasons.includes(reason)
+      ? currentReasons.filter((r) => r !== reason)
+      : [...currentReasons, reason];
+
+    handleMedicationItemChange(index, 'discontinueReasons', nextReasons);
   };
 
   const togglePreviousMethod = (method: PreviousMethodOption) => {
@@ -391,7 +694,9 @@ export const StepThreeForm: React.FC<StepThreeFormProps> = ({
       : [...currentList, method];
 
     handleChange('previousMethods', updatedList);
-    setTouched((prev) => ({ ...prev, previousMethods: true }));
+    if (updatedList.length > 0) {
+      setErrors((prev) => ({ ...prev, previousMethods: '' }));
+    }
   };
 
   const toggleStigmaContext = (context: WeightStigmaContext) => {
@@ -433,8 +738,32 @@ export const StepThreeForm: React.FC<StepThreeFormProps> = ({
     // 3. Medicamentos
     if (!formData.usedWeightMedications) return false;
     if (formData.usedWeightMedications === 'Sí') {
+      const list =
+        formData.weightMedicationsList && formData.weightMedicationsList.length > 0
+          ? formData.weightMedicationsList
+          : [
+              {
+                id: 'med-1',
+                name: formData.weightMedicationsNames || '',
+                dose: formData.weightMedicationsDose || '',
+                currentlyUsing: formData.weightMedicationsCurrentlyUsing || '',
+                discontinueReasons: formData.weightMedicationsDiscontinueReasons || [],
+                discontinueOther: formData.weightMedicationsDiscontinueOther || '',
+              },
+            ];
+
+      const anyInvalid = list.some((m) => {
+        if (!m.name?.trim() || !m.dose?.trim() || !m.currentlyUsing) return true;
+        if (m.currentlyUsing === 'No, lo suspendí') {
+          if (!m.discontinueReasons || m.discontinueReasons.length === 0) return true;
+          if (m.discontinueReasons.includes('Otro') && !m.discontinueOther?.trim()) return true;
+        }
+        return false;
+      });
+
+      if (anyInvalid) return false;
+
       if (
-        !formData.weightMedicationsNames?.trim() ||
         !formData.weightMedicationsExperience?.trim() ||
         !formData.weightMedicationsAdverseEffects?.trim()
       ) {
@@ -446,6 +775,21 @@ export const StepThreeForm: React.FC<StepThreeFormProps> = ({
     if (!formData.hadBariatricSurgery) return false;
     if (formData.hadBariatricSurgery === 'Sí') {
       if (!formData.bariatricSurgeryTimeAgo?.trim()) {
+        return false;
+      }
+      if (!formData.bariatricPreOpWeightKg?.trim()) {
+        return false;
+      }
+      if (!formData.bariatricLowestWeightPostOpKg?.trim()) {
+        return false;
+      }
+      if (!formData.bariatricWeightRegain) {
+        return false;
+      }
+      if (
+        formData.bariatricWeightRegain === 'Sí' &&
+        !formData.bariatricWeightRegainedKg?.trim()
+      ) {
         return false;
       }
     }
@@ -466,6 +810,7 @@ export const StepThreeForm: React.FC<StepThreeFormProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setAttemptedSubmit(true);
 
     // Mark all pertinent fields as touched
     const touchedFields: Record<string, boolean> = {
@@ -489,12 +834,21 @@ export const StepThreeForm: React.FC<StepThreeFormProps> = ({
 
     if (formData.usedWeightMedications === 'Sí') {
       touchedFields.weightMedicationsNames = true;
+      touchedFields.weightMedicationsDose = true;
+      touchedFields.weightMedicationsCurrentlyUsing = true;
+      touchedFields.weightMedicationsDiscontinueReasons = true;
       touchedFields.weightMedicationsExperience = true;
       touchedFields.weightMedicationsAdverseEffects = true;
     }
 
     if (formData.hadBariatricSurgery === 'Sí') {
       touchedFields.bariatricSurgeryTimeAgo = true;
+      touchedFields.bariatricPreOpWeightKg = true;
+      touchedFields.bariatricLowestWeightPostOpKg = true;
+      touchedFields.bariatricWeightRegain = true;
+      if (formData.bariatricWeightRegain === 'Sí') {
+        touchedFields.bariatricWeightRegainedKg = true;
+      }
     }
 
     if (formData.hadAestheticSurgery === 'Sí') {
@@ -522,6 +876,9 @@ export const StepThreeForm: React.FC<StepThreeFormProps> = ({
       restrictiveDiets: validateField('restrictiveDiets', formData),
       usedWeightMedications: validateField('usedWeightMedications', formData),
       weightMedicationsNames: validateField('weightMedicationsNames', formData),
+      weightMedicationsDose: validateField('weightMedicationsDose', formData),
+      weightMedicationsCurrentlyUsing: validateField('weightMedicationsCurrentlyUsing', formData),
+      weightMedicationsDiscontinueReasons: validateField('weightMedicationsDiscontinueReasons', formData),
       weightMedicationsExperience: validateField('weightMedicationsExperience', formData),
       weightMedicationsAdverseEffects: validateField(
         'weightMedicationsAdverseEffects',
@@ -529,6 +886,10 @@ export const StepThreeForm: React.FC<StepThreeFormProps> = ({
       ),
       hadBariatricSurgery: validateField('hadBariatricSurgery', formData),
       bariatricSurgeryTimeAgo: validateField('bariatricSurgeryTimeAgo', formData),
+      bariatricPreOpWeightKg: validateField('bariatricPreOpWeightKg', formData),
+      bariatricLowestWeightPostOpKg: validateField('bariatricLowestWeightPostOpKg', formData),
+      bariatricWeightRegain: validateField('bariatricWeightRegain', formData),
+      bariatricWeightRegainedKg: validateField('bariatricWeightRegainedKg', formData),
       hadAestheticSurgery: validateField('hadAestheticSurgery', formData),
       aestheticSurgeryDetails: validateField('aestheticSurgeryDetails', formData),
       aestheticSurgeryTimeAgo: validateField('aestheticSurgeryTimeAgo', formData),
@@ -1268,7 +1629,6 @@ export const StepThreeForm: React.FC<StepThreeFormProps> = ({
                   id={`attempts-${opt.toLowerCase()}`}
                   onClick={() => {
                     handleChange('hasPreviousAttempts', opt);
-                    handleBlur('hasPreviousAttempts');
                   }}
                   className={`flex items-center justify-between px-4 py-3 rounded-xl border text-sm font-medium transition-all duration-200 cursor-pointer ${
                     isSelected
@@ -1291,7 +1651,7 @@ export const StepThreeForm: React.FC<StepThreeFormProps> = ({
             })}
           </div>
 
-          {touched.hasPreviousAttempts && errors.hasPreviousAttempts && (
+          {attemptedSubmit && !formData.hasPreviousAttempts && errors.hasPreviousAttempts && (
             <motion.p
               initial={{ opacity: 0, y: -4 }}
               animate={{ opacity: 1, y: 0 }}
@@ -1331,7 +1691,6 @@ export const StepThreeForm: React.FC<StepThreeFormProps> = ({
                         id={`fluctuation-${opt.toLowerCase().replace(/\s+/g, '-')}`}
                         onClick={() => {
                           handleChange('fluctuationCount', opt);
-                          handleBlur('fluctuationCount');
                         }}
                         className={`flex items-center justify-between px-3.5 py-3 rounded-xl border text-sm font-medium transition-all duration-200 text-left cursor-pointer ${
                           isSelected
@@ -1354,7 +1713,7 @@ export const StepThreeForm: React.FC<StepThreeFormProps> = ({
                   })}
                 </div>
 
-                {touched.fluctuationCount && errors.fluctuationCount && (
+                {attemptedSubmit && formData.hasPreviousAttempts === 'Sí' && !formData.fluctuationCount && errors.fluctuationCount && (
                   <motion.p
                     initial={{ opacity: 0, y: -4 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -1385,7 +1744,6 @@ export const StepThreeForm: React.FC<StepThreeFormProps> = ({
                         id={`regain-${opt.toLowerCase().replace(/\s+/g, '-')}`}
                         onClick={() => {
                           handleChange('regainSpeed', opt);
-                          handleBlur('regainSpeed');
                         }}
                         className={`flex items-center justify-between px-4 py-3 rounded-xl border text-sm font-medium transition-all duration-200 text-left cursor-pointer ${
                           isSelected
@@ -1408,7 +1766,7 @@ export const StepThreeForm: React.FC<StepThreeFormProps> = ({
                   })}
                 </div>
 
-                {touched.regainSpeed && errors.regainSpeed && (
+                {attemptedSubmit && formData.hasPreviousAttempts === 'Sí' && !formData.regainSpeed && errors.regainSpeed && (
                   <motion.p
                     initial={{ opacity: 0, y: -4 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -1462,7 +1820,10 @@ export const StepThreeForm: React.FC<StepThreeFormProps> = ({
                   })}
                 </div>
 
-                {touched.previousMethods && errors.previousMethods && (
+                {attemptedSubmit &&
+                  formData.hasPreviousAttempts === 'Sí' &&
+                  (!formData.previousMethods || formData.previousMethods.length === 0) &&
+                  errors.previousMethods && (
                   <motion.p
                     initial={{ opacity: 0, y: -4 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -1493,7 +1854,6 @@ export const StepThreeForm: React.FC<StepThreeFormProps> = ({
                         id={`exercise-${opt.toLowerCase().replace(/\s+/g, '-')}`}
                         onClick={() => {
                           handleChange('includedExercise', opt);
-                          handleBlur('includedExercise');
                         }}
                         className={`flex items-center justify-between px-4 py-3 rounded-xl border text-sm font-medium transition-all duration-200 cursor-pointer ${
                           isSelected
@@ -1516,7 +1876,10 @@ export const StepThreeForm: React.FC<StepThreeFormProps> = ({
                   })}
                 </div>
 
-                {touched.includedExercise && errors.includedExercise && (
+                {attemptedSubmit &&
+                  formData.hasPreviousAttempts === 'Sí' &&
+                  !formData.includedExercise &&
+                  errors.includedExercise && (
                   <motion.p
                     initial={{ opacity: 0, y: -4 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -1547,7 +1910,6 @@ export const StepThreeForm: React.FC<StepThreeFormProps> = ({
                         id={`restrictive-${opt.toLowerCase()}`}
                         onClick={() => {
                           handleChange('restrictiveDiets', opt);
-                          handleBlur('restrictiveDiets');
                         }}
                         className={`flex items-center justify-between px-4 py-3 rounded-xl border text-sm font-medium transition-all duration-200 cursor-pointer ${
                           isSelected
@@ -1602,7 +1964,10 @@ export const StepThreeForm: React.FC<StepThreeFormProps> = ({
                   )}
                 </AnimatePresence>
 
-                {touched.restrictiveDiets && errors.restrictiveDiets && (
+                {attemptedSubmit &&
+                  formData.hasPreviousAttempts === 'Sí' &&
+                  !formData.restrictiveDiets &&
+                  errors.restrictiveDiets && (
                   <motion.p
                     initial={{ opacity: 0, y: -4 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -1656,7 +2021,6 @@ export const StepThreeForm: React.FC<StepThreeFormProps> = ({
                   id={`meds-${opt.toLowerCase()}`}
                   onClick={() => {
                     handleChange('usedWeightMedications', opt);
-                    handleBlur('usedWeightMedications');
                   }}
                   className={`flex items-center justify-between px-4 py-3 rounded-xl border text-sm font-medium transition-all duration-200 cursor-pointer ${
                     isSelected
@@ -1679,7 +2043,7 @@ export const StepThreeForm: React.FC<StepThreeFormProps> = ({
             })}
           </div>
 
-          {touched.usedWeightMedications && errors.usedWeightMedications && (
+          {attemptedSubmit && !formData.usedWeightMedications && errors.usedWeightMedications && (
             <motion.p
               initial={{ opacity: 0, y: -4 }}
               animate={{ opacity: 1, y: 0 }}
@@ -1700,42 +2064,284 @@ export const StepThreeForm: React.FC<StepThreeFormProps> = ({
               exit={{ opacity: 0, height: 0 }}
               className="space-y-6 pt-4 border-t border-[#E8E2D8]/80 overflow-hidden"
             >
-              {/* 11. ¿Cuáles? */}
-              <div id="field-weightMedicationsNames" className="space-y-2">
-                <label
-                  htmlFor="weightMedicationsNames-input"
-                  className="flex items-center justify-between text-sm font-semibold text-[#2E3A36]"
-                >
-                  <span>
-                    ¿Cuáles medicamentos o inyectables?{' '}
-                    <span className="text-[#F2A488] font-bold">*</span>
-                  </span>
-                </label>
-                <input
-                  id="weightMedicationsNames-input"
-                  type="text"
-                  value={formData.weightMedicationsNames || ''}
-                  onChange={(e) =>
-                    handleChange('weightMedicationsNames', e.target.value)
-                  }
-                  onBlur={() => handleBlur('weightMedicationsNames')}
-                  placeholder="Ej. Saxenda (liraglutida), Ozempic, Fentermina, Orlistat..."
-                  className={`w-full px-4 py-3.5 rounded-xl bg-[#FAF6F0]/80 border text-[#2E3A36] placeholder-[#8E9E99] text-base transition-all duration-200 focus:outline-hidden focus:ring-2 focus:ring-[#6E9E93]/40 focus:bg-white ${
-                    touched.weightMedicationsNames && errors.weightMedicationsNames
-                      ? 'border-[#F2A488] bg-[#FDEEE9]/40'
-                      : 'border-[#D9D3C8] hover:border-[#AEC9C0]'
-                  }`}
-                />
-                {touched.weightMedicationsNames && errors.weightMedicationsNames && (
-                  <motion.p
-                    initial={{ opacity: 0, y: -4 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="text-xs text-[#C66A4D] flex items-center gap-1.5 pl-1"
+              {/* Bloque para cada medicamento ingresado */}
+              <div className="space-y-6">
+                {(formData.weightMedicationsList && formData.weightMedicationsList.length > 0
+                  ? formData.weightMedicationsList
+                  : [
+                      {
+                        id: 'med-1',
+                        name: formData.weightMedicationsNames || '',
+                        dose: formData.weightMedicationsDose || '',
+                        currentlyUsing: formData.weightMedicationsCurrentlyUsing || '',
+                        discontinueReasons: formData.weightMedicationsDiscontinueReasons || [],
+                        discontinueOther: formData.weightMedicationsDiscontinueOther || '',
+                      },
+                    ]
+                ).map((medItem, medIndex, arr) => {
+                  return (
+                    <div
+                      key={medItem.id || `med-${medIndex}`}
+                      className="p-5 sm:p-6 rounded-2xl bg-[#FAF6F0]/70 border border-[#D9D3C8] space-y-5"
+                    >
+                      {arr.length > 1 && (
+                        <div className="flex items-center justify-between border-b border-[#E8E2D8] pb-3">
+                          <span className="text-sm font-semibold text-[#2E3A36] flex items-center gap-2">
+                            <Pill className="w-4 h-4 text-[#6E9E93]" />
+                            Medicamento {medIndex + 1}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveMedicationItem(medIndex)}
+                            className="text-xs text-[#C66A4D] hover:text-[#A84F35] flex items-center gap-1 cursor-pointer transition-colors px-2 py-1 rounded-lg hover:bg-[#FDEEE9]"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            Eliminar
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Nombre */}
+                      <div id={medIndex === 0 ? 'field-weightMedicationsNames' : undefined} className="space-y-2">
+                        <label
+                          htmlFor={`weightMedicationsNames-input-${medIndex}`}
+                          className="flex items-center justify-between text-sm font-semibold text-[#2E3A36]"
+                        >
+                          <span>
+                            ¿Cuáles medicamentos o inyectables?{' '}
+                            <span className="text-[#F2A488] font-bold">*</span>
+                          </span>
+                        </label>
+                        <input
+                          id={`weightMedicationsNames-input-${medIndex}`}
+                          type="text"
+                          value={medItem.name}
+                          onChange={(e) =>
+                            handleMedicationItemChange(medIndex, 'name', e.target.value)
+                          }
+                          placeholder="Ej. Saxenda (liraglutida), Ozempic, Fentermina, Orlistat..."
+                          className={`w-full px-4 py-3.5 rounded-xl bg-white border text-[#2E3A36] placeholder-[#8E9E99] text-base transition-all duration-200 focus:outline-hidden focus:ring-2 focus:ring-[#6E9E93]/40 ${
+                            attemptedSubmit && !medItem.name.trim() && errors.weightMedicationsNames
+                              ? 'border-[#F2A488] bg-[#FDEEE9]/40'
+                              : 'border-[#D9D3C8] hover:border-[#AEC9C0]'
+                          }`}
+                        />
+                        {attemptedSubmit && !medItem.name.trim() && errors.weightMedicationsNames && (
+                          <motion.p
+                            initial={{ opacity: 0, y: -4 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="text-xs text-[#C66A4D] flex items-center gap-1.5 pl-1"
+                          >
+                            <Info className="w-3.5 h-3.5 shrink-0" />
+                            {errors.weightMedicationsNames}
+                          </motion.p>
+                        )}
+                      </div>
+
+                      {/* 1) Dosis */}
+                      <div id={medIndex === 0 ? 'field-weightMedicationsDose' : undefined} className="space-y-2">
+                        <label
+                          htmlFor={`weightMedicationsDose-input-${medIndex}`}
+                          className="flex items-center justify-between text-sm font-semibold text-[#2E3A36]"
+                        >
+                          <span>
+                            Dosis <span className="text-[#F2A488] font-bold">*</span>
+                          </span>
+                          <span className="text-xs font-normal text-[#8E9E99]">Ej. 2.4 mg semanal</span>
+                        </label>
+                        <input
+                          id={`weightMedicationsDose-input-${medIndex}`}
+                          type="text"
+                          value={medItem.dose}
+                          onChange={(e) =>
+                            handleMedicationItemChange(medIndex, 'dose', e.target.value)
+                          }
+                          placeholder="Ej. 2.4 mg semanal, 3 mg diario, etc."
+                          className={`w-full px-4 py-3.5 rounded-xl bg-white border text-[#2E3A36] placeholder-[#8E9E99] text-base transition-all duration-200 focus:outline-hidden focus:ring-2 focus:ring-[#6E9E93]/40 ${
+                            attemptedSubmit && !medItem.dose.trim() && errors.weightMedicationsDose
+                              ? 'border-[#F2A488] bg-[#FDEEE9]/40'
+                              : 'border-[#D9D3C8] hover:border-[#AEC9C0]'
+                          }`}
+                        />
+                        {attemptedSubmit && !medItem.dose.trim() && errors.weightMedicationsDose && (
+                          <motion.p
+                            initial={{ opacity: 0, y: -4 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="text-xs text-[#C66A4D] flex items-center gap-1.5 pl-1"
+                          >
+                            <Info className="w-3.5 h-3.5 shrink-0" />
+                            {errors.weightMedicationsDose}
+                          </motion.p>
+                        )}
+                      </div>
+
+                      {/* 2) ¿Lo usas actualmente? */}
+                      <div
+                        id={medIndex === 0 ? 'field-weightMedicationsCurrentlyUsing' : undefined}
+                        className="space-y-3"
+                      >
+                        <label className="flex items-center justify-between text-sm font-semibold text-[#2E3A36]">
+                          <span>
+                            ¿Lo usas actualmente? <span className="text-[#F2A488] font-bold">*</span>
+                          </span>
+                          <span className="text-xs font-normal text-[#8E9E99]">Selecciona una opción</span>
+                        </label>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          {(['Sí, lo uso actualmente', 'No, lo suspendí'] as const).map((opt) => {
+                            const isSelected = medItem.currentlyUsing === opt;
+                            return (
+                              <button
+                                type="button"
+                                key={opt}
+                                id={`med-${medIndex}-using-${opt.startsWith('Sí') ? 'current' : 'stopped'}`}
+                                onClick={() => {
+                                  handleMedicationItemChange(medIndex, 'currentlyUsing', opt);
+                                }}
+                                className={`flex items-center justify-between px-4 py-3 rounded-xl border text-sm font-medium transition-all duration-200 cursor-pointer text-left ${
+                                  isSelected
+                                    ? 'bg-[#EBF3F0] border-[#6E9E93] text-[#2E3A36] shadow-2xs font-semibold'
+                                    : 'bg-white border-[#D9D3C8] text-[#5C6E68] hover:border-[#AEC9C0]'
+                                }`}
+                              >
+                                <span>{opt}</span>
+                                <div
+                                  className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 ml-2 transition-all ${
+                                    isSelected
+                                      ? 'bg-[#6E9E93] text-white'
+                                      : 'border border-[#C8C2B7]'
+                                  }`}
+                                >
+                                  {isSelected && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+
+                        {attemptedSubmit &&
+                          !medItem.currentlyUsing &&
+                          errors.weightMedicationsCurrentlyUsing && (
+                            <motion.p
+                              initial={{ opacity: 0, y: -4 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              className="text-xs text-[#C66A4D] flex items-center gap-1.5 pl-1"
+                            >
+                              <Info className="w-3.5 h-3.5 shrink-0" />
+                              {errors.weightMedicationsCurrentlyUsing}
+                            </motion.p>
+                          )}
+                      </div>
+
+                      {/* 3) Si lo suspendió: ¿Por qué lo dejaste? */}
+                      <AnimatePresence>
+                        {medItem.currentlyUsing === 'No, lo suspendí' && (
+                          <motion.div
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: 'auto' }}
+                            exit={{ opacity: 0, height: 0 }}
+                            className="space-y-3 pt-3 border-t border-[#E8E2D8] overflow-hidden"
+                          >
+                            <label className="flex items-center justify-between text-sm font-semibold text-[#2E3A36]">
+                              <span>
+                                ¿Por qué lo dejaste? <span className="text-[#F2A488] font-bold">*</span>
+                              </span>
+                              <span className="text-xs font-normal text-[#8E9E99]">
+                                Puedes marcar varias opciones
+                              </span>
+                            </label>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                              {WEIGHT_MEDICATION_DISCONTINUE_REASONS.map((reason) => {
+                                const isSelected = (medItem.discontinueReasons || []).includes(reason);
+                                return (
+                                  <button
+                                    type="button"
+                                    key={reason}
+                                    id={`med-${medIndex}-reason-${reason.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`}
+                                    onClick={() => handleToggleDiscontinueReason(medIndex, reason)}
+                                    className={`group relative flex items-center justify-between px-3.5 py-3 rounded-xl border text-sm font-medium transition-all duration-200 text-left cursor-pointer ${
+                                      isSelected
+                                        ? 'bg-[#EBF3F0] border-[#6E9E93] text-[#2E3A36] shadow-2xs font-semibold'
+                                        : 'bg-white border-[#D9D3C8] text-[#5C6E68] hover:border-[#AEC9C0]'
+                                    }`}
+                                  >
+                                    <span className="truncate">{reason}</span>
+                                    <div
+                                      className={`w-4 h-4 rounded-md flex items-center justify-center shrink-0 ml-1 transition-all ${
+                                        isSelected
+                                          ? 'bg-[#6E9E93] text-white'
+                                          : 'border border-[#C8C2B7] group-hover:border-[#AEC9C0]'
+                                      }`}
+                                    >
+                                      {isSelected && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                                    </div>
+                                  </button>
+                                );
+                              })}
+                            </div>
+
+                            {/* Campo de texto si seleccionó 'Otro' */}
+                            {medItem.discontinueReasons?.includes('Otro') && (
+                              <motion.div
+                                initial={{ opacity: 0, y: -4 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                className="space-y-1.5 pt-1"
+                              >
+                                <label
+                                  htmlFor={`med-${medIndex}-other-input`}
+                                  className="text-xs font-semibold text-[#2E3A36]"
+                                >
+                                  Especifica el otro motivo <span className="text-[#F2A488] font-bold">*</span>
+                                </label>
+                                <input
+                                  id={`med-${medIndex}-other-input`}
+                                  type="text"
+                                  value={medItem.discontinueOther || ''}
+                                  onChange={(e) =>
+                                    handleMedicationItemChange(medIndex, 'discontinueOther', e.target.value)
+                                  }
+                                  placeholder="Describe brevemente el motivo..."
+                                  className={`w-full px-4 py-2.5 rounded-xl bg-white border text-[#2E3A36] placeholder-[#8E9E99] text-sm focus:outline-hidden focus:ring-2 focus:ring-[#6E9E93]/40 ${
+                                    attemptedSubmit && !medItem.discontinueOther?.trim()
+                                      ? 'border-[#F2A488] bg-[#FDEEE9]/40'
+                                      : 'border-[#D9D3C8]'
+                                  }`}
+                                />
+                              </motion.div>
+                            )}
+
+                            {attemptedSubmit &&
+                              medItem.currentlyUsing === 'No, lo suspendí' &&
+                              (!medItem.discontinueReasons || medItem.discontinueReasons.length === 0) &&
+                              errors.weightMedicationsDiscontinueReasons && (
+                                <motion.p
+                                  initial={{ opacity: 0, y: -4 }}
+                                  animate={{ opacity: 1, y: 0 }}
+                                  className="text-xs text-[#C66A4D] flex items-center gap-1.5 pl-1"
+                                >
+                                  <Info className="w-3.5 h-3.5 shrink-0" />
+                                  {errors.weightMedicationsDiscontinueReasons}
+                                </motion.p>
+                              )}
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  );
+                })}
+
+                {/* Botón para agregar otro medicamento */}
+                <div className="pt-1">
+                  <button
+                    type="button"
+                    onClick={handleAddMedicationItem}
+                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-dashed border-[#6E9E93] text-sm font-semibold text-[#5B887E] bg-[#EBF3F0]/50 hover:bg-[#EBF3F0] transition-colors cursor-pointer"
                   >
-                    <Info className="w-3.5 h-3.5 shrink-0" />
-                    {errors.weightMedicationsNames}
-                  </motion.p>
-                )}
+                    <Plus className="w-4 h-4" />
+                    + Agregar otro medicamento para el peso
+                  </button>
+                </div>
               </div>
 
               {/* 12. ¿Cómo te fue con ellos? */}
@@ -1860,7 +2466,6 @@ export const StepThreeForm: React.FC<StepThreeFormProps> = ({
                   id={`surgery-${opt.toLowerCase()}`}
                   onClick={() => {
                     handleChange('hadBariatricSurgery', opt);
-                    handleBlur('hadBariatricSurgery');
                   }}
                   className={`flex items-center justify-between px-4 py-3 rounded-xl border text-sm font-medium transition-all duration-200 cursor-pointer ${
                     isSelected
@@ -1883,7 +2488,7 @@ export const StepThreeForm: React.FC<StepThreeFormProps> = ({
             })}
           </div>
 
-          {touched.hadBariatricSurgery && errors.hadBariatricSurgery && (
+          {attemptedSubmit && !formData.hadBariatricSurgery && errors.hadBariatricSurgery && (
             <motion.p
               initial={{ opacity: 0, y: -4 }}
               animate={{ opacity: 1, y: 0 }}
@@ -1941,6 +2546,210 @@ export const StepThreeForm: React.FC<StepThreeFormProps> = ({
                   </motion.p>
                 )}
               </div>
+
+              {/* Peso antes de la cirugía y Peso más bajo alcanzado */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* 1. Peso antes de la cirugía */}
+                <div id="field-bariatricPreOpWeightKg" className="space-y-2">
+                  <label
+                    htmlFor="bariatricPreOpWeightKg-input"
+                    className="flex items-center justify-between text-sm font-semibold text-[#2E3A36]"
+                  >
+                    <span>
+                      Peso antes de la cirugía (kg){' '}
+                      <span className="text-[#F2A488] font-bold">*</span>
+                    </span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      id="bariatricPreOpWeightKg-input"
+                      type="number"
+                      step="0.1"
+                      min="30"
+                      max="400"
+                      value={formData.bariatricPreOpWeightKg || ''}
+                      onChange={(e) =>
+                        handleChange('bariatricPreOpWeightKg', e.target.value)
+                      }
+                      onBlur={() => handleBlur('bariatricPreOpWeightKg')}
+                      placeholder="Ej. 115"
+                      className={`w-full pl-4 pr-11 py-3.5 rounded-xl bg-[#FAF6F0]/80 border text-[#2E3A36] placeholder-[#8E9E99] text-base transition-all duration-200 focus:outline-hidden focus:ring-2 focus:ring-[#6E9E93]/40 focus:bg-white ${
+                        touched.bariatricPreOpWeightKg && errors.bariatricPreOpWeightKg
+                          ? 'border-[#F2A488] bg-[#FDEEE9]/40'
+                          : 'border-[#D9D3C8] hover:border-[#AEC9C0]'
+                      }`}
+                    />
+                    <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-semibold text-[#8E9E99] pointer-events-none select-none">
+                      kg
+                    </span>
+                  </div>
+                  {touched.bariatricPreOpWeightKg && errors.bariatricPreOpWeightKg && (
+                    <motion.p
+                      initial={{ opacity: 0, y: -4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="text-xs text-[#C66A4D] flex items-center gap-1.5 pl-1"
+                    >
+                      <Info className="w-3.5 h-3.5 shrink-0" />
+                      {errors.bariatricPreOpWeightKg}
+                    </motion.p>
+                  )}
+                </div>
+
+                {/* 2. Peso más bajo alcanzado después de la cirugía */}
+                <div id="field-bariatricLowestWeightPostOpKg" className="space-y-2">
+                  <label
+                    htmlFor="bariatricLowestWeightPostOpKg-input"
+                    className="flex items-center justify-between text-sm font-semibold text-[#2E3A36]"
+                  >
+                    <span>
+                      Peso más bajo que alcanzaste después de la cirugía (kg){' '}
+                      <span className="text-[#F2A488] font-bold">*</span>
+                    </span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      id="bariatricLowestWeightPostOpKg-input"
+                      type="number"
+                      step="0.1"
+                      min="25"
+                      max="350"
+                      value={formData.bariatricLowestWeightPostOpKg || ''}
+                      onChange={(e) =>
+                        handleChange('bariatricLowestWeightPostOpKg', e.target.value)
+                      }
+                      onBlur={() => handleBlur('bariatricLowestWeightPostOpKg')}
+                      placeholder="Ej. 70"
+                      className={`w-full pl-4 pr-11 py-3.5 rounded-xl bg-[#FAF6F0]/80 border text-[#2E3A36] placeholder-[#8E9E99] text-base transition-all duration-200 focus:outline-hidden focus:ring-2 focus:ring-[#6E9E93]/40 focus:bg-white ${
+                        touched.bariatricLowestWeightPostOpKg && errors.bariatricLowestWeightPostOpKg
+                          ? 'border-[#F2A488] bg-[#FDEEE9]/40'
+                          : 'border-[#D9D3C8] hover:border-[#AEC9C0]'
+                      }`}
+                    />
+                    <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-semibold text-[#8E9E99] pointer-events-none select-none">
+                      kg
+                    </span>
+                  </div>
+                  {touched.bariatricLowestWeightPostOpKg && errors.bariatricLowestWeightPostOpKg && (
+                    <motion.p
+                      initial={{ opacity: 0, y: -4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="text-xs text-[#C66A4D] flex items-center gap-1.5 pl-1"
+                    >
+                      <Info className="w-3.5 h-3.5 shrink-0" />
+                      {errors.bariatricLowestWeightPostOpKg}
+                    </motion.p>
+                  )}
+                </div>
+              </div>
+
+              {/* 3. ¿Has vuelto a subir de peso después de la cirugía? */}
+              <div id="field-bariatricWeightRegain" className="space-y-2">
+                <label className="flex items-center justify-between text-sm font-semibold text-[#2E3A36]">
+                  <span>
+                    ¿Has vuelto a subir de peso después de la cirugía?{' '}
+                    <span className="text-[#F2A488] font-bold">*</span>
+                  </span>
+                </label>
+                <div className="grid grid-cols-2 gap-3 max-w-xs">
+                  {(['Sí', 'No'] as const).map((opt) => {
+                    const isSelected = formData.bariatricWeightRegain === opt;
+                    return (
+                      <button
+                        key={opt}
+                        type="button"
+                        onClick={() => {
+                          handleChange('bariatricWeightRegain', opt);
+                          if (errors.bariatricWeightRegain) {
+                            setErrors((prev) => ({ ...prev, bariatricWeightRegain: '' }));
+                          }
+                        }}
+                        className={`flex items-center justify-between px-4 py-3 rounded-xl border text-sm font-medium transition-all duration-200 cursor-pointer ${
+                          isSelected
+                            ? 'bg-[#EBF3F0] border-[#6E9E93] text-[#2E3A36] shadow-2xs font-semibold'
+                            : 'bg-[#FAF6F0]/60 border-[#D9D3C8] text-[#5C6E68] hover:border-[#AEC9C0] hover:bg-[#FAF6F0]'
+                        }`}
+                      >
+                        <span>{opt}</span>
+                        <div
+                          className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 ml-2 transition-all ${
+                            isSelected
+                              ? 'bg-[#6E9E93] text-white'
+                              : 'border border-[#C8C2B7]'
+                          }`}
+                        >
+                          {isSelected && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+                {attemptedSubmit && !formData.bariatricWeightRegain && errors.bariatricWeightRegain && (
+                  <motion.p
+                    initial={{ opacity: 0, y: -4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="text-xs text-[#C66A4D] flex items-center gap-1.5 pl-1"
+                  >
+                    <Info className="w-3.5 h-3.5 shrink-0" />
+                    {errors.bariatricWeightRegain}
+                  </motion.p>
+                )}
+              </div>
+
+              {/* Si responde Sí: ¿Cuántos kilos aproximadamente? */}
+              <AnimatePresence>
+                {formData.bariatricWeightRegain === 'Sí' && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    id="field-bariatricWeightRegainedKg"
+                    className="space-y-2 overflow-hidden pt-1"
+                  >
+                    <label
+                      htmlFor="bariatricWeightRegainedKg-input"
+                      className="flex items-center justify-between text-sm font-semibold text-[#2E3A36]"
+                    >
+                      <span>
+                        ¿Cuántos kilos aproximadamente?{' '}
+                        <span className="text-[#F2A488] font-bold">*</span>
+                      </span>
+                    </label>
+                    <div className="relative max-w-xs">
+                      <input
+                        id="bariatricWeightRegainedKg-input"
+                        type="number"
+                        step="0.1"
+                        min="0.5"
+                        max="200"
+                        value={formData.bariatricWeightRegainedKg || ''}
+                        onChange={(e) =>
+                          handleChange('bariatricWeightRegainedKg', e.target.value)
+                        }
+                        onBlur={() => handleBlur('bariatricWeightRegainedKg')}
+                        placeholder="Ej. 12"
+                        className={`w-full pl-4 pr-11 py-3.5 rounded-xl bg-[#FAF6F0]/80 border text-[#2E3A36] placeholder-[#8E9E99] text-base transition-all duration-200 focus:outline-hidden focus:ring-2 focus:ring-[#6E9E93]/40 focus:bg-white ${
+                          touched.bariatricWeightRegainedKg && errors.bariatricWeightRegainedKg
+                            ? 'border-[#F2A488] bg-[#FDEEE9]/40'
+                            : 'border-[#D9D3C8] hover:border-[#AEC9C0]'
+                        }`}
+                      />
+                      <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-semibold text-[#8E9E99] pointer-events-none select-none">
+                        kg
+                      </span>
+                    </div>
+                    {touched.bariatricWeightRegainedKg && errors.bariatricWeightRegainedKg && (
+                      <motion.p
+                        initial={{ opacity: 0, y: -4 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="text-xs text-[#C66A4D] flex items-center gap-1.5 pl-1"
+                      >
+                        <Info className="w-3.5 h-3.5 shrink-0" />
+                        {errors.bariatricWeightRegainedKg}
+                      </motion.p>
+                    )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </motion.div>
           )}
         </AnimatePresence>
@@ -1984,7 +2793,6 @@ export const StepThreeForm: React.FC<StepThreeFormProps> = ({
                   id={`aesthetic-${opt.toLowerCase()}`}
                   onClick={() => {
                     handleChange('hadAestheticSurgery', opt);
-                    handleBlur('hadAestheticSurgery');
                   }}
                   className={`flex items-center justify-between px-4 py-3 rounded-xl border text-sm font-medium transition-all duration-200 cursor-pointer ${
                     isSelected
@@ -2007,7 +2815,7 @@ export const StepThreeForm: React.FC<StepThreeFormProps> = ({
             })}
           </div>
 
-          {touched.hadAestheticSurgery && errors.hadAestheticSurgery && (
+          {attemptedSubmit && !formData.hadAestheticSurgery && errors.hadAestheticSurgery && (
             <motion.p
               initial={{ opacity: 0, y: -4 }}
               animate={{ opacity: 1, y: 0 }}

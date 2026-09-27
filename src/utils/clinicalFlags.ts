@@ -23,12 +23,21 @@ export function evaluateClinicalRedFlags(
 ): ClinicalRedFlagReport {
   const flags: ClinicalRedFlagItem[] = [];
 
-  // Flag: Inicio de sobrepeso en primera infancia (< 5 años) - Sospecha de causa genética monogénica
-  if (
-    weightHistory?.overweightOnsetStage === 'infancia' &&
-    weightHistory.childhoodOnsetAge
-  ) {
-    const ageNum = parseInt(weightHistory.childhoodOnsetAge, 10);
+  // Flag: Inicio de sobrepeso en infancia (cualquier edad) - Bandera roja para la Dra. Lorena Castro
+  if (weightHistory?.overweightOnsetStage === 'infancia') {
+    const ageNum = weightHistory.childhoodOnsetAge
+      ? parseInt(weightHistory.childhoodOnsetAge, 10)
+      : NaN;
+
+    flags.push({
+      id: 'early_childhood_obesity_genetic_alert',
+      category: 'Historia ponderal y genética',
+      symptom: 'Obesidad de inicio temprano — ¿genética?',
+      clinicalNote:
+        'Bandera roja — Nota interna para la Dra. Lorena Castro: El paciente reporta que el sobrepeso empezó a ser un tema en la infancia. Evaluar sospecha de base genética, metabólica o factores tempranos del desarrollo.',
+    });
+
+    // Mantener la alerta que ya existe para inicio antes de los 5 años
     if (!isNaN(ageNum) && ageNum < 5) {
       flags.push({
         id: 'early_childhood_obesity_genetic',

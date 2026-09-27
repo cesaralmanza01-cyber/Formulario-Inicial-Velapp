@@ -473,7 +473,7 @@ export const StepInBodyForm: React.FC<StepInBodyFormProps> = ({
               })}
             </div>
           </div>
-          {errors.hasInBodyReport && (
+          {attemptedSubmit && !formData.hasInBodyReport && errors.hasInBodyReport && (
             <p className="text-xs text-[#C66A4D] font-medium flex items-center gap-1.5 pt-0.5">
               <AlertCircle className="w-3.5 h-3.5" />
               {errors.hasInBodyReport}
