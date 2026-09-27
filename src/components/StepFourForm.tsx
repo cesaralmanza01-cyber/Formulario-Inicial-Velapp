@@ -753,6 +753,53 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
     }
   };
 
+  const handleToggleYesNoField = (
+    field: 'hasDrugAllergies' | 'hasFoodAllergies' | 'hasBoneFracturesAfter40' | 'hasBoneDensitometry',
+    opt: 'Sí' | 'No'
+  ) => {
+    setFormData((prev) => {
+      const next = { ...prev, [field]: opt };
+      if (opt === 'No') {
+        if (field === 'hasDrugAllergies') next.drugAllergiesDetails = '';
+        if (field === 'hasFoodAllergies') next.foodAllergiesDetails = '';
+        if (field === 'hasBoneFracturesAfter40') next.boneFracturesDetails = '';
+        if (field === 'hasBoneDensitometry') {
+          next.boneDensitometryYear = '';
+          next.boneDensitometryResult = '';
+        }
+      }
+      return next;
+    });
+
+    setErrors((prevErrs) => {
+      const nextErrs = { ...prevErrs, [field]: '' };
+      if (opt === 'No') {
+        if (field === 'hasDrugAllergies') nextErrs.drugAllergiesDetails = '';
+        if (field === 'hasFoodAllergies') nextErrs.foodAllergiesDetails = '';
+        if (field === 'hasBoneFracturesAfter40') nextErrs.boneFracturesDetails = '';
+        if (field === 'hasBoneDensitometry') {
+          nextErrs.boneDensitometryYear = '';
+          nextErrs.boneDensitometryResult = '';
+        }
+      }
+      return nextErrs;
+    });
+
+    setTouched((prevTouched) => {
+      const nextTouched = { ...prevTouched, [field]: true };
+      if (opt === 'No') {
+        if (field === 'hasDrugAllergies') nextTouched.drugAllergiesDetails = false;
+        if (field === 'hasFoodAllergies') nextTouched.foodAllergiesDetails = false;
+        if (field === 'hasBoneFracturesAfter40') nextTouched.boneFracturesDetails = false;
+        if (field === 'hasBoneDensitometry') {
+          nextTouched.boneDensitometryYear = false;
+          nextTouched.boneDensitometryResult = false;
+        }
+      }
+      return nextTouched;
+    });
+  };
+
   const handleAddCustomMedication = (nameToAdd?: string) => {
     const rawName = nameToAdd || customMedInput;
     const trimmed = rawName.trim();
@@ -1163,14 +1210,14 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
       hospitalHistory: true,
       toxicAllergicHistory: true,
       hasDrugAllergies: true,
-      drugAllergiesDetails: formData.hasDrugAllergies === 'Sí',
+      drugAllergiesDetails: normalizeYesNo(formData.hasDrugAllergies) === 'Sí',
       hasFoodAllergies: true,
-      foodAllergiesDetails: formData.hasFoodAllergies === 'Sí',
+      foodAllergiesDetails: normalizeYesNo(formData.hasFoodAllergies) === 'Sí',
       hasBoneFracturesAfter40: true,
-      boneFracturesDetails: formData.hasBoneFracturesAfter40 === 'Sí',
+      boneFracturesDetails: normalizeYesNo(formData.hasBoneFracturesAfter40) === 'Sí',
       hasBoneDensitometry: true,
-      boneDensitometryYear: formData.hasBoneDensitometry === 'Sí',
-      boneDensitometryResult: formData.hasBoneDensitometry === 'Sí',
+      boneDensitometryYear: normalizeYesNo(formData.hasBoneDensitometry) === 'Sí',
+      boneDensitometryResult: normalizeYesNo(formData.hasBoneDensitometry) === 'Sí',
       appliesGynecoObstetric: isFemale,
       pregnanciesCount: isFemale,
       vaginalDeliveriesCount: isFemale,
@@ -1212,14 +1259,29 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
       hospitalHistory: validateField('hospitalHistory', formData),
       toxicAllergicHistory: validateField('toxicAllergicHistory', formData),
       hasDrugAllergies: validateField('hasDrugAllergies', formData),
-      drugAllergiesDetails: validateField('drugAllergiesDetails', formData),
+      drugAllergiesDetails:
+        normalizeYesNo(formData.hasDrugAllergies) === 'Sí'
+          ? validateField('drugAllergiesDetails', formData)
+          : '',
       hasFoodAllergies: validateField('hasFoodAllergies', formData),
-      foodAllergiesDetails: validateField('foodAllergiesDetails', formData),
+      foodAllergiesDetails:
+        normalizeYesNo(formData.hasFoodAllergies) === 'Sí'
+          ? validateField('foodAllergiesDetails', formData)
+          : '',
       hasBoneFracturesAfter40: validateField('hasBoneFracturesAfter40', formData),
-      boneFracturesDetails: validateField('boneFracturesDetails', formData),
+      boneFracturesDetails:
+        normalizeYesNo(formData.hasBoneFracturesAfter40) === 'Sí'
+          ? validateField('boneFracturesDetails', formData)
+          : '',
       hasBoneDensitometry: validateField('hasBoneDensitometry', formData),
-      boneDensitometryYear: validateField('boneDensitometryYear', formData),
-      boneDensitometryResult: validateField('boneDensitometryResult', formData),
+      boneDensitometryYear:
+        normalizeYesNo(formData.hasBoneDensitometry) === 'Sí'
+          ? validateField('boneDensitometryYear', formData)
+          : '',
+      boneDensitometryResult:
+        normalizeYesNo(formData.hasBoneDensitometry) === 'Sí'
+          ? validateField('boneDensitometryResult', formData)
+          : '',
       appliesGynecoObstetric: isFemale ? validateField('appliesGynecoObstetric', formData) : '',
       menarcheAge: isFemale ? validateField('menarcheAge', formData) : '',
       cycleRegularity: isFemale ? validateField('cycleRegularity', formData) : '',
@@ -1937,12 +1999,7 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
                   <button
                     type="button"
                     key={opt}
-                    onClick={() => {
-                      handleChange('hasDrugAllergies', opt);
-                      if (opt === 'No') {
-                        handleChange('drugAllergiesDetails', '');
-                      }
-                    }}
+                    onClick={() => handleToggleYesNoField('hasDrugAllergies', opt)}
                     className={`flex items-center justify-between px-4 py-2.5 rounded-xl border text-xs sm:text-sm font-medium transition-all duration-200 cursor-pointer ${
                       isSelected
                         ? 'bg-[#EBF3F0] border-[#6E9E93] text-[#2E3A36] shadow-2xs font-semibold'
@@ -1979,11 +2036,12 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
             <AnimatePresence>
               {normalizeYesNo(formData.hasDrugAllergies) === 'Sí' && (
                 <motion.div
+                  key="drug-allergies-detail-box"
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: 'auto' }}
                   exit={{ opacity: 0, height: 0 }}
                   id="field-drugAllergiesDetails"
-                  className="space-y-1.5 pt-2"
+                  className="overflow-hidden space-y-1.5 pt-2"
                 >
                   <label
                     htmlFor="drugAllergiesDetails-input"
@@ -2035,12 +2093,7 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
                   <button
                     type="button"
                     key={opt}
-                    onClick={() => {
-                      handleChange('hasFoodAllergies', opt);
-                      if (opt === 'No') {
-                        handleChange('foodAllergiesDetails', '');
-                      }
-                    }}
+                    onClick={() => handleToggleYesNoField('hasFoodAllergies', opt)}
                     className={`flex items-center justify-between px-4 py-2.5 rounded-xl border text-xs sm:text-sm font-medium transition-all duration-200 cursor-pointer ${
                       isSelected
                         ? 'bg-[#EBF3F0] border-[#6E9E93] text-[#2E3A36] shadow-2xs font-semibold'
@@ -2077,11 +2130,12 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
             <AnimatePresence>
               {normalizeYesNo(formData.hasFoodAllergies) === 'Sí' && (
                 <motion.div
+                  key="food-allergies-detail-box"
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: 'auto' }}
                   exit={{ opacity: 0, height: 0 }}
                   id="field-foodAllergiesDetails"
-                  className="space-y-1.5 pt-2"
+                  className="overflow-hidden space-y-1.5 pt-2"
                 >
                   <label
                     htmlFor="foodAllergiesDetails-input"
@@ -2147,12 +2201,7 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
                   <button
                     type="button"
                     key={opt}
-                    onClick={() => {
-                      handleChange('hasBoneFracturesAfter40', opt);
-                      if (opt === 'No') {
-                        handleChange('boneFracturesDetails', '');
-                      }
-                    }}
+                    onClick={() => handleToggleYesNoField('hasBoneFracturesAfter40', opt)}
                     className={`flex items-center justify-between px-4 py-2.5 rounded-xl border text-xs sm:text-sm font-medium transition-all duration-200 cursor-pointer ${
                       isSelected
                         ? 'bg-[#EBF3F0] border-[#6E9E93] text-[#2E3A36] shadow-2xs font-semibold'
@@ -2189,11 +2238,12 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
             <AnimatePresence>
               {normalizeYesNo(formData.hasBoneFracturesAfter40) === 'Sí' && (
                 <motion.div
+                  key="bone-fractures-detail-box"
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: 'auto' }}
                   exit={{ opacity: 0, height: 0 }}
                   id="field-boneFracturesDetails"
-                  className="space-y-1.5 pt-2"
+                  className="overflow-hidden space-y-1.5 pt-2"
                 >
                   <label
                     htmlFor="boneFracturesDetails-input"
@@ -2244,13 +2294,7 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
                   <button
                     type="button"
                     key={opt}
-                    onClick={() => {
-                      handleChange('hasBoneDensitometry', opt);
-                      if (opt === 'No') {
-                        handleChange('boneDensitometryYear', '');
-                        handleChange('boneDensitometryResult', '');
-                      }
-                    }}
+                    onClick={() => handleToggleYesNoField('hasBoneDensitometry', opt)}
                     className={`flex items-center justify-between px-4 py-2.5 rounded-xl border text-xs sm:text-sm font-medium transition-all duration-200 cursor-pointer ${
                       isSelected
                         ? 'bg-[#EBF3F0] border-[#6E9E93] text-[#2E3A36] shadow-2xs font-semibold'
@@ -2287,10 +2331,11 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
             <AnimatePresence>
               {normalizeYesNo(formData.hasBoneDensitometry) === 'Sí' && (
                 <motion.div
+                  key="bone-densitometry-detail-box"
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: 'auto' }}
                   exit={{ opacity: 0, height: 0 }}
-                  className="space-y-4 pt-3 border-t border-[#E8E2D8]"
+                  className="overflow-hidden space-y-4 pt-3 border-t border-[#E8E2D8]"
                 >
                   {/* Año */}
                   <div id="field-boneDensitometryYear" className="space-y-1.5">

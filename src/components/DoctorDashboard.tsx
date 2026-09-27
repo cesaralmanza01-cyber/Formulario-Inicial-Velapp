@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { VelaLogo } from './VelaLogo';
 import { VelaIcon } from './VelaIcon';
 import { authService } from '../services/authService';
 import { AppUser, PatientListItem, PatientClinicalStatus } from '../types';
@@ -219,15 +220,11 @@ export function DoctorDashboard({ currentUser, onLogout, onBackToApp }: DoctorDa
   return (
     <div id="doctor_dashboard" className="min-h-screen bg-[#faf6f0] text-[#2d3748] font-sans pb-16">
       {/* Top Header */}
-      <header className="bg-white border-b border-[#e2d9cd] sticky top-0 z-30 shadow-xs">
+      <header className="bg-white/95 backdrop-blur-xs border-b border-[#e2d9cd] sticky top-0 z-50 shadow-xs relative pointer-events-auto select-none">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="h-10 flex items-center justify-center shrink-0">
-              <img
-                src="/logo.png"
-                alt="Vela"
-                className="h-10 w-auto object-contain"
-              />
+            <div className="flex items-center justify-center shrink-0">
+              <VelaLogo height={40} />
             </div>
             <div>
               <div className="flex items-center gap-2">
@@ -242,24 +239,37 @@ export function DoctorDashboard({ currentUser, onLogout, onBackToApp }: DoctorDa
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="relative z-50 pointer-events-auto flex items-center gap-3">
             <span className="hidden md:inline-block text-xs text-[#6e857f]">
               {currentUser.email}
             </span>
-            {onBackToApp && (
-              <button
-                type="button"
-                onClick={onBackToApp}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#d2c7b8] text-xs font-semibold text-[#405650] hover:bg-[#f4eee6] hover:text-[#1b3d36] transition cursor-pointer"
-              >
-                <span>Ver Cuestionario</span>
-              </button>
-            )}
+            <a
+              id="doctor_view_questionnaire_btn"
+              href="/?nuevo=1&modo=paciente"
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const cleanUrl = `${window.location.origin}${window.location.pathname}?nuevo=1&modo=paciente`;
+                window.open(cleanUrl, '_blank', 'noopener,noreferrer');
+                if (onBackToApp) onBackToApp();
+              }}
+              className="relative z-50 pointer-events-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#d2c7b8] text-xs font-semibold text-[#405650] hover:bg-[#f4eee6] hover:text-[#1b3d36] transition cursor-pointer select-none"
+              title="Abrir formulario del paciente en blanco en una pestaña nueva"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+              <span>Ver Cuestionario</span>
+            </a>
             <button
               id="doctor_logout_btn"
               type="button"
-              onClick={onLogout}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#d2c7b8] text-xs font-semibold text-[#405650] hover:bg-[#f4eee6] hover:text-[#1b3d36] transition cursor-pointer"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onLogout();
+              }}
+              className="relative z-50 pointer-events-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#d2c7b8] text-xs font-semibold text-[#405650] hover:bg-[#f4eee6] hover:text-[#1b3d36] transition cursor-pointer select-none"
             >
               <LogOut className="w-3.5 h-3.5" />
               <span>Cerrar sesión</span>

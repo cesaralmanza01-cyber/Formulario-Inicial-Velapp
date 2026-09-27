@@ -14,12 +14,12 @@ export const VelaLogo: React.FC<VelaLogoProps> = ({
   const heightMap: Record<string, number> = {
     xs: 24,
     sm: 32,
-    md: 42,
-    lg: 56,
-    xl: 72,
+    md: 40,
+    lg: 52,
+    xl: 64,
   };
 
-  let actualHeight = 42;
+  let actualHeight = 40;
   if (typeof height === 'number' && !isNaN(height) && height > 0) {
     actualHeight = height;
   } else if (typeof size === 'number' && !isNaN(size) && size > 0) {
@@ -29,12 +29,12 @@ export const VelaLogo: React.FC<VelaLogoProps> = ({
   }
 
   return (
-    <div className={`inline-flex items-center select-none ${className}`}>
+    <div className={`inline-flex items-center shrink-0 overflow-visible select-none ${className}`}>
       <img
         src="/logo.png"
         alt="Vela Medicina & Nutrición"
         style={{ height: `${actualHeight}px`, width: 'auto', objectFit: 'contain' }}
-        className="block max-w-full"
+        className="block object-contain shrink-0 max-w-none"
       />
     </div>
   );

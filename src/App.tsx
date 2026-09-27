@@ -456,10 +456,14 @@ export default function App() {
   }, [currentUser]);
 
   const handleLogout = async () => {
-    await authService.logout();
+    try {
+      await authService.logout();
+    } catch (err) {
+      console.warn('Logout error:', err);
+    }
     setCurrentUser(null);
-    setIsAdminView(false);
-    window.location.hash = '';
+    setIsAdminView(true);
+    window.location.hash = '#admin';
   };
 
   const handleResetDraft = () => {
@@ -504,8 +508,17 @@ export default function App() {
   }
 
   // 2. Doctor Portal / Dashboard Access
-  // Medical Panel strictly requires doctor credentials and role
-  if (isAdminView || (currentUser && currentUser.rol === 'doctora')) {
+  // Medical Panel strictly requires doctor credentials and role.
+  // If ?modo=paciente, ?vista=paciente, or ?nuevo=1 is present, allow rendering the patient questionnaire in this tab.
+  const isPatientViewRequested =
+    typeof window !== 'undefined' &&
+    (window.location.search.includes('modo=paciente') ||
+      window.location.search.includes('vista=paciente') ||
+      window.location.search.includes('paciente=1') ||
+      window.location.search.includes('nuevo=1') ||
+      window.location.hash.includes('paciente'));
+
+  if (!isPatientViewRequested && (isAdminView || (currentUser && currentUser.rol === 'doctora'))) {
     if (!currentUser || currentUser.rol !== 'doctora') {
       return (
         <LoginScreen
@@ -522,8 +535,8 @@ export default function App() {
         currentUser={currentUser}
         onLogout={handleLogout}
         onBackToApp={() => {
-          setIsAdminView(false);
-          window.location.hash = '';
+          const url = `${window.location.origin}${window.location.pathname}?nuevo=1&modo=paciente`;
+          window.open(url, '_blank', 'noopener,noreferrer');
         }}
       />
     );

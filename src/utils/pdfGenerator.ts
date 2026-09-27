@@ -14,6 +14,7 @@ import {
 } from '../types';
 import { getFileDataUrl, getFileDataUrlAsync } from './fileMemoryStore';
 import { evaluateClinicalRedFlags } from './clinicalFlags';
+import { VELA_LOGO_DATA_URL } from './logoDataUrl';
 
 /**
  * Formats date into readable Colombian / Latin American format
@@ -429,17 +430,27 @@ export function generatePatientQuestionnairePdfDoc(
   doc.setFillColor(110, 158, 147);
   doc.roundedRect(margin, y, contentWidth, 64, 4, 4, 'F');
 
+  try {
+    // Add white background pill for the logo on top left of banner
+    doc.setFillColor(255, 255, 255);
+    doc.roundedRect(margin + 10, y + 8, 92, 48, 3, 3, 'F');
+    // Draw undistorted logo (430x220 aspect ratio = 1.9545, height=40 => width=78.2)
+    doc.addImage(VELA_LOGO_DATA_URL, 'PNG', margin + 17, y + 12, 78, 40);
+  } catch (e) {
+    console.warn('Could not add logo image to PDF:', e);
+  }
+
   doc.setTextColor(255, 255, 255);
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(16);
-  doc.text('VELA • CUESTIONARIO MÉDICO INICIAL', margin + 16, y + 26);
+  doc.setFontSize(14);
+  doc.text('CUESTIONARIO MÉDICO INICIAL', margin + 114, y + 26);
 
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9.5);
+  doc.setFontSize(9);
   doc.text(
     'Manejo Médico e Integral del Sobrepeso y la Obesidad • Dra. Lorena Castro',
-    margin + 16,
-    y + 45
+    margin + 114,
+    y + 44
   );
 
   y += 74;

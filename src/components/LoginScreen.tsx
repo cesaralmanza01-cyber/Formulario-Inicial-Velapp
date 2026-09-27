@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
+import { VelaLogo } from './VelaLogo';
 import { VelaIcon } from './VelaIcon';
 import { authService } from '../services/authService';
 import { AppUser, UserRole } from '../types';
@@ -58,9 +59,7 @@ export function LoginScreen({ onLoginSuccess, defaultRole = 'paciente', invitati
     <div id="login_screen_container" className="min-h-screen bg-[#faf6f0] flex flex-col justify-center py-12 sm:px-6 lg:px-8 px-4 font-sans text-[#2d3748]">
       <div className="sm:mx-auto sm:w-full sm:max-w-md text-center">
         <div className="flex justify-center mb-4">
-          <div className="w-16 h-16 rounded-2xl bg-[#346a60] flex items-center justify-center shadow-md shadow-[#346a60]/20">
-            <VelaIcon className="w-10 h-10 text-[#fdfbf7]" />
-          </div>
+          <VelaLogo height={52} />
         </div>
 
         <h1 className="text-2xl sm:text-3xl font-serif text-[#1b3d36] tracking-tight">

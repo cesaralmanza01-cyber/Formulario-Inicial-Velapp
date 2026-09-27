@@ -55,9 +55,7 @@ export const Header: React.FC<HeaderProps> = ({
         <div className="max-w-3xl mx-auto flex items-center justify-between gap-3">
           {/* Left: Brand Logo */}
           <div className="flex items-center shrink-0">
-            <div className="py-1">
-              <VelaLogo size="md" />
-            </div>
+            <VelaLogo height={40} />
           </div>
 
           {/* Right: Actions & Medical indicator */}
@@ -147,13 +145,6 @@ export const Header: React.FC<HeaderProps> = ({
                 <span className="sm:hidden">Médica</span>
               </button>
             )}
-
-            <div
-              title="Vela — Dra. Lorena Castro"
-              className="h-9 sm:h-10 flex items-center justify-center shrink-0"
-            >
-              <VelaLogo height={36} />
-            </div>
           </div>
         </div>
       </header>
