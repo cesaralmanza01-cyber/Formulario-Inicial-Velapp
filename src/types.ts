@@ -22,6 +22,23 @@ export type DocumentType = 'CC' | 'CE' | 'Pasaporte' | 'DNI' | 'Otro';
 
 export type PatientSex = 'Femenino' | 'Masculino' | '';
 
+/**
+ * Normalizes boolean or string Yes/No values safely across Firestore, local state, and drafts.
+ */
+export function normalizeYesNo(val: any): 'Sí' | 'No' | '' {
+  if (val === true || val === 'true' || val === 'Sí' || val === 'si' || val === 'SI' || val === 'Si') {
+    return 'Sí';
+  }
+  if (val === false || val === 'false' || val === 'No' || val === 'no' || val === 'NO') {
+    return 'No';
+  }
+  return '';
+}
+
+export function isYesNoAnswered(val: any): boolean {
+  return normalizeYesNo(val) !== '';
+}
+
 export type EthnicOrigin =
   | 'Mestizo(a)'
   | 'Afrodescendiente'

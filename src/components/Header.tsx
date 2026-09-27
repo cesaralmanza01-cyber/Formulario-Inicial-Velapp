@@ -150,9 +150,9 @@ export const Header: React.FC<HeaderProps> = ({
 
             <div
               title="Vela — Dra. Lorena Castro"
-              className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-white border border-[#AEC9C0]/40 shadow-xs flex items-center justify-center transition-transform hover:scale-105 shrink-0"
+              className="h-9 sm:h-10 flex items-center justify-center shrink-0"
             >
-              <VelaIcon size={24} />
+              <VelaLogo height={36} />
             </div>
           </div>
         </div>

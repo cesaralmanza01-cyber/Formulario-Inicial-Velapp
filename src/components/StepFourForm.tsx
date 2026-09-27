@@ -45,6 +45,7 @@ import {
   BONE_DENSITOMETRY_RESULTS,
   HormoneTherapyOption,
   HORMONE_THERAPY_OPTIONS,
+  normalizeYesNo,
 } from '../types';
 
 interface StepFourFormProps {
@@ -416,55 +417,55 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
         return '';
 
       case 'hasDrugAllergies':
-        if (!currentForm.hasDrugAllergies) {
+        if (normalizeYesNo(currentForm.hasDrugAllergies) === '') {
           return 'Por favor indica si tienes alergia a algún medicamento.';
         }
         return '';
 
       case 'drugAllergiesDetails':
-        if (currentForm.hasDrugAllergies === 'Sí' && !currentForm.drugAllergiesDetails?.trim()) {
+        if (normalizeYesNo(currentForm.hasDrugAllergies) === 'Sí' && !currentForm.drugAllergiesDetails?.trim()) {
           return 'Por favor especifica a qué medicamento(s) y qué reacción tuviste.';
         }
         return '';
 
       case 'hasFoodAllergies':
-        if (!currentForm.hasFoodAllergies) {
+        if (normalizeYesNo(currentForm.hasFoodAllergies) === '') {
           return 'Por favor indica si tienes alergia o intolerancia a algún alimento.';
         }
         return '';
 
       case 'foodAllergiesDetails':
-        if (currentForm.hasFoodAllergies === 'Sí' && !currentForm.foodAllergiesDetails?.trim()) {
+        if (normalizeYesNo(currentForm.hasFoodAllergies) === 'Sí' && !currentForm.foodAllergiesDetails?.trim()) {
           return 'Por favor especifica a qué alimento(s).';
         }
         return '';
 
       case 'hasBoneFracturesAfter40':
-        if (!currentForm.hasBoneFracturesAfter40) {
+        if (normalizeYesNo(currentForm.hasBoneFracturesAfter40) === '') {
           return 'Por favor indica si has tenido fracturas de huesos después de los 40 años o con caídas leves.';
         }
         return '';
 
       case 'boneFracturesDetails':
-        if (currentForm.hasBoneFracturesAfter40 === 'Sí' && !currentForm.boneFracturesDetails?.trim()) {
+        if (normalizeYesNo(currentForm.hasBoneFracturesAfter40) === 'Sí' && !currentForm.boneFracturesDetails?.trim()) {
           return 'Por favor indica cuál hueso y a qué edad ocurrió la fractura.';
         }
         return '';
 
       case 'hasBoneDensitometry':
-        if (!currentForm.hasBoneDensitometry) {
+        if (normalizeYesNo(currentForm.hasBoneDensitometry) === '') {
           return 'Por favor indica si te han hecho una densitometría ósea.';
         }
         return '';
 
       case 'boneDensitometryYear':
-        if (currentForm.hasBoneDensitometry === 'Sí' && !currentForm.boneDensitometryYear?.trim()) {
+        if (normalizeYesNo(currentForm.hasBoneDensitometry) === 'Sí' && !currentForm.boneDensitometryYear?.trim()) {
           return 'Por favor indica el año en que te realizaron la densitometría.';
         }
         return '';
 
       case 'boneDensitometryResult':
-        if (currentForm.hasBoneDensitometry === 'Sí' && !currentForm.boneDensitometryResult) {
+        if (normalizeYesNo(currentForm.hasBoneDensitometry) === 'Sí' && !currentForm.boneDensitometryResult) {
           return 'Por favor selecciona el resultado de la densitometría ósea.';
         }
         return '';
@@ -472,12 +473,12 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
       case 'usesHormoneReplacementTherapy': {
         const isMenopause =
           isFemale &&
-          currentForm.appliesGynecoObstetric === 'Sí' &&
+          normalizeYesNo(currentForm.appliesGynecoObstetric) === 'Sí' &&
           (currentForm.menopauseStage === 'Menopausia' ||
             currentForm.menopauseStage === 'Perimenopausia' ||
             currentForm.cycleRegularity === 'Ya no menstruo (menopausia / histerectomía)');
         if (!isMenopause) return '';
-        if (!currentForm.usesHormoneReplacementTherapy) {
+        if (normalizeYesNo(currentForm.usesHormoneReplacementTherapy) === '') {
           return 'Por favor indica si usas terapia hormonal para la menopausia.';
         }
         return '';
@@ -486,13 +487,13 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
       case 'hormoneReplacementTherapyDetails': {
         const isMenopause =
           isFemale &&
-          currentForm.appliesGynecoObstetric === 'Sí' &&
+          normalizeYesNo(currentForm.appliesGynecoObstetric) === 'Sí' &&
           (currentForm.menopauseStage === 'Menopausia' ||
             currentForm.menopauseStage === 'Perimenopausia' ||
             currentForm.cycleRegularity === 'Ya no menstruo (menopausia / histerectomía)');
         if (!isMenopause) return '';
         if (
-          currentForm.usesHormoneReplacementTherapy === 'Sí' &&
+          normalizeYesNo(currentForm.usesHormoneReplacementTherapy) === 'Sí' &&
           !currentForm.hormoneReplacementTherapyDetails?.trim()
         ) {
           return 'Por favor indica cuál terapia hormonal usas y desde cuándo.';
@@ -656,15 +657,16 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
     field: keyof PatientHealthMapInfo,
     value: any
   ) => {
-    const updatedForm = { ...formData, [field]: value };
-    setFormData(updatedForm);
-
-    if (value && (!Array.isArray(value) || value.length > 0)) {
-      setErrors((prev) => ({ ...prev, [field]: '' }));
-    } else if (attemptedSubmit || touched[field]) {
-      const errorMsg = validateField(field, updatedForm);
-      setErrors((prev) => ({ ...prev, [field]: errorMsg }));
-    }
+    setFormData((prev) => {
+      const updatedForm = { ...prev, [field]: value };
+      if (value && (!Array.isArray(value) || value.length > 0)) {
+        setErrors((prevErrs) => ({ ...prevErrs, [field]: '' }));
+      } else if (attemptedSubmit || touched[field]) {
+        const errorMsg = validateField(field, updatedForm);
+        setErrors((prevErrs) => ({ ...prevErrs, [field]: errorMsg }));
+      }
+      return updatedForm;
+    });
   };
 
   const handleBlur = (field: keyof PatientHealthMapInfo) => {
@@ -924,17 +926,17 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
     if (!formData.hospitalHistory.trim()) return false;
 
     // Alergias
-    if (!formData.hasDrugAllergies) return false;
-    if (formData.hasDrugAllergies === 'Sí' && !formData.drugAllergiesDetails?.trim()) return false;
-    if (!formData.hasFoodAllergies) return false;
-    if (formData.hasFoodAllergies === 'Sí' && !formData.foodAllergiesDetails?.trim()) return false;
+    if (normalizeYesNo(formData.hasDrugAllergies) === '') return false;
+    if (normalizeYesNo(formData.hasDrugAllergies) === 'Sí' && !formData.drugAllergiesDetails?.trim()) return false;
+    if (normalizeYesNo(formData.hasFoodAllergies) === '') return false;
+    if (normalizeYesNo(formData.hasFoodAllergies) === 'Sí' && !formData.foodAllergiesDetails?.trim()) return false;
 
     // Salud ósea
-    if (!formData.hasBoneFracturesAfter40) return false;
-    if (formData.hasBoneFracturesAfter40 === 'Sí' && !formData.boneFracturesDetails?.trim()) return false;
-    if (!formData.hasBoneDensitometry) return false;
+    if (normalizeYesNo(formData.hasBoneFracturesAfter40) === '') return false;
+    if (normalizeYesNo(formData.hasBoneFracturesAfter40) === 'Sí' && !formData.boneFracturesDetails?.trim()) return false;
+    if (normalizeYesNo(formData.hasBoneDensitometry) === '') return false;
     if (
-      formData.hasBoneDensitometry === 'Sí' &&
+      normalizeYesNo(formData.hasBoneDensitometry) === 'Sí' &&
       (!formData.boneDensitometryYear?.trim() || !formData.boneDensitometryResult)
     ) {
       return false;
@@ -942,8 +944,8 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
 
     // Gineco-obstétrico validation (solo si sexo es femenino)
     if (isFemale) {
-      if (!formData.appliesGynecoObstetric) return false;
-      if (formData.appliesGynecoObstetric === 'Sí') {
+      if (normalizeYesNo(formData.appliesGynecoObstetric) === '') return false;
+      if (normalizeYesNo(formData.appliesGynecoObstetric) === 'Sí') {
         if (!formData.menarcheAge?.trim()) return false;
         if (!formData.cycleRegularity) return false;
         if (
@@ -959,16 +961,16 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
           formData.menopauseStage === 'Perimenopausia' ||
           formData.cycleRegularity === 'Ya no menstruo (menopausia / histerectomía)';
         if (isMenopause) {
-          if (!formData.usesHormoneReplacementTherapy) return false;
+          if (normalizeYesNo(formData.usesHormoneReplacementTherapy) === '') return false;
           if (
-            formData.usesHormoneReplacementTherapy === 'Sí' &&
+            normalizeYesNo(formData.usesHormoneReplacementTherapy) === 'Sí' &&
             !formData.hormoneReplacementTherapyDetails?.trim()
           ) {
             return false;
           }
         }
 
-        if (!formData.currentlyBreastfeeding) return false;
+        if (normalizeYesNo(formData.currentlyBreastfeeding) === '') return false;
         if (!formData.contraceptiveMethod) return false;
         if (formData.contraceptiveMethod === 'Otro' && !formData.contraceptiveMethodOther?.trim()) return false;
         if (!formData.pregnancyPlan) return false;
@@ -976,7 +978,7 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
     }
 
     // TCA
-    if (!formData.hasEatingDisorderHistory) return false;
+    if (normalizeYesNo(formData.hasEatingDisorderHistory) === '') return false;
 
     // Hábitos: tabaco y alcohol
     if (!formData.smokingStatus) return false;
@@ -1930,7 +1932,7 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
 
             <div className="grid grid-cols-2 gap-3 max-w-xs">
               {(['Sí', 'No'] as const).map((opt) => {
-                const isSelected = formData.hasDrugAllergies === opt;
+                const isSelected = normalizeYesNo(formData.hasDrugAllergies) === opt;
                 return (
                   <button
                     type="button"
@@ -1962,7 +1964,7 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
               })}
             </div>
 
-            {attemptedSubmit && !formData.hasDrugAllergies && errors.hasDrugAllergies && (
+            {attemptedSubmit && normalizeYesNo(formData.hasDrugAllergies) === '' && errors.hasDrugAllergies && (
               <motion.p
                 initial={{ opacity: 0, y: -4 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -1975,7 +1977,7 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
 
             {/* Detalle de alergia a medicamentos si Sí */}
             <AnimatePresence>
-              {formData.hasDrugAllergies === 'Sí' && (
+              {normalizeYesNo(formData.hasDrugAllergies) === 'Sí' && (
                 <motion.div
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: 'auto' }}
@@ -2028,7 +2030,7 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
 
             <div className="grid grid-cols-2 gap-3 max-w-xs">
               {(['Sí', 'No'] as const).map((opt) => {
-                const isSelected = formData.hasFoodAllergies === opt;
+                const isSelected = normalizeYesNo(formData.hasFoodAllergies) === opt;
                 return (
                   <button
                     type="button"
@@ -2060,7 +2062,7 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
               })}
             </div>
 
-            {attemptedSubmit && !formData.hasFoodAllergies && errors.hasFoodAllergies && (
+            {attemptedSubmit && normalizeYesNo(formData.hasFoodAllergies) === '' && errors.hasFoodAllergies && (
               <motion.p
                 initial={{ opacity: 0, y: -4 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -2073,7 +2075,7 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
 
             {/* Detalle de alergia a alimentos si Sí */}
             <AnimatePresence>
-              {formData.hasFoodAllergies === 'Sí' && (
+              {normalizeYesNo(formData.hasFoodAllergies) === 'Sí' && (
                 <motion.div
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: 'auto' }}
@@ -2140,7 +2142,7 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
 
             <div className="grid grid-cols-2 gap-3 max-w-xs">
               {(['Sí', 'No'] as const).map((opt) => {
-                const isSelected = formData.hasBoneFracturesAfter40 === opt;
+                const isSelected = normalizeYesNo(formData.hasBoneFracturesAfter40) === opt;
                 return (
                   <button
                     type="button"
@@ -2172,7 +2174,7 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
               })}
             </div>
 
-            {attemptedSubmit && !formData.hasBoneFracturesAfter40 && errors.hasBoneFracturesAfter40 && (
+            {attemptedSubmit && normalizeYesNo(formData.hasBoneFracturesAfter40) === '' && errors.hasBoneFracturesAfter40 && (
               <motion.p
                 initial={{ opacity: 0, y: -4 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -2185,7 +2187,7 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
 
             {/* Detalle si Sí */}
             <AnimatePresence>
-              {formData.hasBoneFracturesAfter40 === 'Sí' && (
+              {normalizeYesNo(formData.hasBoneFracturesAfter40) === 'Sí' && (
                 <motion.div
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: 'auto' }}
@@ -2237,7 +2239,7 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
 
             <div className="grid grid-cols-2 gap-3 max-w-xs">
               {(['Sí', 'No'] as const).map((opt) => {
-                const isSelected = formData.hasBoneDensitometry === opt;
+                const isSelected = normalizeYesNo(formData.hasBoneDensitometry) === opt;
                 return (
                   <button
                     type="button"
@@ -2270,7 +2272,7 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
               })}
             </div>
 
-            {attemptedSubmit && !formData.hasBoneDensitometry && errors.hasBoneDensitometry && (
+            {attemptedSubmit && normalizeYesNo(formData.hasBoneDensitometry) === '' && errors.hasBoneDensitometry && (
               <motion.p
                 initial={{ opacity: 0, y: -4 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -2283,7 +2285,7 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
 
             {/* Campos condicionales si Sí: año y resultado */}
             <AnimatePresence>
-              {formData.hasBoneDensitometry === 'Sí' && (
+              {normalizeYesNo(formData.hasBoneDensitometry) === 'Sí' && (
                 <motion.div
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: 'auto' }}

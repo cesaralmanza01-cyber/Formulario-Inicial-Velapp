@@ -49,6 +49,7 @@ import {
   FOOD_SECURITY_OPTIONS,
   CommuteTimeOption,
   COMMUTE_TIME_OPTIONS,
+  normalizeYesNo,
 } from '../types';
 import { VelaIcon } from './VelaIcon';
 
@@ -308,11 +309,11 @@ export const StepFiveForm: React.FC<StepFiveFormProps> = ({
         !sa.usualSleepHours ||
         sa.usualSleepHours.trim() === '' ||
         !sa.sleepQuality ||
-        !sa.nightOrRotatingShift ||
-        !sa.stopScreening?.snoringLoudly ||
-        !sa.stopScreening?.tiredDuringDay ||
-        !sa.stopScreening?.observedApnea ||
-        !sa.stopScreening?.highBloodPressure
+        normalizeYesNo(sa.nightOrRotatingShift) === '' ||
+        normalizeYesNo(sa.stopScreening?.snoringLoudly) === '' ||
+        normalizeYesNo(sa.stopScreening?.tiredDuringDay) === '' ||
+        normalizeYesNo(sa.stopScreening?.observedApnea) === '' ||
+        normalizeYesNo(sa.stopScreening?.highBloodPressure) === ''
       ) {
         return false;
       }
@@ -1303,7 +1304,7 @@ export const StepFiveForm: React.FC<StepFiveFormProps> = ({
                                 </label>
                                 <div className="flex items-center gap-2">
                                   {['Sí', 'No'].map((val) => {
-                                    const isSelected = formData.moodSleepHabits?.sleepAssessment?.nightOrRotatingShift === val;
+                                    const isSelected = normalizeYesNo(formData.moodSleepHabits?.sleepAssessment?.nightOrRotatingShift) === val;
                                     return (
                                       <button
                                         key={val}
@@ -1343,7 +1344,7 @@ export const StepFiveForm: React.FC<StepFiveFormProps> = ({
                                   </label>
                                   <div className="flex items-center gap-2 shrink-0">
                                     {['Sí', 'No'].map((val) => {
-                                      const isSelected = formData.moodSleepHabits?.sleepAssessment?.stopScreening?.snoringLoudly === val;
+                                      const isSelected = normalizeYesNo(formData.moodSleepHabits?.sleepAssessment?.stopScreening?.snoringLoudly) === val;
                                       return (
                                         <button
                                           key={val}
@@ -1362,7 +1363,7 @@ export const StepFiveForm: React.FC<StepFiveFormProps> = ({
                                     })}
                                   </div>
                                 </div>
-                                {attemptedSubmit && !formData.moodSleepHabits?.sleepAssessment?.stopScreening?.snoringLoudly && (
+                                {attemptedSubmit && normalizeYesNo(formData.moodSleepHabits?.sleepAssessment?.stopScreening?.snoringLoudly) === '' && (
                                   <span className="text-[10px] text-[#C66A4D] font-medium flex items-center gap-1">
                                     <AlertCircle className="w-3 h-3" /> Selección requerida
                                   </span>
@@ -1377,7 +1378,7 @@ export const StepFiveForm: React.FC<StepFiveFormProps> = ({
                                   </label>
                                   <div className="flex items-center gap-2 shrink-0">
                                     {['Sí', 'No'].map((val) => {
-                                      const isSelected = formData.moodSleepHabits?.sleepAssessment?.stopScreening?.tiredDuringDay === val;
+                                      const isSelected = normalizeYesNo(formData.moodSleepHabits?.sleepAssessment?.stopScreening?.tiredDuringDay) === val;
                                       return (
                                         <button
                                           key={val}
@@ -1396,7 +1397,7 @@ export const StepFiveForm: React.FC<StepFiveFormProps> = ({
                                     })}
                                   </div>
                                 </div>
-                                {attemptedSubmit && !formData.moodSleepHabits?.sleepAssessment?.stopScreening?.tiredDuringDay && (
+                                {attemptedSubmit && normalizeYesNo(formData.moodSleepHabits?.sleepAssessment?.stopScreening?.tiredDuringDay) === '' && (
                                   <span className="text-[10px] text-[#C66A4D] font-medium flex items-center gap-1">
                                     <AlertCircle className="w-3 h-3" /> Selección requerida
                                   </span>
@@ -1411,7 +1412,7 @@ export const StepFiveForm: React.FC<StepFiveFormProps> = ({
                                   </label>
                                   <div className="flex items-center gap-2 shrink-0">
                                     {['Sí', 'No'].map((val) => {
-                                      const isSelected = formData.moodSleepHabits?.sleepAssessment?.stopScreening?.observedApnea === val;
+                                      const isSelected = normalizeYesNo(formData.moodSleepHabits?.sleepAssessment?.stopScreening?.observedApnea) === val;
                                       return (
                                         <button
                                           key={val}
@@ -1430,7 +1431,7 @@ export const StepFiveForm: React.FC<StepFiveFormProps> = ({
                                     })}
                                   </div>
                                 </div>
-                                {attemptedSubmit && !formData.moodSleepHabits?.sleepAssessment?.stopScreening?.observedApnea && (
+                                {attemptedSubmit && normalizeYesNo(formData.moodSleepHabits?.sleepAssessment?.stopScreening?.observedApnea) === '' && (
                                   <span className="text-[10px] text-[#C66A4D] font-medium flex items-center gap-1">
                                     <AlertCircle className="w-3 h-3" /> Selección requerida
                                   </span>
@@ -1445,7 +1446,7 @@ export const StepFiveForm: React.FC<StepFiveFormProps> = ({
                                   </label>
                                   <div className="flex items-center gap-2 shrink-0">
                                     {['Sí', 'No'].map((val) => {
-                                      const isSelected = formData.moodSleepHabits?.sleepAssessment?.stopScreening?.highBloodPressure === val;
+                                      const isSelected = normalizeYesNo(formData.moodSleepHabits?.sleepAssessment?.stopScreening?.highBloodPressure) === val;
                                       return (
                                         <button
                                           key={val}
@@ -1464,7 +1465,7 @@ export const StepFiveForm: React.FC<StepFiveFormProps> = ({
                                     })}
                                   </div>
                                 </div>
-                                {attemptedSubmit && !formData.moodSleepHabits?.sleepAssessment?.stopScreening?.highBloodPressure && (
+                                {attemptedSubmit && normalizeYesNo(formData.moodSleepHabits?.sleepAssessment?.stopScreening?.highBloodPressure) === '' && (
                                   <span className="text-[10px] text-[#C66A4D] font-medium flex items-center gap-1">
                                     <AlertCircle className="w-3 h-3" /> Selección requerida
                                   </span>

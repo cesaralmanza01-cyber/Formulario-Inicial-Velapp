@@ -10,6 +10,7 @@ import {
   LifeStageKey,
   getPHQ2OptionScore,
   calculateStopScore,
+  normalizeYesNo,
 } from '../types';
 import { getFileDataUrl, getFileDataUrlAsync } from './fileMemoryStore';
 import { evaluateClinicalRedFlags } from './clinicalFlags';
@@ -864,16 +865,22 @@ export function generatePatientQuestionnairePdfDoc(
 
   // Alergias e intolerancias
   printSubSectionTitle('Alergias e intolerancias');
+  const drugAllergyNorm = normalizeYesNo(patient.mapa_salud?.hasDrugAllergies);
   const drugAllergyStr =
-    patient.mapa_salud?.hasDrugAllergies === 'Sí'
-      ? `Sí: ${patient.mapa_salud.drugAllergiesDetails || 'Reportada'}`
-      : patient.mapa_salud?.hasDrugAllergies || 'Niega';
+    drugAllergyNorm === 'Sí'
+      ? `Sí: ${patient.mapa_salud?.drugAllergiesDetails || 'Reportada'}`
+      : drugAllergyNorm === 'No'
+      ? 'No (Niega)'
+      : 'No registrado';
   printField('¿Alergia a algún medicamento?', drugAllergyStr);
 
+  const foodAllergyNorm = normalizeYesNo(patient.mapa_salud?.hasFoodAllergies);
   const foodAllergyStr =
-    patient.mapa_salud?.hasFoodAllergies === 'Sí'
-      ? `Sí: ${patient.mapa_salud.foodAllergiesDetails || 'Reportada'}`
-      : patient.mapa_salud?.hasFoodAllergies || 'Niega';
+    foodAllergyNorm === 'Sí'
+      ? `Sí: ${patient.mapa_salud?.foodAllergiesDetails || 'Reportada'}`
+      : foodAllergyNorm === 'No'
+      ? 'No (Niega)'
+      : 'No registrado';
   printField('¿Alergia o intolerancia a alimentos?', foodAllergyStr);
 
   if (patient.mapa_salud?.toxicAllergicHistory && patient.mapa_salud.toxicAllergicHistory !== 'Ninguno' && patient.mapa_salud.toxicAllergicHistory !== 'Sin alergias ni hábitos tóxicos') {
@@ -882,17 +889,21 @@ export function generatePatientQuestionnairePdfDoc(
 
   // Salud ósea
   printSubSectionTitle('Salud ósea');
+  const fracturesNorm = normalizeYesNo(patient.mapa_salud?.hasBoneFracturesAfter40);
   const fracturesStr =
-    patient.mapa_salud?.hasBoneFracturesAfter40 === 'Sí'
-      ? `Sí: ${patient.mapa_salud.boneFracturesDetails || 'Reportada'}`
-      : patient.mapa_salud?.hasBoneFracturesAfter40 || 'Niega';
+    fracturesNorm === 'Sí'
+      ? `Sí: ${patient.mapa_salud?.boneFracturesDetails || 'Reportada'}`
+      : fracturesNorm === 'No'
+      ? 'No (Niega)'
+      : 'No registrado';
   printField('Fracturas de huesos (+40 años o caídas leves)', fracturesStr);
 
-  let densitometryStr = patient.mapa_salud?.hasBoneDensitometry || 'No realizada';
-  if (patient.mapa_salud?.hasBoneDensitometry === 'Sí') {
+  const densitometryNorm = normalizeYesNo(patient.mapa_salud?.hasBoneDensitometry);
+  let densitometryStr = densitometryNorm === 'No' ? 'No realizada (Niega)' : 'No registrado';
+  if (densitometryNorm === 'Sí') {
     const details = [
-      patient.mapa_salud.boneDensitometryYear ? `Año: ${patient.mapa_salud.boneDensitometryYear}` : null,
-      patient.mapa_salud.boneDensitometryResult ? `Resultado: ${patient.mapa_salud.boneDensitometryResult}` : null,
+      patient.mapa_salud?.boneDensitometryYear ? `Año: ${patient.mapa_salud.boneDensitometryYear}` : null,
+      patient.mapa_salud?.boneDensitometryResult ? `Resultado: ${patient.mapa_salud.boneDensitometryResult}` : null,
     ].filter(Boolean).join(' — ');
     densitometryStr = `Sí (${details || 'Realizada'})`;
   }

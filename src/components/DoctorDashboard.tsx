@@ -222,8 +222,12 @@ export function DoctorDashboard({ currentUser, onLogout, onBackToApp }: DoctorDa
       <header className="bg-white border-b border-[#e2d9cd] sticky top-0 z-30 shadow-xs">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-[#346a60] flex items-center justify-center text-white shadow-xs">
-              <VelaIcon className="w-6 h-6 text-[#fdfbf7]" />
+            <div className="h-10 flex items-center justify-center shrink-0">
+              <img
+                src="/logo.png"
+                alt="Vela"
+                className="h-10 w-auto object-contain"
+              />
             </div>
             <div>
               <div className="flex items-center gap-2">

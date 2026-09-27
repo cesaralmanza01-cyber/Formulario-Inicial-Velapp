@@ -9,6 +9,7 @@ import {
   PatientLabExamsInfo,
   PatientInBodyInfo,
   PatientSex,
+  normalizeYesNo,
 } from '../types';
 
 export interface StepCompletenessResult {
@@ -156,17 +157,17 @@ function isStep4Complete(data: PatientHealthMapInfo | null, patientSex?: Patient
   if (!data.hospitalHistory.trim()) return false;
 
   // Alergias (Obligatorias)
-  if (!data.hasDrugAllergies) return false;
-  if (data.hasDrugAllergies === 'Sí' && !data.drugAllergiesDetails?.trim()) return false;
-  if (!data.hasFoodAllergies) return false;
-  if (data.hasFoodAllergies === 'Sí' && !data.foodAllergiesDetails?.trim()) return false;
+  if (normalizeYesNo(data.hasDrugAllergies) === '') return false;
+  if (normalizeYesNo(data.hasDrugAllergies) === 'Sí' && !data.drugAllergiesDetails?.trim()) return false;
+  if (normalizeYesNo(data.hasFoodAllergies) === '') return false;
+  if (normalizeYesNo(data.hasFoodAllergies) === 'Sí' && !data.foodAllergiesDetails?.trim()) return false;
 
   // Salud ósea (Obligatoria)
-  if (!data.hasBoneFracturesAfter40) return false;
-  if (data.hasBoneFracturesAfter40 === 'Sí' && !data.boneFracturesDetails?.trim()) return false;
-  if (!data.hasBoneDensitometry) return false;
+  if (normalizeYesNo(data.hasBoneFracturesAfter40) === '') return false;
+  if (normalizeYesNo(data.hasBoneFracturesAfter40) === 'Sí' && !data.boneFracturesDetails?.trim()) return false;
+  if (normalizeYesNo(data.hasBoneDensitometry) === '') return false;
   if (
-    data.hasBoneDensitometry === 'Sí' &&
+    normalizeYesNo(data.hasBoneDensitometry) === 'Sí' &&
     (!data.boneDensitometryYear?.trim() || !data.boneDensitometryResult)
   ) {
     return false;
@@ -175,8 +176,8 @@ function isStep4Complete(data: PatientHealthMapInfo | null, patientSex?: Patient
   // Gineco-obstétrico: Solo es obligatorio si el paciente es de sexo femenino
   const isFemale = patientSex === 'Femenino';
   if (isFemale) {
-    if (!data.appliesGynecoObstetric) return false;
-    if (data.appliesGynecoObstetric === 'Sí') {
+    if (normalizeYesNo(data.appliesGynecoObstetric) === '') return false;
+    if (normalizeYesNo(data.appliesGynecoObstetric) === 'Sí') {
       if (!data.menarcheAge?.trim()) return false;
       if (!data.cycleRegularity) return false;
       if (
@@ -192,23 +193,23 @@ function isStep4Complete(data: PatientHealthMapInfo | null, patientSex?: Patient
         data.menopauseStage === 'Perimenopausia' ||
         data.cycleRegularity === 'Ya no menstruo (menopausia / histerectomía)';
       if (isMenopause) {
-        if (!data.usesHormoneReplacementTherapy) return false;
+        if (normalizeYesNo(data.usesHormoneReplacementTherapy) === '') return false;
         if (
-          data.usesHormoneReplacementTherapy === 'Sí' &&
+          normalizeYesNo(data.usesHormoneReplacementTherapy) === 'Sí' &&
           !data.hormoneReplacementTherapyDetails?.trim()
         ) {
           return false;
         }
       }
 
-      if (!data.currentlyBreastfeeding) return false;
+      if (normalizeYesNo(data.currentlyBreastfeeding) === '') return false;
       if (!data.contraceptiveMethod) return false;
       if (data.contraceptiveMethod === 'Otro' && !data.contraceptiveMethodOther?.trim()) return false;
       if (!data.pregnancyPlan) return false;
     }
   }
 
-  if (!data.hasEatingDisorderHistory) return false;
+  if (normalizeYesNo(data.hasEatingDisorderHistory) === '') return false;
 
   // Hábitos: tabaco y alcohol
   if (!data.smokingStatus) return false;
@@ -224,8 +225,8 @@ function isStep4Complete(data: PatientHealthMapInfo | null, patientSex?: Patient
   }
 
   // Antecedentes familiares: pregunta ampliada sobre obesidad en la familia
-  if (!data.hasFamilyObesityHistory) return false;
-  if (data.hasFamilyObesityHistory === 'Sí') {
+  if (normalizeYesNo(data.hasFamilyObesityHistory) === '') return false;
+  if (normalizeYesNo(data.hasFamilyObesityHistory) === 'Sí') {
     if (!data.familyObesityMembers || data.familyObesityMembers.length === 0) return false;
     const hasValidMember = data.familyObesityMembers.some(
       (m) => m.relationship && (m.relationship !== 'Otro familiar' || !!m.otherRelationship?.trim())
@@ -274,11 +275,11 @@ function isStep5Complete(data: PatientBodySymptomsInfo | null): boolean {
     !sa.usualSleepHours ||
     sa.usualSleepHours.trim() === '' ||
     !sa.sleepQuality ||
-    !sa.nightOrRotatingShift ||
-    !sa.stopScreening?.snoringLoudly ||
-    !sa.stopScreening?.tiredDuringDay ||
-    !sa.stopScreening?.observedApnea ||
-    !sa.stopScreening?.highBloodPressure
+    normalizeYesNo(sa.nightOrRotatingShift) === '' ||
+    normalizeYesNo(sa.stopScreening?.snoringLoudly) === '' ||
+    normalizeYesNo(sa.stopScreening?.tiredDuringDay) === '' ||
+    normalizeYesNo(sa.stopScreening?.observedApnea) === '' ||
+    normalizeYesNo(sa.stopScreening?.highBloodPressure) === ''
   ) {
     return false;
   }
