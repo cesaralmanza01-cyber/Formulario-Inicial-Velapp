@@ -8,6 +8,8 @@ import {
   ObesityFamilyMemberEntry,
   WeightStagePoint,
   LifeStageKey,
+  getPHQ2OptionScore,
+  calculateStopScore,
 } from '../types';
 import { getFileDataUrl, getFileDataUrlAsync } from './fileMemoryStore';
 import { evaluateClinicalRedFlags } from './clinicalFlags';
@@ -863,17 +865,31 @@ export function generatePatientQuestionnairePdfDoc(
   if (hasFamObesity === 'Sí') {
     const members = patient.mapa_salud?.familyObesityMembers || [];
     if (members.length > 0) {
-      printSubSectionTitle('Familiares con antecedentes de obesidad y comorbilidades');
+      printSubSectionTitle('Familiares con antecedentes de obesidad y enfermedades asociadas');
       members.forEach((m: ObesityFamilyMemberEntry, idx: number) => {
         const relation = m.relationship === 'Otro familiar' && m.otherRelationship?.trim()
           ? `Otro (${m.otherRelationship.trim()})`
           : (m.relationship || `Familiar ${idx + 1}`);
         const onset = m.onsetAge || 'Inicio no especificado';
         const comorbs = m.comorbidities && m.comorbidities.length > 0
-          ? m.comorbidities.join(', ')
+          ? m.comorbidities
+              .map((c) => {
+                const age = m.comorbiditiesAges?.[c]?.trim();
+                if (age && age.toLowerCase() !== 'no sé' && age.toLowerCase() !== 'no se') {
+                  return `${c} (edad aprox: ${age} años)`;
+                } else if (age && (age.toLowerCase() === 'no sé' || age.toLowerCase() === 'no se')) {
+                  return `${c} (edad: no sabe)`;
+                }
+                return c;
+              })
+              .join(', ')
           : 'Sin comorbilidades reportadas';
-        const otherComorb = m.otherComorbidities?.trim() ? ` (Otros: ${m.otherComorbidities.trim()})` : '';
-        const memberDetails = `Parentesco: ${relation}\nInicio del exceso de peso: ${onset}\nComorbilidades asociadas: ${comorbs}${otherComorb}`;
+        const otherAge = m.otherComorbiditiesAge?.trim();
+        const otherAgeStr = otherAge
+          ? (otherAge.toLowerCase() === 'no sé' || otherAge.toLowerCase() === 'no se' ? ' [edad: no sabe]' : ` [edad aprox: ${otherAge} años]`)
+          : '';
+        const otherComorb = m.otherComorbidities?.trim() ? ` (Otros: ${m.otherComorbidities.trim()}${otherAgeStr})` : '';
+        const memberDetails = `Parentesco: ${relation}\nInicio del exceso de peso: ${onset}\nEnfermedades asociadas: ${comorbs}${otherComorb}`;
         printField(`Familiar #${idx + 1} - ${relation}`, memberDetails, true);
       });
     } else {
@@ -976,14 +992,86 @@ export function generatePatientQuestionnairePdfDoc(
 
   if (patient.revision_sistemas?.moodSleepHabits) {
     const msh = patient.revision_sistemas.moodSleepHabits;
-    printSubSectionTitle('Estrés, horarios de descanso y rutina diaria');
-    printField('Nivel de estrés percibido', msh.stressLevel !== undefined ? `${msh.stressLevel} / 10` : null);
+    printSubSectionTitle('Estrés, bienestar emocional y estilo de vida');
     printField(
-      'Horas de sueño y horario de descanso',
-      msh.calculatedSleepHours
-        ? `${msh.calculatedSleepHours} horas de sueño habituales (Horario: ${msh.bedtime || '—'} a ${msh.wakeTime || '—'})`
-        : null
+      'Nivel de estrés en el último mes',
+      msh.stressLevel !== undefined ? `${msh.stressLevel} / 10` : null
     );
+    if (msh.stressSources && msh.stressSources.length > 0) {
+      const sourcesStr = msh.stressSources.join(', ');
+      const otherStr = msh.stressSourcesOther ? ` (Otros: ${msh.stressSourcesOther})` : '';
+      printField('Principales fuentes de estrés', `${sourcesStr}${otherStr}`);
+    }
+
+    // PHQ-2 Screening details
+    if (msh.phq2 && (msh.phq2.littleInterest || msh.phq2.feelingDown)) {
+      printSubSectionTitle('Tamizaje de estado de ánimo PHQ-2 (Últimas 2 semanas)');
+      const q1Ans = msh.phq2.littleInterest || 'No reportado';
+      const q2Ans = msh.phq2.feelingDown || 'No reportado';
+      const q1Score = getPHQ2OptionScore(msh.phq2.littleInterest);
+      const q2Score = getPHQ2OptionScore(msh.phq2.feelingDown);
+      const totalScore = msh.phq2.totalScore !== undefined ? msh.phq2.totalScore : (q1Score + q2Score);
+      const isPositive = totalScore >= 3;
+
+      const phq2Lines: string[] = [
+        `• 1. Poco interés o placer en hacer las cosas: ${q1Ans} (${q1Score} ${q1Score === 1 ? 'punto' : 'puntos'})`,
+        `• 2. Sensación de tristeza, desánimo o desesperanza: ${q2Ans} (${q2Score} ${q2Score === 1 ? 'punto' : 'puntos'})`,
+        `• Puntaje total PHQ-2: ${totalScore} / 6 ${isPositive ? '— [POSITIVO (≥3): Ampliar evaluación de depresión]' : '— [Negativo (<3)]'}`,
+      ];
+      printField('Resultados del tamizaje PHQ-2', phq2Lines.join('\n'), true);
+    }
+
+    // Bloque de Evaluación del Sueño y Tamizaje STOP
+    const sa = msh.sleepAssessment;
+    if (sa) {
+      printSubSectionTitle('Evaluación de sueño y descanso');
+      printField(
+        '1. Horas de sueño en una noche habitual',
+        sa.usualSleepHours ? `${sa.usualSleepHours} horas` : null
+      );
+      printField('2. Calidad percibida del sueño', sa.sleepQuality || null);
+      printField('3. ¿Trabaja en turnos nocturnos o rotativos?', sa.nightOrRotatingShift || null);
+
+      if (sa.stopScreening) {
+        const stop = sa.stopScreening;
+        const stopScore = calculateStopScore(stop);
+        const isStopPositive = stopScore >= 2;
+
+        const stopLines: string[] = [
+          `• 4. ¿Roncas fuerte (se escucha a través de puerta cerrada o despierta a pareja)?: ${stop.snoringLoudly || 'No reportado'}`,
+          `• 5. ¿Te sientes cansado(a), fatigado(a) o con sueño durante el día con frecuencia?: ${stop.tiredDuringDay || 'No reportado'}`,
+          `• 6. ¿Alguien te ha visto dejar de respirar o ahogarte mientras duermes?: ${stop.observedApnea || 'No reportado'}`,
+          `• 7. ¿Tienes o te están tratando la presión arterial alta?: ${stop.highBloodPressure || 'No reportado'}`,
+          `• STOP (parcial): ${stopScore} de 4 ${isStopPositive ? '— [POSITIVO (≥2): Tamizaje STOP positivo — completar STOP-Bang en consulta]' : '— [Negativo (<2)]'}`,
+        ];
+        printField('Tamizaje STOP (Riesgo de apnea del sueño)', stopLines.join('\n'), true);
+      }
+    }
+
+    // Bloque de Pantallas y Entorno / Rutina
+    if (msh.screenTimeHours || msh.whoCooksAtHome || msh.foodSecurityWorry || msh.dailyCommuteTime) {
+      printSubSectionTitle('Pantallas, entorno cotidiano y determinantes del hogar');
+      if (msh.screenTimeHours) {
+        printField(
+          'Horas frente a pantallas fuera del trabajo (celular, TV, PC)',
+          `${msh.screenTimeHours} horas al día`
+        );
+      }
+      if (msh.whoCooksAtHome) {
+        const cooksStr = `${msh.whoCooksAtHome}${msh.whoCooksAtHome === 'Otro' && msh.whoCooksAtHomeOther ? ` (${msh.whoCooksAtHomeOther})` : ''}`;
+        printField('¿Quién cocina habitualmente en casa?', cooksStr);
+      }
+      if (msh.foodSecurityWorry) {
+        printField(
+          '¿Le ha preocupado que no alcance el dinero para la comida (último año)?',
+          msh.foodSecurityWorry
+        );
+      }
+      if (msh.dailyCommuteTime) {
+        printField('Tiempo diario invertido en desplazamientos', msh.dailyCommuteTime);
+      }
+    }
+
     printNarrativeCard('Descripción de un día cotidiano habitual', msh.dailyRoutineDescription);
   }
 
@@ -1312,7 +1400,7 @@ export function generatePatientQuestionnairePdfDoc(
   const effectiveFlags =
     patient.banderas_revisar && patient.banderas_revisar.length > 0
       ? patient.banderas_revisar
-      : evaluateClinicalRedFlags(patient.revision_sistemas, patient.relacion_peso).flags;
+      : evaluateClinicalRedFlags(patient.revision_sistemas, patient.relacion_peso, patient.mapa_salud).flags;
 
   if (effectiveFlags && effectiveFlags.length > 0) {
     checkPageBreak(40);

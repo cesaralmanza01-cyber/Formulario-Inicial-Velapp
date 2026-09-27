@@ -222,13 +222,50 @@ const SYMPTOM_CATEGORY_KEYS: (keyof Omit<
 
 function isStep5Complete(data: PatientBodySymptomsInfo | null): boolean {
   if (!data) return false;
-  return SYMPTOM_CATEGORY_KEYS.every((key) => {
+  const categoriesComplete = SYMPTOM_CATEGORY_KEYS.every((key) => {
     const cat = data[key];
     if (!cat) return false;
     if (cat.skipped) return true;
     if (cat.hasNoSymptoms) return true;
     return Boolean(cat.selectedChips && cat.selectedChips.length > 0);
   });
+
+  if (!categoriesComplete) return false;
+
+  // PHQ-2 Screening mandatory validation
+  const phq2 = data.moodSleepHabits?.phq2;
+  if (!phq2 || !phq2.littleInterest || !phq2.feelingDown) {
+    return false;
+  }
+
+  // Sleep Assessment (7 questions) mandatory validation
+  const sa = data.moodSleepHabits?.sleepAssessment;
+  if (
+    !sa ||
+    !sa.usualSleepHours ||
+    sa.usualSleepHours.trim() === '' ||
+    !sa.sleepQuality ||
+    !sa.nightOrRotatingShift ||
+    !sa.stopScreening?.snoringLoudly ||
+    !sa.stopScreening?.tiredDuringDay ||
+    !sa.stopScreening?.observedApnea ||
+    !sa.stopScreening?.highBloodPressure
+  ) {
+    return false;
+  }
+
+  // Lifestyle validation (Stress 1-10, Screens, Environment & Routine)
+  const msh = data.moodSleepHabits;
+  if (!msh) return false;
+  if (msh.stressLevel === undefined || msh.stressLevel === null) return false;
+  if (msh.stressSources?.includes('Otro') && !msh.stressSourcesOther?.trim()) return false;
+  if (!msh.screenTimeHours) return false;
+  if (!msh.whoCooksAtHome) return false;
+  if (msh.whoCooksAtHome === 'Otro' && !msh.whoCooksAtHomeOther?.trim()) return false;
+  if (!msh.foodSecurityWorry) return false;
+  if (!msh.dailyCommuteTime) return false;
+
+  return true;
 }
 
 function isStep6Complete(data: PatientNutritionInfo | null): boolean {

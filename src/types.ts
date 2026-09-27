@@ -243,6 +243,11 @@ export const FAMILY_OBESITY_MEMBERS = [
   'Madre',
   'Padre',
   'Hermano(a)',
+  'Hermano',
+  'Hermana',
+  'Hijo(a)',
+  'Hijo',
+  'Hija',
   'Abuela materna',
   'Abuelo materno',
   'Abuela paterna',
@@ -266,7 +271,9 @@ export const FAMILY_COMORBIDITIES_LIST = [
   'Diabetes mellitus tipo 2',
   'Hipertensión arterial',
   'Dislipidemia (colesterol o triglicéridos elevados)',
-  'Evento cardiovascular a temprana edad (infarto / ACV)',
+  'Infarto / Ataque cardíaco',
+  'Trombosis / ACV (Accidente cerebrovascular)',
+  'Muerte súbita',
   'Síndrome de ovario poliquístico (SOP) o problemas de fertilidad',
 ] as const;
 
@@ -278,7 +285,9 @@ export interface ObesityFamilyMemberEntry {
   otherRelationship?: string;
   onsetAge: FamilyObesityOnsetAge | string;
   comorbidities: string[];
+  comorbiditiesAges?: Record<string, string>;
   otherComorbidities?: string;
+  otherComorbiditiesAge?: string;
 }
 
 export type MenopauseStage =
@@ -451,12 +460,179 @@ export interface DigestiveHabitsInfo {
   hasDifficultyDefecating?: 'No, sin esfuerzo' | 'A veces me cuesta' | 'Sí, con esfuerzo o dolor frecuente' | '';
 }
 
+export type PHQ2Option =
+  | 'Nunca'
+  | 'Varios días'
+  | 'Más de la mitad de los días'
+  | 'Casi todos los días';
+
+export const PHQ2_OPTIONS: PHQ2Option[] = [
+  'Nunca',
+  'Varios días',
+  'Más de la mitad de los días',
+  'Casi todos los días',
+];
+
+export function getPHQ2OptionScore(option?: string | null): number {
+  switch (option) {
+    case 'Nunca':
+      return 0;
+    case 'Varios días':
+      return 1;
+    case 'Más de la mitad de los días':
+      return 2;
+    case 'Casi todos los días':
+      return 3;
+    default:
+      return 0;
+  }
+}
+
+export function calculatePHQ2Score(littleInterest?: string | null, feelingDown?: string | null): number {
+  return getPHQ2OptionScore(littleInterest) + getPHQ2OptionScore(feelingDown);
+}
+
+export interface PHQ2Screening {
+  littleInterest?: PHQ2Option | '';
+  feelingDown?: PHQ2Option | '';
+  totalScore?: number; // 0 to 6
+}
+
+export type SleepQuality =
+  | 'Muy buena'
+  | 'Buena'
+  | 'Regular'
+  | 'Mala'
+  | 'Muy mala';
+
+export const SLEEP_QUALITY_OPTIONS: SleepQuality[] = [
+  'Muy buena',
+  'Buena',
+  'Regular',
+  'Mala',
+  'Muy mala',
+];
+
+export interface StopApneaScreening {
+  snoringLoudly?: 'Sí' | 'No' | ''; // S: Ronquido fuerte
+  tiredDuringDay?: 'Sí' | 'No' | ''; // T: Cansancio / somnolencia diurna
+  observedApnea?: 'Sí' | 'No' | ''; // O: Apneas observadas / ahogo al dormir
+  highBloodPressure?: 'Sí' | 'No' | ''; // P: Presión arterial alta
+  score?: number; // 0 to 4
+}
+
+export function calculateStopScore(screening?: StopApneaScreening | null): number {
+  if (!screening) return 0;
+  let count = 0;
+  if (screening.snoringLoudly === 'Sí') count++;
+  if (screening.tiredDuringDay === 'Sí') count++;
+  if (screening.observedApnea === 'Sí') count++;
+  if (screening.highBloodPressure === 'Sí') count++;
+  return count;
+}
+
+export interface SleepAssessmentInfo {
+  usualSleepHours?: string; // 1) ¿Cuántas horas duermes en una noche habitual?
+  sleepQuality?: SleepQuality | ''; // 2) ¿Cómo calificarías la calidad de tu sueño?
+  nightOrRotatingShift?: 'Sí' | 'No' | ''; // 3) ¿Trabajas en turnos nocturnos o rotativos?
+  stopScreening?: StopApneaScreening; // 4) STOP Apnea Screening
+}
+
+export type StressSourceOption =
+  | 'Trabajo'
+  | 'Dinero'
+  | 'Familia'
+  | 'Pareja'
+  | 'Salud'
+  | 'Estudios'
+  | 'Otro';
+
+export const STRESS_SOURCES_LIST: StressSourceOption[] = [
+  'Trabajo',
+  'Dinero',
+  'Familia',
+  'Pareja',
+  'Salud',
+  'Estudios',
+  'Otro',
+];
+
+export type ScreenTimeOption =
+  | 'Menos de 1'
+  | '1 a 2'
+  | '2 a 4'
+  | 'Más de 4'
+  | '';
+
+export const SCREEN_TIME_OPTIONS: ScreenTimeOption[] = [
+  'Menos de 1',
+  '1 a 2',
+  '2 a 4',
+  'Más de 4',
+];
+
+export type WhoCooksOption =
+  | 'Yo'
+  | 'Mi pareja'
+  | 'Otro familiar'
+  | 'Empleada del hogar'
+  | 'Compramos hecho o domicilios'
+  | 'Otro'
+  | '';
+
+export const WHO_COOKS_OPTIONS: WhoCooksOption[] = [
+  'Yo',
+  'Mi pareja',
+  'Otro familiar',
+  'Empleada del hogar',
+  'Compramos hecho o domicilios',
+  'Otro',
+];
+
+export type FoodSecurityWorryOption =
+  | 'Nunca'
+  | 'A veces'
+  | 'Frecuentemente'
+  | '';
+
+export const FOOD_SECURITY_OPTIONS: FoodSecurityWorryOption[] = [
+  'Nunca',
+  'A veces',
+  'Frecuentemente',
+];
+
+export type CommuteTimeOption =
+  | 'Menos de 30 min'
+  | '30 a 60 min'
+  | '1 a 2 horas'
+  | 'Más de 2 horas'
+  | '';
+
+export const COMMUTE_TIME_OPTIONS: CommuteTimeOption[] = [
+  'Menos de 30 min',
+  '30 a 60 min',
+  '1 a 2 horas',
+  'Más de 2 horas',
+];
+
 export interface MoodSleepHabitsInfo {
-  stressLevel?: number; // 1 to 10
+  stressLevel?: number; // 1 to 10 ('¿Qué tan estresado(a) te has sentido el último mes?')
+  stressSources?: string[]; // Selección múltiple: Trabajo / Dinero / Familia / Pareja / Salud / Estudios / Otro
+  stressSourcesOther?: string; // Especificación si marca 'Otro'
+  
+  screenTimeHours?: ScreenTimeOption; // '¿Cuántas horas al día pasas frente a pantallas fuera del trabajo (celular, TV, computador)?'
+  
+  whoCooksAtHome?: WhoCooksOption; // '¿Quién cocina habitualmente en tu casa?'
+  whoCooksAtHomeOther?: string; // Especificación si marca 'Otro'
+  foodSecurityWorry?: FoodSecurityWorryOption; // 'En el último año, ¿te ha preocupado que no alcance el dinero para la comida?'
+  dailyCommuteTime?: CommuteTimeOption; // '¿Cuánto tiempo gastas al día en desplazamientos?'
+  
   bedtime?: string; // e.g. "23:00"
   wakeTime?: string; // e.g. "07:00"
   calculatedSleepHours?: number; // calculated hours e.g. 8
   dailyRoutineDescription?: string;
+  phq2?: PHQ2Screening;
+  sleepAssessment?: SleepAssessmentInfo;
 }
 
 export interface PatientBodySymptomsInfo {

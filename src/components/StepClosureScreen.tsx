@@ -136,7 +136,7 @@ export const StepClosureScreen: React.FC<StepClosureScreenProps> = ({
       startedAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       completedAt: new Date().toISOString(),
-      banderas_revisar: evaluateClinicalRedFlags(symptomsInfo, weightInfo).flags,
+      banderas_revisar: evaluateClinicalRedFlags(symptomsInfo, weightInfo, healthMapInfo).flags,
       identificacion: basicInfo || null,
       motivo_objetivos: motivationInfo || null,
       relacion_peso: weightInfo || null,

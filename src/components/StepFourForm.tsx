@@ -979,7 +979,28 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
       ? member.comorbidities.filter((c) => c !== comorbidity)
       : [...(member.comorbidities || []), comorbidity];
 
-    handleUpdateFamilyObesityMember(id, { comorbidities: updatedComorbidities });
+    const currentAges = { ...(member.comorbiditiesAges || {}) };
+    if (exists) {
+      delete currentAges[comorbidity];
+    }
+
+    handleUpdateFamilyObesityMember(id, {
+      comorbidities: updatedComorbidities,
+      comorbiditiesAges: currentAges,
+    });
+  };
+
+  const handleUpdateMemberComorbidityAge = (id: string, comorbidity: string, ageVal: string) => {
+    const current = formData.familyObesityMembers || [];
+    const member = current.find((m) => m.id === id);
+    if (!member) return;
+    const currentAges = { ...(member.comorbiditiesAges || {}) };
+    if (ageVal === '') {
+      delete currentAges[comorbidity];
+    } else {
+      currentAges[comorbidity] = ageVal;
+    }
+    handleUpdateFamilyObesityMember(id, { comorbiditiesAges: currentAges });
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -2959,52 +2980,149 @@ export const StepFourForm: React.FC<StepFourFormProps> = ({
                           <label className="text-xs font-semibold text-[#2E3A36] block">
                             ¿Qué comorbilidades o enfermedades tiene o tuvo este familiar?
                             <span className="text-[11px] text-[#5C6E68] font-normal block mt-0.5">
-                              Selecciona todas las que correspondan a {member.relationship || 'este familiar'}:
+                              Selecciona todas las que correspondan a {member.relationship || 'este familiar'} e indica la edad aproximada:
                             </span>
                           </label>
 
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                             {FAMILY_COMORBIDITIES_LIST.map((comorb) => {
                               const isChecked = (member.comorbidities || []).includes(comorb);
+                              const currentAgeVal = member.comorbiditiesAges?.[comorb] || '';
+                              const isDontKnow = currentAgeVal === 'No sé' || currentAgeVal === 'No se';
+
                               return (
-                                <button
-                                  type="button"
+                                <div
                                   key={comorb}
-                                  onClick={() => handleToggleMemberComorbidity(member.id, comorb)}
-                                  className={`px-3 py-2 rounded-xl text-left text-xs border flex items-center justify-between transition-all cursor-pointer ${
+                                  className={`p-3 rounded-2xl border transition-all duration-200 ${
                                     isChecked
-                                      ? 'border-[#6E9E93] bg-[#EBF3F0] text-[#2E3A36] font-semibold ring-1 ring-[#6E9E93]'
-                                      : 'border-[#D9D3C8] bg-[#FAF6F0]/50 text-[#5C6E68] hover:border-[#AEC9C0] hover:bg-white'
+                                      ? 'border-[#6E9E93] bg-[#EBF3F0]/90 shadow-2xs'
+                                      : 'border-[#D9D3C8] bg-[#FAF6F0]/50 hover:border-[#AEC9C0] hover:bg-white'
                                   }`}
                                 >
-                                  <span className="pr-1">{comorb}</span>
-                                  <div
-                                    className={`w-4 h-4 rounded-md border flex items-center justify-center shrink-0 ${
-                                      isChecked
-                                        ? 'bg-[#6E9E93] border-[#6E9E93] text-white'
-                                        : 'border-[#C8C2B7] bg-white'
-                                    }`}
+                                  {/* Header button: toggle comorbidity */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleToggleMemberComorbidity(member.id, comorb)}
+                                    className="w-full text-left text-xs flex items-center justify-between gap-2 cursor-pointer font-medium"
                                   >
-                                    {isChecked && <Check className="w-3 h-3 stroke-[3]" />}
-                                  </div>
-                                </button>
+                                    <span className={isChecked ? 'text-[#2E3A36] font-semibold' : 'text-[#5C6E68]'}>
+                                      {comorb}
+                                    </span>
+                                    <div
+                                      className={`w-4 h-4 rounded-md border flex items-center justify-center shrink-0 transition-colors ${
+                                        isChecked
+                                          ? 'bg-[#6E9E93] border-[#6E9E93] text-white'
+                                          : 'border-[#C8C2B7] bg-white'
+                                      }`}
+                                    >
+                                      {isChecked && <Check className="w-3 h-3 stroke-[3]" />}
+                                    </div>
+                                  </button>
+
+                                  {/* Age of onset sub-input when selected */}
+                                  {isChecked && (
+                                    <motion.div
+                                      initial={{ opacity: 0, height: 0 }}
+                                      animate={{ opacity: 1, height: 'auto' }}
+                                      className="mt-2.5 pt-2.5 border-t border-[#D0E2DC] space-y-1.5"
+                                    >
+                                      <label className="text-[11px] font-medium text-[#465A54] block">
+                                        ¿A qué edad aproximadamente? <span className="text-[#8E9E99] font-normal">(opcional)</span>
+                                      </label>
+
+                                      <div className="flex items-center gap-2">
+                                        <input
+                                          type="number"
+                                          min="1"
+                                          max="120"
+                                          disabled={isDontKnow}
+                                          value={isDontKnow ? '' : currentAgeVal}
+                                          onChange={(e) =>
+                                            handleUpdateMemberComorbidityAge(member.id, comorb, e.target.value)
+                                          }
+                                          placeholder={isDontKnow ? 'No sabe' : 'Ej. 52'}
+                                          className={`w-24 px-2.5 py-1.5 rounded-lg border text-xs bg-white text-[#2E3A36] placeholder-[#8E9E99] focus:outline-hidden focus:ring-2 focus:ring-[#6E9E93]/40 ${
+                                            isDontKnow ? 'bg-gray-100 text-gray-400 cursor-not-allowed border-gray-200' : 'border-[#C8C2B7]'
+                                          }`}
+                                        />
+
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            if (isDontKnow) {
+                                              handleUpdateMemberComorbidityAge(member.id, comorb, '');
+                                            } else {
+                                              handleUpdateMemberComorbidityAge(member.id, comorb, 'No sé');
+                                            }
+                                          }}
+                                          className={`px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-colors cursor-pointer shrink-0 ${
+                                            isDontKnow
+                                              ? 'bg-[#6E9E93] border-[#6E9E93] text-white font-semibold shadow-2xs'
+                                              : 'bg-white border-[#D9D3C8] text-[#5C6E68] hover:border-[#6E9E93] hover:text-[#2E3A36]'
+                                          }`}
+                                        >
+                                          {isDontKnow ? '✓ No sé' : 'No sé'}
+                                        </button>
+                                      </div>
+                                    </motion.div>
+                                  )}
+                                </div>
                               );
                             })}
                           </div>
 
                           {/* Campo abierto opcional de otras comorbilidades para este familiar */}
-                          <div className="pt-1">
-                            <input
-                              type="text"
-                              value={member.otherComorbidities || ''}
-                              onChange={(e) =>
-                                handleUpdateFamilyObesityMember(member.id, {
-                                  otherComorbidities: e.target.value,
-                                })
-                              }
-                              placeholder="Otras condiciones médicas conocidas de este familiar (opcional)..."
-                              className="w-full px-3 py-2 rounded-xl bg-[#FAF6F0]/40 border border-[#D9D3C8] text-xs text-[#2E3A36] placeholder-[#8E9E99] focus:outline-hidden focus:ring-2 focus:ring-[#6E9E93]/40 focus:bg-white"
-                            />
+                          <div className="pt-2">
+                            <label className="text-xs font-semibold text-[#2E3A36] block mb-1">
+                              Otras condiciones médicas conocidas de este familiar <span className="text-[#8E9E99] font-normal">(opcional)</span>
+                            </label>
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                              <input
+                                type="text"
+                                value={member.otherComorbidities || ''}
+                                onChange={(e) =>
+                                  handleUpdateFamilyObesityMember(member.id, {
+                                    otherComorbidities: e.target.value,
+                                  })
+                                }
+                                placeholder="Ej. Hipotiroidismo, cáncer de colon..."
+                                className="sm:col-span-2 px-3 py-2 rounded-xl bg-white border border-[#D9D3C8] text-xs text-[#2E3A36] placeholder-[#8E9E99] focus:outline-hidden focus:ring-2 focus:ring-[#6E9E93]/40"
+                              />
+                              {member.otherComorbidities?.trim() && (
+                                <div className="flex items-center gap-1.5">
+                                  <input
+                                    type="number"
+                                    min="1"
+                                    max="120"
+                                    disabled={member.otherComorbiditiesAge === 'No sé'}
+                                    value={member.otherComorbiditiesAge === 'No sé' ? '' : (member.otherComorbiditiesAge || '')}
+                                    onChange={(e) =>
+                                      handleUpdateFamilyObesityMember(member.id, {
+                                        otherComorbiditiesAge: e.target.value,
+                                      })
+                                    }
+                                    placeholder={member.otherComorbiditiesAge === 'No sé' ? 'No sabe' : 'Edad aprox.'}
+                                    className={`w-full px-2.5 py-2 rounded-xl border text-xs bg-white text-[#2E3A36] placeholder-[#8E9E99] focus:outline-hidden focus:ring-2 focus:ring-[#6E9E93]/40 ${
+                                      member.otherComorbiditiesAge === 'No sé' ? 'bg-gray-100 text-gray-400 cursor-not-allowed border-gray-200' : 'border-[#D9D3C8]'
+                                    }`}
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const current = member.otherComorbiditiesAge === 'No sé' ? '' : 'No sé';
+                                      handleUpdateFamilyObesityMember(member.id, { otherComorbiditiesAge: current });
+                                    }}
+                                    className={`px-2 py-2 rounded-xl border text-xs font-medium transition-colors cursor-pointer shrink-0 ${
+                                      member.otherComorbiditiesAge === 'No sé'
+                                        ? 'bg-[#6E9E93] border-[#6E9E93] text-white font-semibold'
+                                        : 'bg-white border-[#D9D3C8] text-[#5C6E68] hover:border-[#6E9E93]'
+                                    }`}
+                                  >
+                                    {member.otherComorbiditiesAge === 'No sé' ? '✓ No sé' : 'No sé'}
+                                  </button>
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </div>

@@ -21,12 +21,34 @@ import {
   Flame,
   MessageSquare,
   HelpCircle,
+  Tv,
+  Car,
+  Home,
+  DollarSign,
 } from 'lucide-react';
 import {
   PatientBodySymptomsInfo,
   BodyCategoryState,
   DigestiveHabitsInfo,
   MoodSleepHabitsInfo,
+  PHQ2Option,
+  PHQ2_OPTIONS,
+  calculatePHQ2Score,
+  SleepQuality,
+  SLEEP_QUALITY_OPTIONS,
+  SleepAssessmentInfo,
+  StopApneaScreening,
+  calculateStopScore,
+  StressSourceOption,
+  STRESS_SOURCES_LIST,
+  ScreenTimeOption,
+  SCREEN_TIME_OPTIONS,
+  WhoCooksOption,
+  WHO_COOKS_OPTIONS,
+  FoodSecurityWorryOption,
+  FOOD_SECURITY_OPTIONS,
+  CommuteTimeOption,
+  COMMUTE_TIME_OPTIONS,
 } from '../types';
 import { VelaIcon } from './VelaIcon';
 
@@ -197,10 +219,34 @@ export const StepFiveForm: React.FC<StepFiveFormProps> = ({
       moodSleepMind: createEmptyCategoryState(),
       moodSleepHabits: {
         stressLevel: 5,
+        stressSources: [],
+        stressSourcesOther: '',
+        screenTimeHours: '',
+        whoCooksAtHome: '',
+        whoCooksAtHomeOther: '',
+        foodSecurityWorry: '',
+        dailyCommuteTime: '',
         bedtime: '23:00',
         wakeTime: '07:00',
         calculatedSleepHours: 8,
         dailyRoutineDescription: '',
+        phq2: {
+          littleInterest: '',
+          feelingDown: '',
+          totalScore: 0,
+        },
+        sleepAssessment: {
+          usualSleepHours: '',
+          sleepQuality: '',
+          nightOrRotatingShift: '',
+          stopScreening: {
+            snoringLoudly: '',
+            tiredDuringDay: '',
+            observedApnea: '',
+            highBloodPressure: '',
+            score: 0,
+          },
+        },
       },
       additionalNotes: '',
     };
@@ -244,8 +290,45 @@ export const StepFiveForm: React.FC<StepFiveFormProps> = ({
     const cat = formData[key];
     if (!cat) return false;
     if (cat.skipped) return true;
-    if (cat.hasNoSymptoms) return true;
-    return cat.selectedChips && cat.selectedChips.length > 0;
+
+    // Check chips
+    const chipsReviewed = cat.hasNoSymptoms || (Boolean(cat.selectedChips && cat.selectedChips.length > 0));
+    if (!chipsReviewed) return false;
+
+    // For Category 7 (moodSleepMind), PHQ-2, Sleep Assessment (7 questions), Stress, Screens, and Routine are mandatory
+    if (key === 'moodSleepMind') {
+      const phq2 = formData.moodSleepHabits?.phq2;
+      if (!phq2 || !phq2.littleInterest || !phq2.feelingDown) {
+        return false;
+      }
+
+      const sa = formData.moodSleepHabits?.sleepAssessment;
+      if (
+        !sa ||
+        !sa.usualSleepHours ||
+        sa.usualSleepHours.trim() === '' ||
+        !sa.sleepQuality ||
+        !sa.nightOrRotatingShift ||
+        !sa.stopScreening?.snoringLoudly ||
+        !sa.stopScreening?.tiredDuringDay ||
+        !sa.stopScreening?.observedApnea ||
+        !sa.stopScreening?.highBloodPressure
+      ) {
+        return false;
+      }
+
+      const msh = formData.moodSleepHabits;
+      if (!msh) return false;
+      if (msh.stressLevel === undefined || msh.stressLevel === null) return false;
+      if (msh.stressSources?.includes('Otro') && !msh.stressSourcesOther?.trim()) return false;
+      if (!msh.screenTimeHours) return false;
+      if (!msh.whoCooksAtHome) return false;
+      if (msh.whoCooksAtHome === 'Otro' && !msh.whoCooksAtHomeOther?.trim()) return false;
+      if (!msh.foodSecurityWorry) return false;
+      if (!msh.dailyCommuteTime) return false;
+    }
+
+    return true;
   };
 
   const totalCategories = CATEGORIES.length; // 7 categories
@@ -334,6 +417,147 @@ export const StepFiveForm: React.FC<StepFiveFormProps> = ({
       return {
         ...prev,
         moodSleepHabits: updated,
+      };
+    });
+  };
+
+  // Update PHQ-2 Screening Responses
+  const handleUpdatePHQ2 = (field: 'littleInterest' | 'feelingDown', value: PHQ2Option) => {
+    setFormData((prev) => {
+      const currentHabits = prev.moodSleepHabits || {
+        stressLevel: 5,
+        bedtime: '23:00',
+        wakeTime: '07:00',
+        calculatedSleepHours: 8,
+        dailyRoutineDescription: '',
+      };
+      const currentPhq2 = currentHabits.phq2 || { littleInterest: '', feelingDown: '', totalScore: 0 };
+      const nextLittleInterest = field === 'littleInterest' ? value : (currentPhq2.littleInterest || '');
+      const nextFeelingDown = field === 'feelingDown' ? value : (currentPhq2.feelingDown || '');
+      const nextScore = calculatePHQ2Score(nextLittleInterest, nextFeelingDown);
+
+      return {
+        ...prev,
+        moodSleepHabits: {
+          ...currentHabits,
+          phq2: {
+            littleInterest: nextLittleInterest,
+            feelingDown: nextFeelingDown,
+            totalScore: nextScore,
+          },
+        },
+      };
+    });
+  };
+
+  // Update Sleep Assessment (questions 1, 2, 3)
+  const handleUpdateSleepAssessment = (field: keyof SleepAssessmentInfo, value: any) => {
+    setFormData((prev) => {
+      const currentHabits = prev.moodSleepHabits || {
+        stressLevel: 5,
+        bedtime: '23:00',
+        wakeTime: '07:00',
+        calculatedSleepHours: 8,
+        dailyRoutineDescription: '',
+      };
+      const currentSleep = currentHabits.sleepAssessment || {
+        usualSleepHours: '',
+        sleepQuality: '',
+        nightOrRotatingShift: '',
+        stopScreening: {
+          snoringLoudly: '',
+          tiredDuringDay: '',
+          observedApnea: '',
+          highBloodPressure: '',
+          score: 0,
+        },
+      };
+
+      return {
+        ...prev,
+        moodSleepHabits: {
+          ...currentHabits,
+          sleepAssessment: {
+            ...currentSleep,
+            [field]: value,
+          },
+        },
+      };
+    });
+  };
+
+  // Update STOP Apnea Screening (questions 4 to 7)
+  const handleUpdateStopScreening = (field: keyof StopApneaScreening, value: 'Sí' | 'No') => {
+    setFormData((prev) => {
+      const currentHabits = prev.moodSleepHabits || {
+        stressLevel: 5,
+        bedtime: '23:00',
+        wakeTime: '07:00',
+        calculatedSleepHours: 8,
+        dailyRoutineDescription: '',
+      };
+      const currentSleep = currentHabits.sleepAssessment || {
+        usualSleepHours: '',
+        sleepQuality: '',
+        nightOrRotatingShift: '',
+        stopScreening: {
+          snoringLoudly: '',
+          tiredDuringDay: '',
+          observedApnea: '',
+          highBloodPressure: '',
+          score: 0,
+        },
+      };
+      const currentStop = currentSleep.stopScreening || {
+        snoringLoudly: '',
+        tiredDuringDay: '',
+        observedApnea: '',
+        highBloodPressure: '',
+        score: 0,
+      };
+
+      const nextStop = {
+        ...currentStop,
+        [field]: value,
+      };
+      nextStop.score = calculateStopScore(nextStop);
+
+      return {
+        ...prev,
+        moodSleepHabits: {
+          ...currentHabits,
+          sleepAssessment: {
+            ...currentSleep,
+            stopScreening: nextStop,
+          },
+        },
+      };
+    });
+  };
+
+  // Toggle Stress Sources (multiple select)
+  const handleToggleStressSource = (source: string) => {
+    setFormData((prev) => {
+      const currentHabits = prev.moodSleepHabits || {
+        stressLevel: 5,
+        stressSources: [],
+        bedtime: '23:00',
+        wakeTime: '07:00',
+        calculatedSleepHours: 8,
+        dailyRoutineDescription: '',
+      };
+      const currentSources = currentHabits.stressSources || [];
+      const isSelected = currentSources.includes(source);
+      const nextSources = isSelected
+        ? currentSources.filter((s) => s !== source)
+        : [...currentSources, source];
+
+      return {
+        ...prev,
+        moodSleepHabits: {
+          ...currentHabits,
+          stressSources: nextSources,
+        },
       };
     });
   };
@@ -748,15 +972,126 @@ export const StepFiveForm: React.FC<StepFiveFormProps> = ({
                         </div>
                       )}
 
-                      {/* SPECIAL SUB-SECTION: MOOD, STRESS SCALE, SLEEP SCHEDULE & DAILY LIFE ROUTINE */}
+                      {/* SPECIAL SUB-SECTION: MOOD, PHQ-2, STRESS SCALE, SLEEP SCHEDULE & DAILY LIFE ROUTINE */}
                       {category.key === 'moodSleepMind' && (
                         <div className="pt-4 border-t border-[#E8E2D8]/70 space-y-6">
-                          {/* 1. STRESS SCALE (1 to 10) */}
-                          <div className="space-y-3 bg-[#FAF6F0]/80 p-4 sm:p-5 rounded-2xl border border-[#E8E2D8]">
+                          {/* 0. PHQ-2 SCREENING BLOCK */}
+                          <div
+                            id="phq2-screening-container"
+                            className={`space-y-4 p-4 sm:p-5 rounded-2xl border transition-all duration-200 ${
+                              attemptedSubmit &&
+                              (!formData.moodSleepHabits?.phq2?.littleInterest ||
+                                !formData.moodSleepHabits?.phq2?.feelingDown)
+                                ? 'bg-[#FDEEE9]/60 border-[#F2A488] ring-2 ring-[#F2A488]/30 shadow-xs'
+                                : 'bg-white border-[#D9D3C8] shadow-2xs'
+                            }`}
+                          >
+                            <div className="space-y-1">
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-2 text-xs font-semibold text-[#5B887E] uppercase tracking-wider">
+                                  <Smile className="w-3.5 h-3.5" />
+                                  <span>Tamizaje de bienestar emocional (PHQ-2)</span>
+                                </div>
+                                <span className="text-[11px] font-semibold text-[#C66A4D] bg-[#FDEEE9] px-2.5 py-0.5 rounded-full border border-[#F2A488]/40">
+                                  Obligatorio
+                                </span>
+                              </div>
+                              <p className="text-xs sm:text-sm font-medium text-[#2E3A36] pt-1">
+                                En las últimas 2 semanas, ¿con qué frecuencia has tenido...
+                              </p>
+                            </div>
+
+                            {/* Item 1: Poco interés o placer en hacer las cosas */}
+                            <div className="space-y-2 pt-2 border-t border-[#E8E2D8]/60">
+                              <label className="text-xs font-semibold text-[#2E3A36] flex items-center justify-between gap-2">
+                                <span>1) Poco interés o placer en hacer las cosas:</span>
+                                {attemptedSubmit && !formData.moodSleepHabits?.phq2?.littleInterest && (
+                                  <span className="text-[10px] text-[#C66A4D] font-medium flex items-center gap-1">
+                                    <AlertCircle className="w-3 h-3" /> Selección requerida
+                                  </span>
+                                )}
+                              </label>
+
+                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                                {PHQ2_OPTIONS.map((opt) => {
+                                  const isSelected = formData.moodSleepHabits?.phq2?.littleInterest === opt;
+                                  return (
+                                    <button
+                                      key={opt}
+                                      type="button"
+                                      id={`phq2-q1-${opt.toLowerCase().replace(/\s+/g, '-')}`}
+                                      onClick={() => handleUpdatePHQ2('littleInterest', opt)}
+                                      className={`px-3.5 py-2.5 rounded-xl text-xs font-medium transition-all duration-150 flex items-center justify-between gap-2 cursor-pointer border text-left ${
+                                        isSelected
+                                          ? 'bg-[#FDEEE9] text-[#C66A4D] border-[#F2A488] font-semibold shadow-xs ring-2 ring-[#F2A488]/30'
+                                          : 'bg-white text-[#2E3A36] border-[#D9D3C8] hover:border-[#AEC9C0] hover:bg-[#FAF6F0]'
+                                      }`}
+                                    >
+                                      <span>{opt}</span>
+                                      <div
+                                        className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 transition-colors ${
+                                          isSelected
+                                            ? 'bg-[#F2A488] border-[#F2A488] text-white'
+                                            : 'border-[#C8C2B7] bg-white'
+                                        }`}
+                                      >
+                                        {isSelected && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                                      </div>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+
+                            {/* Item 2: Sensación de tristeza, desánimo o desesperanza */}
+                            <div className="space-y-2 pt-2 border-t border-[#E8E2D8]/60">
+                              <label className="text-xs font-semibold text-[#2E3A36] flex items-center justify-between gap-2">
+                                <span>2) Sensación de tristeza, desánimo o desesperanza:</span>
+                                {attemptedSubmit && !formData.moodSleepHabits?.phq2?.feelingDown && (
+                                  <span className="text-[10px] text-[#C66A4D] font-medium flex items-center gap-1">
+                                    <AlertCircle className="w-3 h-3" /> Selección requerida
+                                  </span>
+                                )}
+                              </label>
+
+                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                                {PHQ2_OPTIONS.map((opt) => {
+                                  const isSelected = formData.moodSleepHabits?.phq2?.feelingDown === opt;
+                                  return (
+                                    <button
+                                      key={opt}
+                                      type="button"
+                                      id={`phq2-q2-${opt.toLowerCase().replace(/\s+/g, '-')}`}
+                                      onClick={() => handleUpdatePHQ2('feelingDown', opt)}
+                                      className={`px-3.5 py-2.5 rounded-xl text-xs font-medium transition-all duration-150 flex items-center justify-between gap-2 cursor-pointer border text-left ${
+                                        isSelected
+                                          ? 'bg-[#FDEEE9] text-[#C66A4D] border-[#F2A488] font-semibold shadow-xs ring-2 ring-[#F2A488]/30'
+                                          : 'bg-white text-[#2E3A36] border-[#D9D3C8] hover:border-[#AEC9C0] hover:bg-[#FAF6F0]'
+                                      }`}
+                                    >
+                                      <span>{opt}</span>
+                                      <div
+                                        className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 transition-colors ${
+                                          isSelected
+                                            ? 'bg-[#F2A488] border-[#F2A488] text-white'
+                                            : 'border-[#C8C2B7] bg-white'
+                                        }`}
+                                      >
+                                        {isSelected && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                                      </div>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* 1. STRESS SCALE & SOURCES (Obligatorio) */}
+                          <div className="space-y-4 bg-[#FAF6F0]/80 p-4 sm:p-5 rounded-2xl border border-[#E8E2D8]">
                             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
                               <label className="text-xs font-semibold text-[#2E3A36] flex items-center gap-1.5">
                                 <Flame className="w-4 h-4 text-[#C66A4D]" />
-                                <span>Escala de nivel de estrés cotidiano (1 al 10):</span>
+                                <span>¿Qué tan estresado(a) te has sentido el último mes? (1 al 10):</span>
                               </label>
                               <span className="text-xs font-semibold text-[#C66A4D] bg-[#FDEEE9] px-2.5 py-0.5 rounded-full border border-[#F2A488]/40 self-start sm:self-auto">
                                 Nivel {formData.moodSleepHabits?.stressLevel || 5} de 10 —{' '}
@@ -790,73 +1125,600 @@ export const StepFiveForm: React.FC<StepFiveFormProps> = ({
                                 <span>10 (Extremo)</span>
                               </div>
                             </div>
-                          </div>
 
-                          {/* 2. SLEEP SCHEDULE & DYNAMIC SLEEP CALCULATION */}
-                          <div className="space-y-3 bg-white p-4 sm:p-5 rounded-2xl border border-[#D9D3C8] shadow-2xs">
-                            <div className="flex items-center gap-2 text-xs font-semibold text-[#5B887E] uppercase tracking-wider">
-                              <Moon className="w-3.5 h-3.5" />
-                              <span>Horarios de sueño y descanso</span>
-                            </div>
-
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-center">
-                              {/* Bedtime */}
-                              <div className="space-y-1.5">
-                                <label
-                                  htmlFor="bedtime-input"
-                                  className="text-xs font-semibold text-[#2E3A36] flex items-center gap-1.5"
-                                >
-                                  <Moon className="w-3.5 h-3.5 text-[#5C6E68]" />
-                                  <span>¿A qué hora te vas a dormir?</span>
-                                </label>
-                                <input
-                                  type="time"
-                                  id="bedtime-input"
-                                  value={formData.moodSleepHabits?.bedtime || '23:00'}
-                                  onChange={(e) => handleUpdateMoodHabits('bedtime', e.target.value)}
-                                  className="w-full px-3 py-2 rounded-xl bg-[#FAF6F0] border border-[#D9D3C8] text-[#2E3A36] text-xs font-medium focus:ring-2 focus:ring-[#6E9E93]/40 focus:bg-white"
-                                />
+                            {/* Fuentes principales de estrés */}
+                            <div className="pt-3 border-t border-[#E8E2D8]/70 space-y-2">
+                              <label className="text-xs font-semibold text-[#2E3A36] flex items-center justify-between">
+                                <span>¿Cuáles son tus principales fuentes de estrés?</span>
+                                <span className="text-[11px] font-normal text-[#8E9E99]">(selección múltiple)</span>
+                              </label>
+                              <div className="flex flex-wrap gap-2">
+                                {STRESS_SOURCES_LIST.map((source) => {
+                                  const isSelected = formData.moodSleepHabits?.stressSources?.includes(source);
+                                  return (
+                                    <button
+                                      key={source}
+                                      type="button"
+                                      id={`stress-source-${source.toLowerCase().replace(/\s+/g, '-')}`}
+                                      onClick={() => handleToggleStressSource(source)}
+                                      className={`px-3.5 py-2 rounded-xl text-xs font-medium transition-all duration-150 flex items-center gap-1.5 cursor-pointer border ${
+                                        isSelected
+                                          ? 'bg-[#FDEEE9] text-[#C66A4D] border-[#F2A488] font-semibold ring-1 ring-[#F2A488]/40 shadow-xs'
+                                          : 'bg-white text-[#2E3A36] border-[#D9D3C8] hover:border-[#AEC9C0] hover:bg-[#FAF6F0]'
+                                      }`}
+                                    >
+                                      <div
+                                        className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 transition-colors ${
+                                          isSelected ? 'bg-[#F2A488] border-[#F2A488] text-white' : 'border-[#C8C2B7] bg-white'
+                                        }`}
+                                      >
+                                        {isSelected && <Check className="w-2 h-2 stroke-[3]" />}
+                                      </div>
+                                      <span>{source}</span>
+                                    </button>
+                                  );
+                                })}
                               </div>
 
-                              {/* Wake time */}
-                              <div className="space-y-1.5">
-                                <label
-                                  htmlFor="wakeTime-input"
-                                  className="text-xs font-semibold text-[#2E3A36] flex items-center gap-1.5"
-                                >
-                                  <Sun className="w-3.5 h-3.5 text-[#C66A4D]" />
-                                  <span>¿A qué hora te levantas?</span>
-                                </label>
-                                <input
-                                  type="time"
-                                  id="wakeTime-input"
-                                  value={formData.moodSleepHabits?.wakeTime || '07:00'}
-                                  onChange={(e) => handleUpdateMoodHabits('wakeTime', e.target.value)}
-                                  className="w-full px-3 py-2 rounded-xl bg-[#FAF6F0] border border-[#D9D3C8] text-[#2E3A36] text-xs font-medium focus:ring-2 focus:ring-[#6E9E93]/40 focus:bg-white"
-                                />
-                              </div>
-
-                              {/* Dynamic Sleep Calculation Banner */}
-                              <div className="p-3 rounded-2xl bg-[#EBF3F0] border border-[#AEC9C0]/60 flex flex-col justify-center text-center sm:text-left">
-                                <span className="text-[11px] text-[#477369] font-medium flex items-center justify-center sm:justify-start gap-1">
-                                  <Clock className="w-3 h-3 text-[#5B887E]" />
-                                  Horas de sueño calculadas:
-                                </span>
-                                <div className="text-base font-semibold text-[#2E3A36] mt-0.5">
-                                  {calculatedSleep !== undefined ? `${calculatedSleep} horas / noche` : 'Por calcular'}
+                              {/* Si seleccionó Otro */}
+                              {formData.moodSleepHabits?.stressSources?.includes('Otro') && (
+                                <div className="pt-2">
+                                  <input
+                                    type="text"
+                                    id="stress-sources-other"
+                                    value={formData.moodSleepHabits?.stressSourcesOther || ''}
+                                    onChange={(e) => handleUpdateMoodHabits('stressSourcesOther', e.target.value)}
+                                    placeholder="¿Cuáles otras fuentes de estrés?"
+                                    className="w-full px-3.5 py-2 rounded-xl bg-white border border-[#D9D3C8] text-[#2E3A36] placeholder-[#8E9E99] text-xs focus:ring-2 focus:ring-[#6E9E93]/40"
+                                  />
                                 </div>
-                                <span className="text-[10px] text-[#5C6E68]">
-                                  {calculatedSleep !== undefined && calculatedSleep < 7
-                                    ? '⚠️ Menos de 7 horas (descanso corto)'
-                                    : calculatedSleep !== undefined && calculatedSleep > 9
-                                    ? 'Descanso prolongado (>9h)'
-                                    : '✓ Rango óptimo recomendado'}
+                              )}
+                            </div>
+                          </div>
+
+                          {/* 2. SLEEP ASSESSMENT & APNEA SCREENING BLOCK (Obligatorio) */}
+                          <div
+                            id="sleep-assessment-container"
+                            className={`space-y-5 p-4 sm:p-5 rounded-2xl border transition-all duration-200 ${
+                              attemptedSubmit &&
+                              (!formData.moodSleepHabits?.sleepAssessment?.usualSleepHours ||
+                                !formData.moodSleepHabits?.sleepAssessment?.sleepQuality ||
+                                !formData.moodSleepHabits?.sleepAssessment?.nightOrRotatingShift ||
+                                !formData.moodSleepHabits?.sleepAssessment?.stopScreening?.snoringLoudly ||
+                                !formData.moodSleepHabits?.sleepAssessment?.stopScreening?.tiredDuringDay ||
+                                !formData.moodSleepHabits?.sleepAssessment?.stopScreening?.observedApnea ||
+                                !formData.moodSleepHabits?.sleepAssessment?.stopScreening?.highBloodPressure)
+                                ? 'bg-[#FDEEE9]/60 border-[#F2A488] ring-2 ring-[#F2A488]/30 shadow-xs'
+                                : 'bg-white border-[#D9D3C8] shadow-2xs'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-2 border-b border-[#E8E2D8]/70 pb-3">
+                              <div className="flex items-center gap-2 text-xs font-semibold text-[#5B887E] uppercase tracking-wider">
+                                <Moon className="w-4 h-4 text-[#5B887E]" />
+                                <span>Bloque de Sueño y Descanso</span>
+                              </div>
+                              <span className="text-[11px] font-semibold text-[#C66A4D] bg-[#FDEEE9] px-2.5 py-0.5 rounded-full border border-[#F2A488]/40">
+                                Obligatorio
+                              </span>
+                            </div>
+
+                            {/* Pregunta 1: Horas de sueño en una noche habitual */}
+                            <div className="space-y-2">
+                              <label
+                                htmlFor="usual-sleep-hours-input"
+                                className="text-xs font-semibold text-[#2E3A36] flex items-center justify-between gap-2"
+                              >
+                                <span>1) ¿Cuántas horas duermes en una noche habitual?</span>
+                                {attemptedSubmit && !formData.moodSleepHabits?.sleepAssessment?.usualSleepHours && (
+                                  <span className="text-[10px] text-[#C66A4D] font-medium flex items-center gap-1">
+                                    <AlertCircle className="w-3 h-3" /> Requerido
+                                  </span>
+                                )}
+                              </label>
+                              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                                <div className="relative w-full sm:w-44">
+                                  <input
+                                    type="number"
+                                    id="usual-sleep-hours-input"
+                                    min="1"
+                                    max="24"
+                                    step="0.5"
+                                    value={formData.moodSleepHabits?.sleepAssessment?.usualSleepHours || ''}
+                                    onChange={(e) => handleUpdateSleepAssessment('usualSleepHours', e.target.value)}
+                                    placeholder="ej. 7"
+                                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#FAF6F0] border border-[#D9D3C8] text-[#2E3A36] text-xs font-medium focus:ring-2 focus:ring-[#6E9E93]/40 focus:bg-white"
+                                  />
+                                  <span className="absolute right-3 top-2.5 text-xs text-[#8E9E99] pointer-events-none">
+                                    horas
+                                  </span>
+                                </div>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {['5', '6', '7', '8', '9'].map((h) => (
+                                    <button
+                                      key={h}
+                                      type="button"
+                                      onClick={() => handleUpdateSleepAssessment('usualSleepHours', h)}
+                                      className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors cursor-pointer ${
+                                        formData.moodSleepHabits?.sleepAssessment?.usualSleepHours === h
+                                          ? 'bg-[#5B887E] text-white border-[#5B887E]'
+                                          : 'bg-white text-[#5C6E68] border-[#D9D3C8] hover:border-[#6E9E93]'
+                                      }`}
+                                    >
+                                      {h} hrs
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Pregunta 2: Calidad del sueño */}
+                            <div className="space-y-2 pt-2 border-t border-[#E8E2D8]/60">
+                              <label className="text-xs font-semibold text-[#2E3A36] flex items-center justify-between gap-2">
+                                <span>2) ¿Cómo calificarías la calidad de tu sueño?</span>
+                                {attemptedSubmit && !formData.moodSleepHabits?.sleepAssessment?.sleepQuality && (
+                                  <span className="text-[10px] text-[#C66A4D] font-medium flex items-center gap-1">
+                                    <AlertCircle className="w-3 h-3" /> Selección requerida
+                                  </span>
+                                )}
+                              </label>
+                              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                                {SLEEP_QUALITY_OPTIONS.map((opt) => {
+                                  const isSelected = formData.moodSleepHabits?.sleepAssessment?.sleepQuality === opt;
+                                  return (
+                                    <button
+                                      key={opt}
+                                      type="button"
+                                      id={`sleep-quality-${opt.toLowerCase().replace(/\s+/g, '-')}`}
+                                      onClick={() => handleUpdateSleepAssessment('sleepQuality', opt)}
+                                      className={`px-3 py-2.5 rounded-xl text-xs font-medium transition-all duration-150 flex items-center justify-between gap-1.5 cursor-pointer border text-left ${
+                                        isSelected
+                                          ? 'bg-[#EBF3F0] text-[#346A60] border-[#6E9E93] font-semibold ring-2 ring-[#6E9E93]/30 shadow-xs'
+                                          : 'bg-white text-[#2E3A36] border-[#D9D3C8] hover:border-[#AEC9C0] hover:bg-[#FAF6F0]'
+                                      }`}
+                                    >
+                                      <span>{opt}</span>
+                                      <div
+                                        className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 transition-colors ${
+                                          isSelected ? 'bg-[#5B887E] border-[#5B887E] text-white' : 'border-[#C8C2B7] bg-white'
+                                        }`}
+                                      >
+                                        {isSelected && <Check className="w-2 h-2 stroke-[3]" />}
+                                      </div>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+
+                            {/* Pregunta 3: Turnos nocturnos o rotativos */}
+                            <div className="space-y-2 pt-2 border-t border-[#E8E2D8]/60">
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                <label className="text-xs font-semibold text-[#2E3A36] flex items-center justify-between sm:justify-start gap-2">
+                                  <span>3) ¿Trabajas en turnos nocturnos o rotativos?</span>
+                                  {attemptedSubmit && !formData.moodSleepHabits?.sleepAssessment?.nightOrRotatingShift && (
+                                    <span className="text-[10px] text-[#C66A4D] font-medium flex items-center gap-1 sm:hidden">
+                                      <AlertCircle className="w-3 h-3" /> Requerido
+                                    </span>
+                                  )}
+                                </label>
+                                <div className="flex items-center gap-2">
+                                  {['Sí', 'No'].map((val) => {
+                                    const isSelected = formData.moodSleepHabits?.sleepAssessment?.nightOrRotatingShift === val;
+                                    return (
+                                      <button
+                                        key={val}
+                                        type="button"
+                                        id={`night-shift-${val.toLowerCase()}`}
+                                        onClick={() => handleUpdateSleepAssessment('nightOrRotatingShift', val)}
+                                        className={`px-4 py-1.5 rounded-xl text-xs font-medium border transition-all cursor-pointer ${
+                                          isSelected
+                                            ? 'bg-[#5B887E] text-white border-[#5B887E]'
+                                            : 'bg-white text-[#5C6E68] border-[#D9D3C8] hover:border-[#6E9E93]'
+                                        }`}
+                                      >
+                                        {val}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* TAMIZAJE DE APNEA / DESCANSO NOCTURNO (Preguntas 4 a 7) */}
+                            <div className="pt-3 border-t border-[#E8E2D8] space-y-3.5 bg-[#FAF6F0]/60 p-3.5 sm:p-4 rounded-xl">
+                              <div className="space-y-0.5">
+                                <span className="text-xs font-semibold text-[#5B887E]">
+                                  Evaluación de descanso nocturno y respiración
                                 </span>
+                                <p className="text-[11px] text-[#5C6E68]">
+                                  Responde con sinceridad cada una de las siguientes preguntas:
+                                </p>
+                              </div>
+
+                              {/* Pregunta 4: Ronquido fuerte */}
+                              <div className="space-y-1.5 pt-1">
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                  <label className="text-xs text-[#2E3A36] leading-relaxed pr-2">
+                                    <span className="font-semibold">4)</span> ¿Roncas fuerte (tan fuerte que se escucha a través de una puerta cerrada o que tu pareja te ha despertado por eso)?
+                                  </label>
+                                  <div className="flex items-center gap-2 shrink-0">
+                                    {['Sí', 'No'].map((val) => {
+                                      const isSelected = formData.moodSleepHabits?.sleepAssessment?.stopScreening?.snoringLoudly === val;
+                                      return (
+                                        <button
+                                          key={val}
+                                          type="button"
+                                          id={`stop-snoring-${val.toLowerCase()}`}
+                                          onClick={() => handleUpdateStopScreening('snoringLoudly', val as 'Sí' | 'No')}
+                                          className={`px-4 py-1.5 rounded-xl text-xs font-medium border transition-all cursor-pointer ${
+                                            isSelected
+                                              ? 'bg-[#5B887E] text-white border-[#5B887E]'
+                                              : 'bg-white text-[#5C6E68] border-[#D9D3C8] hover:border-[#6E9E93]'
+                                          }`}
+                                        >
+                                          {val}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                                {attemptedSubmit && !formData.moodSleepHabits?.sleepAssessment?.stopScreening?.snoringLoudly && (
+                                  <span className="text-[10px] text-[#C66A4D] font-medium flex items-center gap-1">
+                                    <AlertCircle className="w-3 h-3" /> Selección requerida
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* Pregunta 5: Cansancio o fatiga diurna */}
+                              <div className="space-y-1.5 pt-2 border-t border-[#E8E2D8]/60">
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                  <label className="text-xs text-[#2E3A36] leading-relaxed pr-2">
+                                    <span className="font-semibold">5)</span> ¿Te sientes cansado(a), fatigado(a) o con sueño durante el día con frecuencia?
+                                  </label>
+                                  <div className="flex items-center gap-2 shrink-0">
+                                    {['Sí', 'No'].map((val) => {
+                                      const isSelected = formData.moodSleepHabits?.sleepAssessment?.stopScreening?.tiredDuringDay === val;
+                                      return (
+                                        <button
+                                          key={val}
+                                          type="button"
+                                          id={`stop-tired-${val.toLowerCase()}`}
+                                          onClick={() => handleUpdateStopScreening('tiredDuringDay', val as 'Sí' | 'No')}
+                                          className={`px-4 py-1.5 rounded-xl text-xs font-medium border transition-all cursor-pointer ${
+                                            isSelected
+                                              ? 'bg-[#5B887E] text-white border-[#5B887E]'
+                                              : 'bg-white text-[#5C6E68] border-[#D9D3C8] hover:border-[#6E9E93]'
+                                          }`}
+                                        >
+                                          {val}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                                {attemptedSubmit && !formData.moodSleepHabits?.sleepAssessment?.stopScreening?.tiredDuringDay && (
+                                  <span className="text-[10px] text-[#C66A4D] font-medium flex items-center gap-1">
+                                    <AlertCircle className="w-3 h-3" /> Selección requerida
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* Pregunta 6: Apnea o ahogo observado */}
+                              <div className="space-y-1.5 pt-2 border-t border-[#E8E2D8]/60">
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                  <label className="text-xs text-[#2E3A36] leading-relaxed pr-2">
+                                    <span className="font-semibold">6)</span> ¿Alguien te ha visto dejar de respirar o ahogarte mientras duermes?
+                                  </label>
+                                  <div className="flex items-center gap-2 shrink-0">
+                                    {['Sí', 'No'].map((val) => {
+                                      const isSelected = formData.moodSleepHabits?.sleepAssessment?.stopScreening?.observedApnea === val;
+                                      return (
+                                        <button
+                                          key={val}
+                                          type="button"
+                                          id={`stop-apnea-${val.toLowerCase()}`}
+                                          onClick={() => handleUpdateStopScreening('observedApnea', val as 'Sí' | 'No')}
+                                          className={`px-4 py-1.5 rounded-xl text-xs font-medium border transition-all cursor-pointer ${
+                                            isSelected
+                                              ? 'bg-[#5B887E] text-white border-[#5B887E]'
+                                              : 'bg-white text-[#5C6E68] border-[#D9D3C8] hover:border-[#6E9E93]'
+                                          }`}
+                                        >
+                                          {val}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                                {attemptedSubmit && !formData.moodSleepHabits?.sleepAssessment?.stopScreening?.observedApnea && (
+                                  <span className="text-[10px] text-[#C66A4D] font-medium flex items-center gap-1">
+                                    <AlertCircle className="w-3 h-3" /> Selección requerida
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* Pregunta 7: Hipertensión arterial */}
+                              <div className="space-y-1.5 pt-2 border-t border-[#E8E2D8]/60">
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                  <label className="text-xs text-[#2E3A36] leading-relaxed pr-2">
+                                    <span className="font-semibold">7)</span> ¿Tienes o te están tratando la presión arterial alta?
+                                  </label>
+                                  <div className="flex items-center gap-2 shrink-0">
+                                    {['Sí', 'No'].map((val) => {
+                                      const isSelected = formData.moodSleepHabits?.sleepAssessment?.stopScreening?.highBloodPressure === val;
+                                      return (
+                                        <button
+                                          key={val}
+                                          type="button"
+                                          id={`stop-htn-${val.toLowerCase()}`}
+                                          onClick={() => handleUpdateStopScreening('highBloodPressure', val as 'Sí' | 'No')}
+                                          className={`px-4 py-1.5 rounded-xl text-xs font-medium border transition-all cursor-pointer ${
+                                            isSelected
+                                              ? 'bg-[#5B887E] text-white border-[#5B887E]'
+                                              : 'bg-white text-[#5C6E68] border-[#D9D3C8] hover:border-[#6E9E93]'
+                                          }`}
+                                        >
+                                          {val}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                                {attemptedSubmit && !formData.moodSleepHabits?.sleepAssessment?.stopScreening?.highBloodPressure && (
+                                  <span className="text-[10px] text-[#C66A4D] font-medium flex items-center gap-1">
+                                    <AlertCircle className="w-3 h-3" /> Selección requerida
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Horarios habituales adicionales (opcionales para enriquecer cálculo) */}
+                            <div className="pt-2 border-t border-[#E8E2D8]/60 space-y-2">
+                              <span className="text-[11px] font-semibold text-[#5C6E68]">
+                                Horarios aproximados de acostarse y levantarse (opcional):
+                              </span>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div className="space-y-1">
+                                  <label htmlFor="bedtime-input" className="text-[11px] text-[#5C6E68] flex items-center gap-1">
+                                    <Moon className="w-3 h-3 text-[#5C6E68]" /> ¿A qué hora te acuestas?
+                                  </label>
+                                  <input
+                                    type="time"
+                                    id="bedtime-input"
+                                    value={formData.moodSleepHabits?.bedtime || '23:00'}
+                                    onChange={(e) => handleUpdateMoodHabits('bedtime', e.target.value)}
+                                    className="w-full px-3 py-1.5 rounded-xl bg-[#FAF6F0] border border-[#D9D3C8] text-[#2E3A36] text-xs font-medium focus:ring-2 focus:ring-[#6E9E93]/40 focus:bg-white"
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <label htmlFor="wakeTime-input" className="text-[11px] text-[#5C6E68] flex items-center gap-1">
+                                    <Sun className="w-3 h-3 text-[#C66A4D]" /> ¿A qué hora te levantas?
+                                  </label>
+                                  <input
+                                    type="time"
+                                    id="wakeTime-input"
+                                    value={formData.moodSleepHabits?.wakeTime || '07:00'}
+                                    onChange={(e) => handleUpdateMoodHabits('wakeTime', e.target.value)}
+                                    className="w-full px-3 py-1.5 rounded-xl bg-[#FAF6F0] border border-[#D9D3C8] text-[#2E3A36] text-xs font-medium focus:ring-2 focus:ring-[#6E9E93]/40 focus:bg-white"
+                                  />
+                                </div>
                               </div>
                             </div>
                           </div>
 
-                          {/* 3. DAILY LIFE ROUTINE DESCRIPTION */}
+                          {/* 3. SCREEN TIME / PANTALLAS FUERA DEL TRABAJO (Obligatorio) */}
+                          <div
+                            id="screen-time-container"
+                            className={`space-y-3 p-4 sm:p-5 rounded-2xl border transition-all duration-200 ${
+                              attemptedSubmit && !formData.moodSleepHabits?.screenTimeHours
+                                ? 'bg-[#FDEEE9]/60 border-[#F2A488] ring-2 ring-[#F2A488]/30 shadow-xs'
+                                : 'bg-white border-[#D9D3C8] shadow-2xs'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <label className="text-xs font-semibold text-[#2E3A36] flex items-center gap-2">
+                                <Tv className="w-4 h-4 text-[#5B887E]" />
+                                <span>¿Cuántas horas al día pasas frente a pantallas fuera del trabajo (celular, TV, computador)?</span>
+                              </label>
+                              <span className="text-[11px] font-semibold text-[#C66A4D] bg-[#FDEEE9] px-2 py-0.5 rounded-full border border-[#F2A488]/40 shrink-0">
+                                Obligatorio
+                              </span>
+                            </div>
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1">
+                              {SCREEN_TIME_OPTIONS.map((opt) => {
+                                const isSelected = formData.moodSleepHabits?.screenTimeHours === opt;
+                                return (
+                                  <button
+                                    key={opt}
+                                    type="button"
+                                    id={`screen-time-${opt.toLowerCase().replace(/\s+/g, '-')}`}
+                                    onClick={() => handleUpdateMoodHabits('screenTimeHours', opt)}
+                                    className={`px-3.5 py-2.5 rounded-xl text-xs font-medium transition-all duration-150 flex items-center justify-between gap-1.5 cursor-pointer border text-left ${
+                                      isSelected
+                                        ? 'bg-[#EBF3F0] text-[#346A60] border-[#6E9E93] font-semibold ring-2 ring-[#6E9E93]/30 shadow-xs'
+                                        : 'bg-white text-[#2E3A36] border-[#D9D3C8] hover:border-[#AEC9C0] hover:bg-[#FAF6F0]'
+                                    }`}
+                                  >
+                                    <span>{opt} horas</span>
+                                    <div
+                                      className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 transition-colors ${
+                                        isSelected ? 'bg-[#5B887E] border-[#5B887E] text-white' : 'border-[#C8C2B7] bg-white'
+                                      }`}
+                                    >
+                                      {isSelected && <Check className="w-2 h-2 stroke-[3]" />}
+                                    </div>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                            {attemptedSubmit && !formData.moodSleepHabits?.screenTimeHours && (
+                              <span className="text-[10px] text-[#C66A4D] font-medium flex items-center gap-1">
+                                <AlertCircle className="w-3 h-3" /> Selección requerida
+                              </span>
+                            )}
+                          </div>
+
+                          {/* 4. ENTORNO, HOGAR Y DESPLAZAMIENTOS (Obligatorio) */}
+                          <div
+                            id="environment-routine-container"
+                            className={`space-y-4 p-4 sm:p-5 rounded-2xl border transition-all duration-200 ${
+                              attemptedSubmit &&
+                              (!formData.moodSleepHabits?.whoCooksAtHome ||
+                                (formData.moodSleepHabits?.whoCooksAtHome === 'Otro' &&
+                                  !formData.moodSleepHabits?.whoCooksAtHomeOther?.trim()) ||
+                                !formData.moodSleepHabits?.foodSecurityWorry ||
+                                !formData.moodSleepHabits?.dailyCommuteTime)
+                                ? 'bg-[#FDEEE9]/60 border-[#F2A488] ring-2 ring-[#F2A488]/30 shadow-xs'
+                                : 'bg-white border-[#D9D3C8] shadow-2xs'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-2 border-b border-[#E8E2D8]/70 pb-2.5">
+                              <div className="flex items-center gap-2 text-xs font-semibold text-[#5B887E] uppercase tracking-wider">
+                                <Home className="w-4 h-4 text-[#5B887E]" />
+                                <span>Entorno y Rutina del Hogar</span>
+                              </div>
+                              <span className="text-[11px] font-semibold text-[#C66A4D] bg-[#FDEEE9] px-2.5 py-0.5 rounded-full border border-[#F2A488]/40">
+                                Obligatorio
+                              </span>
+                            </div>
+
+                            {/* ¿Quién cocina habitualmente en tu casa? */}
+                            <div className="space-y-2">
+                              <label className="text-xs font-semibold text-[#2E3A36] flex items-center justify-between gap-2">
+                                <span>¿Quién cocina habitualmente en tu casa?</span>
+                                {attemptedSubmit && !formData.moodSleepHabits?.whoCooksAtHome && (
+                                  <span className="text-[10px] text-[#C66A4D] font-medium flex items-center gap-1">
+                                    <AlertCircle className="w-3 h-3" /> Selección requerida
+                                  </span>
+                                )}
+                              </label>
+                              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                {WHO_COOKS_OPTIONS.map((opt) => {
+                                  const isSelected = formData.moodSleepHabits?.whoCooksAtHome === opt;
+                                  return (
+                                    <button
+                                      key={opt}
+                                      type="button"
+                                      id={`who-cooks-${opt.toLowerCase().replace(/\s+/g, '-')}`}
+                                      onClick={() => handleUpdateMoodHabits('whoCooksAtHome', opt)}
+                                      className={`px-3 py-2 rounded-xl text-xs font-medium transition-all duration-150 flex items-center justify-between gap-1.5 cursor-pointer border text-left ${
+                                        isSelected
+                                          ? 'bg-[#EBF3F0] text-[#346A60] border-[#6E9E93] font-semibold ring-2 ring-[#6E9E93]/30 shadow-xs'
+                                          : 'bg-white text-[#2E3A36] border-[#D9D3C8] hover:border-[#AEC9C0] hover:bg-[#FAF6F0]'
+                                      }`}
+                                    >
+                                      <span>{opt}</span>
+                                      <div
+                                        className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 transition-colors ${
+                                          isSelected ? 'bg-[#5B887E] border-[#5B887E] text-white' : 'border-[#C8C2B7] bg-white'
+                                        }`}
+                                      >
+                                        {isSelected && <Check className="w-2 h-2 stroke-[3]" />}
+                                      </div>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                              {formData.moodSleepHabits?.whoCooksAtHome === 'Otro' && (
+                                <div className="pt-1">
+                                  <input
+                                    type="text"
+                                    id="who-cooks-other"
+                                    value={formData.moodSleepHabits?.whoCooksAtHomeOther || ''}
+                                    onChange={(e) => handleUpdateMoodHabits('whoCooksAtHomeOther', e.target.value)}
+                                    placeholder="¿Quién cocina habitualmente?"
+                                    className="w-full px-3.5 py-2 rounded-xl bg-[#FAF6F0] border border-[#D9D3C8] text-[#2E3A36] placeholder-[#8E9E99] text-xs focus:ring-2 focus:ring-[#6E9E93]/40"
+                                  />
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Preocupación por alcance de dinero para comida */}
+                            <div className="space-y-2 pt-2 border-t border-[#E8E2D8]/60">
+                              <label className="text-xs font-semibold text-[#2E3A36] flex items-center justify-between gap-2">
+                                <span className="flex items-center gap-1.5">
+                                  <DollarSign className="w-3.5 h-3.5 text-[#5B887E]" />
+                                  En el último año, ¿te ha preocupado que no alcance el dinero para la comida?
+                                </span>
+                                {attemptedSubmit && !formData.moodSleepHabits?.foodSecurityWorry && (
+                                  <span className="text-[10px] text-[#C66A4D] font-medium flex items-center gap-1">
+                                    <AlertCircle className="w-3 h-3" /> Selección requerida
+                                  </span>
+                                )}
+                              </label>
+                              <div className="grid grid-cols-3 gap-2">
+                                {FOOD_SECURITY_OPTIONS.map((opt) => {
+                                  const isSelected = formData.moodSleepHabits?.foodSecurityWorry === opt;
+                                  return (
+                                    <button
+                                      key={opt}
+                                      type="button"
+                                      id={`food-security-${opt.toLowerCase().replace(/\s+/g, '-')}`}
+                                      onClick={() => handleUpdateMoodHabits('foodSecurityWorry', opt)}
+                                      className={`px-3 py-2 rounded-xl text-xs font-medium transition-all duration-150 flex items-center justify-between gap-1.5 cursor-pointer border text-left ${
+                                        isSelected
+                                          ? 'bg-[#EBF3F0] text-[#346A60] border-[#6E9E93] font-semibold ring-2 ring-[#6E9E93]/30 shadow-xs'
+                                          : 'bg-white text-[#2E3A36] border-[#D9D3C8] hover:border-[#AEC9C0] hover:bg-[#FAF6F0]'
+                                      }`}
+                                    >
+                                      <span>{opt}</span>
+                                      <div
+                                        className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 transition-colors ${
+                                          isSelected ? 'bg-[#5B887E] border-[#5B887E] text-white' : 'border-[#C8C2B7] bg-white'
+                                        }`}
+                                      >
+                                        {isSelected && <Check className="w-2 h-2 stroke-[3]" />}
+                                      </div>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+
+                            {/* Tiempo en desplazamientos */}
+                            <div className="space-y-2 pt-2 border-t border-[#E8E2D8]/60">
+                              <label className="text-xs font-semibold text-[#2E3A36] flex items-center justify-between gap-2">
+                                <span className="flex items-center gap-1.5">
+                                  <Car className="w-3.5 h-3.5 text-[#5B887E]" />
+                                  ¿Cuánto tiempo gastas al día en desplazamientos?
+                                </span>
+                                {attemptedSubmit && !formData.moodSleepHabits?.dailyCommuteTime && (
+                                  <span className="text-[10px] text-[#C66A4D] font-medium flex items-center gap-1">
+                                    <AlertCircle className="w-3 h-3" /> Selección requerida
+                                  </span>
+                                )}
+                              </label>
+                              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                {COMMUTE_TIME_OPTIONS.map((opt) => {
+                                  const isSelected = formData.moodSleepHabits?.dailyCommuteTime === opt;
+                                  return (
+                                    <button
+                                      key={opt}
+                                      type="button"
+                                      id={`commute-time-${opt.toLowerCase().replace(/\s+/g, '-')}`}
+                                      onClick={() => handleUpdateMoodHabits('dailyCommuteTime', opt)}
+                                      className={`px-3 py-2 rounded-xl text-xs font-medium transition-all duration-150 flex items-center justify-between gap-1.5 cursor-pointer border text-left ${
+                                        isSelected
+                                          ? 'bg-[#EBF3F0] text-[#346A60] border-[#6E9E93] font-semibold ring-2 ring-[#6E9E93]/30 shadow-xs'
+                                          : 'bg-white text-[#2E3A36] border-[#D9D3C8] hover:border-[#AEC9C0] hover:bg-[#FAF6F0]'
+                                      }`}
+                                    >
+                                      <span>{opt}</span>
+                                      <div
+                                        className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 transition-colors ${
+                                          isSelected ? 'bg-[#5B887E] border-[#5B887E] text-white' : 'border-[#C8C2B7] bg-white'
+                                        }`}
+                                      >
+                                        {isSelected && <Check className="w-2 h-2 stroke-[3]" />}
+                                      </div>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* 5. DAILY LIFE ROUTINE DESCRIPTION */}
                           <div className="space-y-2 bg-[#FAF6F0]/80 p-4 sm:p-5 rounded-2xl border border-[#E8E2D8]">
                             <label
                               htmlFor="dailyRoutine-textarea"
@@ -919,10 +1781,9 @@ export const StepFiveForm: React.FC<StepFiveFormProps> = ({
         <div className="p-4 rounded-2xl bg-[#FDEEE9] border border-[#F2A488] text-[#C66A4D] flex items-start gap-3 text-xs sm:text-sm">
           <AlertCircle className="w-5 h-5 shrink-0 mt-0.5 text-[#C66A4D]" />
           <div>
-            <p className="font-semibold">Faltan categorías por revisar</p>
+            <p className="font-semibold">Faltan secciones por completar</p>
             <p className="mt-0.5 text-xs text-[#C66A4D]/90">
-              Por favor revisa cada categoría pendiente seleccionando los síntomas que apliquen o
-              marcando el chip <strong>"Nada de esto"</strong> para continuar.
+              Por favor revisa cada categoría pendiente seleccionando los síntomas o marcando <strong>"Nada de esto"</strong>, y responde las preguntas de bienestar emocional (PHQ-2), sueño, estrés, pantallas y entorno en la sección 7.
             </p>
           </div>
         </div>
